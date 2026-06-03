@@ -1,11 +1,12 @@
 import Constants from "expo-constants";
-import * as Google from "expo-auth-session/providers/google";
-import * as WebBrowser from "expo-web-browser";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Animated, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 import { AppBackground } from "../components/AppBackground";
 import { InsectIllustration } from "../components/InsectIllustration";
 import { sharedStyles } from "./sharedStyles";
+
+const splashBadge = require("../../assets/generated/bugbaas-splash-badge-hd.png");
 
 type Props = {
   error: string;
@@ -14,8 +15,6 @@ type Props = {
   onSubmit: (email: string, password: string, createAccount: boolean) => Promise<void>;
 };
 
-WebBrowser.maybeCompleteAuthSession();
-
 export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,35 +22,34 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleError, setGoogleError] = useState("");
   const handledGoogleTokenRef = useRef("");
+  const badgePulse = useRef(new Animated.Value(0)).current;
   const googleClientId = String(Constants.expoConfig?.extra?.googleClientId || "");
-  const googleAndroidClientId = String(Constants.expoConfig?.extra?.googleAndroidClientId || "");
-  const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-    androidClientId: googleAndroidClientId || undefined,
-    webClientId: googleClientId || undefined,
-    selectAccount: true
-  });
 
   useEffect(() => {
-    async function finishGoogleLogin() {
-      if (googleResponse?.type !== "success") return;
-      const idToken = googleResponse.params.id_token;
-      const accessToken = googleResponse.params.access_token;
+    GoogleSignin.configure({
+      webClientId: googleClientId,
+      offlineAccess: false
+    });
+  }, [googleClientId]);
 
-      if (!idToken) {
-        setGoogleError("Google-login gaf geen geldig token terug.");
-        return;
-      }
-      if (handledGoogleTokenRef.current === idToken) return;
-      handledGoogleTokenRef.current = idToken;
-
-      setGoogleBusy(true);
-      setGoogleError("");
-      await onGoogleSubmit(idToken, accessToken);
-      setGoogleBusy(false);
-    }
-
-    void finishGoogleLogin();
-  }, [googleResponse, onGoogleSubmit]);
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(badgePulse, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: true
+        }),
+        Animated.timing(badgePulse, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: true
+        })
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [badgePulse]);
 
   async function submit(createAccount: boolean) {
     setBusy(true);
@@ -60,27 +58,54 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
   }
 
   async function submitGoogle() {
-    if (!googleClientId && !googleAndroidClientId) {
+    if (!googleClientId) {
       setGoogleError("Google-login is nog niet geconfigureerd.");
       return;
     }
     setGoogleBusy(true);
     setGoogleError("");
     try {
-      const result = await promptGoogleAsync();
-      if (result.type !== "success") setGoogleBusy(false);
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const result = await GoogleSignin.signIn();
+      if (result.type === "cancelled") {
+        setGoogleBusy(false);
+        return;
+      }
+
+      const idToken = result.data.idToken;
+      if (!idToken) {
+        setGoogleError("Google-login gaf geen geldig token terug.");
+        setGoogleBusy(false);
+        return;
+      }
+      if (handledGoogleTokenRef.current === idToken) {
+        setGoogleBusy(false);
+        return;
+      }
+      handledGoogleTokenRef.current = idToken;
+      await onGoogleSubmit(idToken);
     } catch (error) {
-      setGoogleError(error instanceof Error ? error.message : "Google-login openen mislukt.");
+      if (typeof error === "object" && error !== null && "code" in error && error.code === statusCodes.SIGN_IN_CANCELLED) {
+        setGoogleBusy(false);
+        return;
+      }
+      setGoogleError(error instanceof Error ? error.message : "Google-login mislukt.");
+    } finally {
       setGoogleBusy(false);
     }
   }
 
   const isBusy = busy || googleBusy || loading;
+  const badgeScale = badgePulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.98, 1.03]
+  });
 
   return (
     <SafeAreaView style={styles.screen}>
       <AppBackground />
       <View style={styles.card}>
+        <Animated.Image accessibilityLabel="CimPro BugBaas logo" resizeMode="contain" source={splashBadge} style={[styles.badge, { transform: [{ scale: badgeScale }] }]} />
         <View style={styles.brandRow}>
           <Text style={sharedStyles.title}>CimPro BugBaas</Text>
           <InsectIllustration size={58} variant="beetle" />
@@ -90,8 +115,15 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
         <Pressable style={sharedStyles.button} disabled={isBusy} onPress={() => submit(false)}>
           {busy || loading ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>Inloggen</Text>}
         </Pressable>
-        <Pressable style={styles.googleButton} disabled={isBusy || !googleRequest} onPress={submitGoogle}>
-          {googleBusy ? <ActivityIndicator color="#17211c" /> : <Text style={styles.googleText}>Google login</Text>}
+        <Pressable style={styles.googleButton} disabled={isBusy || !googleClientId} onPress={submitGoogle}>
+          {googleBusy ? (
+            <ActivityIndicator color="#17211c" />
+          ) : (
+            <View style={styles.googleContent}>
+              <GoogleLogo />
+              <Text style={styles.googleText}>Google login</Text>
+            </View>
+          )}
         </Pressable>
         <Pressable style={sharedStyles.secondaryButton} disabled={isBusy} onPress={() => submit(true)}>
           <Text style={sharedStyles.secondaryButtonText}>Account maken</Text>
@@ -99,6 +131,14 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
         {!!(error || googleError) && <Text style={sharedStyles.error}>{error || googleError}</Text>}
       </View>
     </SafeAreaView>
+  );
+}
+
+function GoogleLogo() {
+  return (
+    <View style={styles.googleLogo} accessibilityLabel="Google logo">
+      <Text style={styles.googleLogoLetter}>G</Text>
+    </View>
   );
 }
 
@@ -122,6 +162,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     zIndex: 1
   },
+  badge: {
+    alignSelf: "center",
+    height: 142,
+    marginBottom: 8,
+    width: 142
+  },
   brandRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -136,6 +182,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 10,
     padding: 15
+  },
+  googleContent: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "center"
+  },
+  googleLogo: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderColor: "#dadce0",
+    borderRadius: 10,
+    borderWidth: 1,
+    height: 24,
+    justifyContent: "center",
+    width: 24
+  },
+  googleLogoLetter: {
+    color: "#4285f4",
+    fontSize: 16,
+    fontWeight: "900",
+    letterSpacing: 0
   },
   googleText: {
     color: "#17211c",

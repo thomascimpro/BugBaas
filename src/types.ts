@@ -29,6 +29,16 @@ export type BugReport = {
   updatedAt: string;
 };
 
+export type BugComment = {
+  id: string;
+  bugId: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  reaction: string;
+  createdAt: string;
+};
+
 export type NewBugInput = {
   title: string;
   project: string;

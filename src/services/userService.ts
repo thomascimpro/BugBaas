@@ -7,61 +7,15 @@ import {
   signInWithCredential,
   signOut
 } from "firebase/auth";
-import { doc, getDoc, getDocs, orderBy, query, setDoc, updateDoc, collection } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, orderBy, query, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db, isFirebaseConfigured } from "../firebase";
-import { User } from "../types";
+import { BugReport, User } from "../types";
 import { badgesForUser, titleForPoints } from "./pointsService";
+
+export const upvotePointValue = 3;
 
 let demoUser: User | null = null;
 const demoUsers = new Map<string, User>();
-
-const demoRivals: User[] = [
-  {
-    uid: "demo-rival-maya",
-    displayName: "Maya",
-    email: "maya@cimpro.local",
-    totalPoints: 315,
-    bugCount: 18,
-    title: titleForPoints(315),
-    badges: []
-  },
-  {
-    uid: "demo-rival-noor",
-    displayName: "Noor",
-    email: "noor@cimpro.local",
-    totalPoints: 168,
-    bugCount: 11,
-    title: titleForPoints(168),
-    badges: []
-  },
-  {
-    uid: "demo-rival-lars",
-    displayName: "Lars",
-    email: "lars@cimpro.local",
-    totalPoints: 92,
-    bugCount: 7,
-    title: titleForPoints(92),
-    badges: []
-  },
-  {
-    uid: "demo-rival-zoe",
-    displayName: "Zoe",
-    email: "zoe@cimpro.local",
-    totalPoints: 31,
-    bugCount: 3,
-    title: titleForPoints(31),
-    badges: []
-  }
-];
-
-function ensureDemoLeaderboard() {
-  demoRivals.forEach((rival) => {
-    if (!demoUsers.has(rival.email)) {
-      const normalized = normalizeUser(rival);
-      demoUsers.set(normalized.email, normalized);
-    }
-  });
-}
 
 function normalizeUser(user: User): User {
   return {
@@ -69,6 +23,19 @@ function normalizeUser(user: User): User {
     title: titleForPoints(user.totalPoints),
     badges: badgesForUser(user)
   };
+}
+
+function withUpvoteBonus(user: User, bugs: BugReport[]): User {
+  const upvoteBonus = bugs
+    .filter((bug) => bug.reporterId === user.uid)
+    .reduce((total, bug) => total + (bug.upvoteCount ?? 0) * upvotePointValue, 0);
+  return normalizeUser({ ...user, totalPoints: user.totalPoints + upvoteBonus });
+}
+
+async function listAllBugsForScores(): Promise<BugReport[]> {
+  if (!isFirebaseConfigured) return [];
+  const snapshot = await getDocs(collection(db, "bugs"));
+  return snapshot.docs.map((item) => item.data() as BugReport);
 }
 
 function makeUser(uid: string, email: string, displayName?: string | null): User {
@@ -97,7 +64,6 @@ export async function login(email: string, password: string): Promise<User> {
   if (!isFirebaseConfigured) {
     demoUser = demoUsers.get(email) ?? makeUser(`demo-${Date.now()}`, email);
     demoUsers.set(email, demoUser);
-    ensureDemoLeaderboard();
     return demoUser;
   }
   const credential = await signInWithEmailAndPassword(auth, email, password);
@@ -109,7 +75,6 @@ export async function register(email: string, password: string): Promise<User> {
   if (!isFirebaseConfigured) {
     demoUser = makeUser(`demo-${Date.now()}`, email);
     demoUsers.set(email, demoUser);
-    ensureDemoLeaderboard();
     return demoUser;
   }
   const credential = await createUserWithEmailAndPassword(auth, email, password);
@@ -129,7 +94,9 @@ export async function ensureUserDocument(firebaseUser: FirebaseUser): Promise<Us
   const ref = doc(db, "users", firebaseUser.uid);
   const snapshot = await getDoc(ref);
   if (snapshot.exists()) {
-    return normalizeUser(snapshot.data() as User);
+    const user = snapshot.data() as User;
+    const bugs = await listAllBugsForScores();
+    return withUpvoteBonus(user, bugs);
   }
   const user = makeUser(firebaseUser.uid, firebaseUser.email ?? "onbekend@cimpro.local", firebaseUser.displayName);
   await setDoc(ref, user);
@@ -146,11 +113,11 @@ export async function logout(): Promise<void> {
 
 export async function listUsers(): Promise<User[]> {
   if (!isFirebaseConfigured) {
-    ensureDemoLeaderboard();
     return Array.from(demoUsers.values()).map(normalizeUser).sort((a, b) => b.totalPoints - a.totalPoints);
   }
   const snapshot = await getDocs(query(collection(db, "users"), orderBy("totalPoints", "desc")));
-  return snapshot.docs.map((item) => normalizeUser(item.data() as User));
+  const bugs = await listAllBugsForScores();
+  return snapshot.docs.map((item) => withUpvoteBonus(item.data() as User, bugs)).sort((a, b) => b.totalPoints - a.totalPoints);
 }
 
 export async function getUserById(uid: string): Promise<User | null> {
@@ -159,7 +126,9 @@ export async function getUserById(uid: string): Promise<User | null> {
     return user ? normalizeUser(user) : null;
   }
   const snapshot = await getDoc(doc(db, "users", uid));
-  return snapshot.exists() ? normalizeUser(snapshot.data() as User) : null;
+  if (!snapshot.exists()) return null;
+  const bugs = await listAllBugsForScores();
+  return withUpvoteBonus(snapshot.data() as User, bugs);
 }
 
 export async function applyUserPoints(uid: string, pointsDelta: number, bugCountDelta: number): Promise<User | null> {

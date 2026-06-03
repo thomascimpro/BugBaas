@@ -1,5 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { upvotePointValue } from "../services/userService";
 import { BugReport } from "../types";
 import { SeverityBadge } from "./SeverityBadge";
 import { StatusBadge } from "./StatusBadge";
@@ -11,10 +12,11 @@ export function BugCard({ bug, onPress }: { bug: BugReport; onPress: () => void 
         <Text style={styles.title}>{bug.title}</Text>
         <View style={styles.scoreWrap}>
           <Text style={styles.points}>{bug.points} pt</Text>
-          <Text style={styles.upvotes}>+{bug.upvoteCount ?? 0}</Text>
+          <Text style={styles.upvotes}>{bug.upvoteCount ?? 0} upvotes</Text>
         </View>
       </View>
       <Text style={styles.meta}>{bug.project} · {bug.reporterName}</Text>
+      <Text style={styles.bonus}>+{upvotePointValue} pt per upvote</Text>
       <View style={styles.row}>
         <SeverityBadge severity={bug.severity} />
         <StatusBadge status={bug.status} />
@@ -67,6 +69,12 @@ const styles = StyleSheet.create({
   meta: {
     color: "#53645d",
     marginTop: 4
+  },
+  bonus: {
+    color: "#15724f",
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 3
   },
   row: {
     flexDirection: "row",
