@@ -38,8 +38,8 @@ Gebruik geen Cloud Functions, Cloud Storage of Blaze-only features voor V1. Scre
 
 ## Interne APK
 
-- Eerste APK: `release/CimPro-BugBaas-0.1.0.apk`.
-- GitHub Release: https://github.com/thomascimpro/cimpro-bugbaas/releases/tag/v0.1.0
+- Eerste APK: `release/CimPro-BugBaas-0.1.1.apk`.
+- GitHub Release: https://github.com/thomascimpro/cimpro-bugbaas/releases/tag/v0.1.1
 - APK is bedoeld voor GitHub Releases en handmatige installatie door collega's.
 - Android vraagt gebruikers om installatie uit onbekende bron toe te staan.
 - Iedereen gebruikt hetzelfde Firebase project `<firebase-project-id>`, dus gebruikers, bugs, upvotes en ranglijst zijn gedeeld.
