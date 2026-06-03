@@ -226,6 +226,8 @@ Datum: 2026-06-02
   - `<google-android-client-id>`.
 - `assembleRelease`: geslaagd met ingebakken JS bundle.
 - APK gekopieerd naar `release/CimPro-BugBaas-0.1.0.apk`.
+- GitHub Release aangemaakt:
+  - `https://github.com/thomascimpro/cimpro-bugbaas/releases/tag/v0.1.0`.
 - APK-grootte: circa 58 MB.
 - `apksigner verify --print-certs`: geslaagd; SHA-1 matcht Firebase.
 - Pixel 8 APK install: geslaagd.
