@@ -5,7 +5,8 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithCredential,
-  signOut
+  signOut,
+  updateProfile
 } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, orderBy, query, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db, isFirebaseConfigured } from "../firebase";
@@ -38,12 +39,18 @@ async function listAllBugsForScores(): Promise<BugReport[]> {
   return snapshot.docs.map((item) => item.data() as BugReport);
 }
 
-function makeUser(uid: string, email: string, displayName?: string | null): User {
+function cleanDisplayName(displayName?: string | null): string {
+  return (displayName ?? "").trim().replace(/\s+/g, " ").slice(0, 32);
+}
+
+function makeUser(uid: string, email: string, displayName?: string | null, nameSet = false): User {
   const fallbackName = email.split("@")[0] || "Bugmelder";
+  const name = cleanDisplayName(displayName);
   return {
     uid,
-    displayName: displayName || fallbackName,
+    displayName: name || fallbackName,
     email,
+    nameSet,
     totalPoints: 0,
     bugCount: 0,
     title: titleForPoints(0),
@@ -70,15 +77,17 @@ export async function login(email: string, password: string): Promise<User> {
   return ensureUserDocument(credential.user);
 }
 
-export async function register(email: string, password: string): Promise<User> {
+export async function register(email: string, password: string, displayName?: string): Promise<User> {
   if (!email || password.length < 6) throw new Error("Gebruik een wachtwoord van minimaal 6 tekens.");
+  const name = cleanDisplayName(displayName);
   if (!isFirebaseConfigured) {
-    demoUser = makeUser(`demo-${Date.now()}`, email);
+    demoUser = makeUser(`demo-${Date.now()}`, email, name, Boolean(name));
     demoUsers.set(email, demoUser);
     return demoUser;
   }
   const credential = await createUserWithEmailAndPassword(auth, email, password);
-  return ensureUserDocument(credential.user);
+  if (name) await updateProfile(credential.user, { displayName: name });
+  return ensureUserDocument(credential.user, name);
 }
 
 export async function loginWithGoogle(idToken: string, accessToken?: string): Promise<User> {
@@ -90,17 +99,44 @@ export async function loginWithGoogle(idToken: string, accessToken?: string): Pr
   return ensureUserDocument(userCredential.user);
 }
 
-export async function ensureUserDocument(firebaseUser: FirebaseUser): Promise<User> {
+export async function ensureUserDocument(firebaseUser: FirebaseUser, preferredDisplayName?: string): Promise<User> {
   const ref = doc(db, "users", firebaseUser.uid);
   const snapshot = await getDoc(ref);
   if (snapshot.exists()) {
     const user = snapshot.data() as User;
+    const name = cleanDisplayName(preferredDisplayName);
+    if (name && user.displayName !== name) {
+      const updated = { ...user, displayName: name, nameSet: true };
+      await setDoc(ref, updated);
+      const bugs = await listAllBugsForScores();
+      return withUpvoteBonus(updated, bugs);
+    }
     const bugs = await listAllBugsForScores();
     return withUpvoteBonus(user, bugs);
   }
-  const user = makeUser(firebaseUser.uid, firebaseUser.email ?? "onbekend@cimpro.local", firebaseUser.displayName);
+  const user = makeUser(firebaseUser.uid, firebaseUser.email ?? "onbekend@cimpro.local", preferredDisplayName ?? firebaseUser.displayName, false);
   await setDoc(ref, user);
   return user;
+}
+
+export async function updateUserDisplayName(user: User, displayName: string): Promise<User> {
+  const name = cleanDisplayName(displayName);
+  if (!name || name.length < 2) throw new Error("Vul een naam in van minimaal 2 tekens.");
+
+  if (!isFirebaseConfigured) {
+    const updated = { ...user, displayName: name, nameSet: true };
+    demoUsers.set(updated.email, updated);
+    if (demoUser?.uid === user.uid) demoUser = updated;
+    return normalizeUser(updated);
+  }
+
+  if (auth.currentUser?.uid === user.uid) await updateProfile(auth.currentUser, { displayName: name });
+  const updated = { ...user, displayName: name, nameSet: true };
+  await updateDoc(doc(db, "users", user.uid), {
+    displayName: updated.displayName,
+    nameSet: true
+  });
+  return normalizeUser(updated);
 }
 
 export async function logout(): Promise<void> {

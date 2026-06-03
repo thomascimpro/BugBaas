@@ -12,12 +12,14 @@ type Props = {
   error: string;
   loading: boolean;
   onGoogleSubmit: (idToken: string, accessToken?: string) => Promise<void>;
-  onSubmit: (email: string, password: string, createAccount: boolean) => Promise<void>;
+  onSubmit: (email: string, password: string, createAccount: boolean, displayName?: string) => Promise<void>;
 };
 
 export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [createAccount, setCreateAccount] = useState(false);
+  const [emailVisible, setEmailVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleError, setGoogleError] = useState("");
@@ -51,9 +53,9 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
     return () => animation.stop();
   }, [badgePulse]);
 
-  async function submit(createAccount: boolean) {
+  async function submit(nextCreateAccount = createAccount) {
     setBusy(true);
-    await onSubmit(email, password, createAccount);
+    await onSubmit(email, password, nextCreateAccount);
     setBusy(false);
   }
 
@@ -110,24 +112,48 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
           <Text style={sharedStyles.title}>CimPro BugBaas</Text>
           <BugArtImage bugId="neushoornkever" size={62} />
         </View>
-        <TextInput autoCapitalize="none" keyboardType="email-address" placeholder="E-mail" style={sharedStyles.input} value={email} onChangeText={setEmail} />
-        <TextInput placeholder="Wachtwoord" secureTextEntry style={sharedStyles.input} value={password} onChangeText={setPassword} />
-        <Pressable style={sharedStyles.button} disabled={isBusy} onPress={() => submit(false)}>
-          {busy || loading ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>Inloggen</Text>}
-        </Pressable>
-        <Pressable style={styles.googleButton} disabled={isBusy || !googleClientId} onPress={submitGoogle}>
+        <Pressable style={styles.googlePrimaryButton} disabled={isBusy || !googleClientId} onPress={submitGoogle}>
           {googleBusy ? (
             <ActivityIndicator color="#17211c" />
           ) : (
             <View style={styles.googleContent}>
               <GoogleLogo />
-              <Text style={styles.googleText}>Google login</Text>
+              <Text style={styles.googlePrimaryText}>Doorgaan met Google</Text>
             </View>
           )}
         </Pressable>
-        <Pressable style={sharedStyles.secondaryButton} disabled={isBusy} onPress={() => submit(true)}>
-          <Text style={sharedStyles.secondaryButtonText}>Account maken</Text>
+        <Pressable style={styles.emailToggle} disabled={isBusy} onPress={() => setEmailVisible((current) => !current)}>
+          <Text style={styles.emailToggleText}>{emailVisible ? "E-mail verbergen" : "Met e-mail inloggen"}</Text>
         </Pressable>
+        {emailVisible && (
+          <>
+            <TextInput autoCapitalize="none" keyboardType="email-address" placeholder="E-mail" style={sharedStyles.input} value={email} onChangeText={setEmail} />
+            <TextInput placeholder="Wachtwoord" secureTextEntry style={sharedStyles.input} value={password} onChangeText={setPassword} />
+            <Pressable style={sharedStyles.button} disabled={isBusy} onPress={() => submit(false)}>
+              {busy || loading ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>E-mail login</Text>}
+            </Pressable>
+            <Pressable
+              style={createAccount ? sharedStyles.button : sharedStyles.secondaryButton}
+              disabled={isBusy}
+              onPress={() => {
+                if (!createAccount) {
+                  setCreateAccount(true);
+                  return;
+                }
+                void submit(true);
+              }}
+            >
+              <Text style={createAccount ? sharedStyles.buttonText : sharedStyles.secondaryButtonText}>
+                {createAccount ? "Account aanmaken" : "Nieuw e-mailaccount"}
+              </Text>
+            </Pressable>
+            {createAccount && (
+              <Pressable style={styles.switchButton} disabled={isBusy} onPress={() => setCreateAccount(false)}>
+                <Text style={styles.switchText}>Ik heb al een e-mailaccount</Text>
+              </Pressable>
+            )}
+          </>
+        )}
         {!!(error || googleError) && <Text style={sharedStyles.error}>{error || googleError}</Text>}
       </View>
     </SafeAreaView>
@@ -174,7 +200,7 @@ const styles = StyleSheet.create({
     gap: 12,
     justifyContent: "space-between"
   },
-  googleButton: {
+  googlePrimaryButton: {
     alignItems: "center",
     backgroundColor: "#ffffff",
     borderColor: "#c6d3cc",
@@ -182,6 +208,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 10,
     padding: 15
+  },
+  emailToggle: {
+    alignItems: "center",
+    marginBottom: 10,
+    marginTop: 14
+  },
+  emailToggleText: {
+    color: "#15724f",
+    fontWeight: "900"
   },
   googleContent: {
     alignItems: "center",
@@ -205,8 +240,16 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0
   },
-  googleText: {
+  googlePrimaryText: {
     color: "#17211c",
+    fontWeight: "900"
+  },
+  switchButton: {
+    alignItems: "center",
+    marginTop: 12
+  },
+  switchText: {
+    color: "#15724f",
     fontWeight: "900"
   }
 });

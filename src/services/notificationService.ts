@@ -1,0 +1,146 @@
+import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc } from "firebase/firestore";
+import { db, isFirebaseConfigured } from "../firebase";
+import { AppNotification, BugComment, BugReport, NotificationSettings, NotificationType, User } from "../types";
+import { listUsers } from "./userService";
+
+export const defaultNotificationSettings: NotificationSettings = {
+  trade: true,
+  new_bug: true,
+  comment: true,
+  bug_update: true,
+  bugdex: true
+};
+
+const demoNotifications = new Map<string, AppNotification[]>();
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function normalizeSettings(settings?: Partial<NotificationSettings>): NotificationSettings {
+  return { ...defaultNotificationSettings, ...(settings ?? {}) };
+}
+
+export async function getNotificationSettings(user: User): Promise<NotificationSettings> {
+  if (!isFirebaseConfigured) return defaultNotificationSettings;
+  const snapshot = await getDoc(doc(db, "users", user.uid, "settings", "notifications"));
+  if (!snapshot.exists()) return defaultNotificationSettings;
+  return normalizeSettings(snapshot.data() as Partial<NotificationSettings>);
+}
+
+export async function saveNotificationSettings(user: User, settings: NotificationSettings): Promise<void> {
+  if (!isFirebaseConfigured) return;
+  await setDoc(doc(db, "users", user.uid, "settings", "notifications"), settings);
+}
+
+export async function markNotificationRead(user: User, notificationId: string): Promise<void> {
+  if (!isFirebaseConfigured) return;
+  await updateDoc(doc(db, "users", user.uid, "notifications", notificationId), { read: true });
+}
+
+export function subscribeUserNotifications(
+  user: User,
+  settings: NotificationSettings,
+  onNotification: (notification: AppNotification) => void
+): () => void {
+  if (!isFirebaseConfigured) return () => undefined;
+
+  const seenIds = new Set<string>();
+  let initialized = false;
+  const notificationsQuery = query(collection(db, "users", user.uid, "notifications"), orderBy("createdAt", "desc"), limit(20));
+
+  return onSnapshot(notificationsQuery, (snapshot) => {
+    if (!initialized) {
+      snapshot.docs.forEach((item) => {
+        const notification = item.data() as AppNotification;
+        seenIds.add(notification.id);
+      });
+      initialized = true;
+      return;
+    }
+
+    snapshot.docChanges().forEach((change) => {
+      if (change.type !== "added") return;
+      const notification = change.doc.data() as AppNotification;
+      if (notification.read || !settings[notification.type]) return;
+      if (seenIds.has(notification.id)) return;
+      seenIds.add(notification.id);
+      onNotification(notification);
+    });
+  });
+}
+
+async function createNotification(userId: string, notification: Omit<AppNotification, "id" | "read" | "createdAt">) {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const item: AppNotification = { ...notification, id, read: false, createdAt: nowIso() };
+
+  if (!isFirebaseConfigured) {
+    demoNotifications.set(userId, [item, ...(demoNotifications.get(userId) ?? [])]);
+    return;
+  }
+
+  await setDoc(doc(db, "users", userId, "notifications", id), item);
+}
+
+async function notifyRecipients(
+  recipients: User[],
+  actor: User,
+  type: NotificationType,
+  payload: Pick<AppNotification, "title" | "body" | "bugId">
+) {
+  await Promise.all(
+    recipients
+      .filter((recipient) => recipient.uid !== actor.uid)
+      .map((recipient) =>
+        createNotification(recipient.uid, {
+          ...payload,
+          type,
+          actorId: actor.uid,
+          actorName: actor.displayName
+        })
+      )
+  );
+}
+
+export async function notifyNewBug(bug: BugReport, actor: User): Promise<void> {
+  const users = await listUsers();
+  await notifyRecipients(users, actor, "new_bug", {
+    title: "Nieuwe bug",
+    body: `${actor.displayName}: ${bug.title}`,
+    bugId: bug.id
+  });
+}
+
+export async function notifyComment(bug: BugReport, comment: BugComment, actor: User): Promise<void> {
+  if (bug.reporterId === actor.uid) return;
+  await createNotification(bug.reporterId, {
+    type: "comment",
+    title: "Nieuwe reactie",
+    body: `${comment.authorName}: ${bug.title}`,
+    actorId: actor.uid,
+    actorName: actor.displayName,
+    bugId: bug.id
+  });
+}
+
+export async function notifyBugUpdate(previousBug: BugReport, nextBug: BugReport, actor: User): Promise<void> {
+  if (previousBug.status === nextBug.status || nextBug.reporterId === actor.uid) return;
+  await createNotification(nextBug.reporterId, {
+    type: "bug_update",
+    title: "Bug update",
+    body: `${nextBug.title}: ${nextBug.status}`,
+    actorId: actor.uid,
+    actorName: actor.displayName,
+    bugId: nextBug.id
+  });
+}
+
+export async function notifyTradeRequest(recipientId: string, actor: User, offeredBugName: string): Promise<void> {
+  await createNotification(recipientId, {
+    type: "trade",
+    title: "Ruilverzoek",
+    body: `${actor.displayName} wil ${offeredBugName} ruilen`,
+    actorId: actor.uid,
+    actorName: actor.displayName
+  });
+}

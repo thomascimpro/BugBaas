@@ -16,10 +16,11 @@ type Props = {
   user: User;
   onBack: () => void;
   onBugChanged: (bug: BugReport) => void;
+  onCommentAdded?: (comment: BugComment) => void;
   onOpenProfile: (user: User) => void;
 };
 
-export function BugDetailScreen({ bug, user, onBack, onBugChanged, onOpenProfile }: Props) {
+export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdded, onOpenProfile }: Props) {
   const [busy, setBusy] = useState(false);
   const [voteBusy, setVoteBusy] = useState(false);
   const [commentBusy, setCommentBusy] = useState(false);
@@ -70,6 +71,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onOpenProfile
       const comment = await addBugComment(bug, user, commentText, selectedReaction);
       setComments((current) => [...current, comment]);
       setCommentText("");
+      onCommentAdded?.(comment);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Commentaar opslaan mislukt.");
     } finally {
@@ -87,7 +89,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onOpenProfile
   return (
     <ScrollView contentContainerStyle={styles.content} style={sharedStyles.screen}>
       <Text style={sharedStyles.title}>{bug.title}</Text>
-      <Text style={sharedStyles.subtitle}>{bug.project} · {bug.reporterName} · {bug.points} punten</Text>
+      <Text style={sharedStyles.subtitle}>{bug.project} - {bug.reporterName}</Text>
       <View style={sharedStyles.row}>
         <SeverityBadge severity={bug.severity} />
         <StatusBadge status={bug.status} />

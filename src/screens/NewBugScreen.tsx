@@ -4,7 +4,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { createBug } from "../services/bugService";
-import { BugSeverity, User } from "../types";
+import { BugReport, BugSeverity, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 const severities: BugSeverity[] = ["Laag", "Normaal", "Hoog", "Kritiek"];
@@ -25,7 +25,7 @@ type BugDraft = {
 type Props = {
   user: User;
   onBack: () => void;
-  onSaved: () => void;
+  onSaved: (bug: BugReport) => void;
 };
 
 export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
@@ -133,10 +133,10 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
     setBusy(true);
     setError("");
     try {
-      await createBug({ title, project, severity, description, steps, screenshotDataUrl }, user);
+      const bug = await createBug({ title, project, severity, description, steps, screenshotDataUrl }, user);
       await AsyncStorage.removeItem(draftKey);
       clearForm();
-      onSaved();
+      onSaved(bug);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Opslaan mislukt.");
     } finally {

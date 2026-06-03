@@ -4,10 +4,11 @@ import { RouteName } from "../../App";
 import { BugArtImage } from "../components/BugArtImage";
 import { TierBadge } from "../components/TierBadge";
 import { listBugs } from "../services/bugService";
-import { bugDexEntries, getTierForPoints, unlockedBugDexCount, userTiers } from "../services/pointsService";
+import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
+import { BugDexEntry, bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
 import { listUsers } from "../services/userService";
 import { weeklyMissionLabel, weeklyMissionSet } from "../services/weeklyMissionService";
-import { BugReport, User } from "../types";
+import { BugDexInventoryItem, BugReport, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
@@ -19,15 +20,18 @@ export function HomeScreen({ user, onNavigate }: Props) {
   const tier = getTierForPoints(user.totalPoints);
   const [users, setUsers] = useState<User[]>([]);
   const [bugs, setBugs] = useState<BugReport[]>([]);
+  const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
   const leaders = users.slice(0, 3);
   const userRank = Math.max(1, users.findIndex((item) => item.uid === user.uid) + 1);
-  const dexCount = unlockedBugDexCount(user);
+  const dexCount = inventory.length;
+  const dexPreviewEntries = inventory.slice(0, 3).map((item) => entryByBugId(item.bugId)).filter((entry): entry is BugDexEntry => Boolean(entry));
   const missions = weeklyMissionSet(user, bugs);
 
   useEffect(() => {
     listUsers().then(setUsers);
     listBugs().then(setBugs);
-  }, [user.totalPoints]);
+    listBugDexInventory(user).then(setInventory);
+  }, [user.uid, user.totalPoints]);
 
   return (
     <ScrollView contentContainerStyle={styles.content} style={sharedStyles.screen} showsVerticalScrollIndicator={false}>
@@ -39,7 +43,7 @@ export function HomeScreen({ user, onNavigate }: Props) {
               <Text style={styles.profileText}>Profiel</Text>
             </Pressable>
           </View>
-          <Text style={styles.scoreText}>{user.totalPoints} pt - {user.title}</Text>
+          <Text style={styles.scoreText}>{user.title}</Text>
         </View>
         <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={tier.bugSize + 20} />
       </View>
@@ -58,9 +62,19 @@ export function HomeScreen({ user, onNavigate }: Props) {
         </View>
       </View>
       <View style={styles.stage}>
-        {userTiers.map((item) => (
-          <BugArtImage key={item.title} bugId={item.bugArtId} fallbackLevel={item.evolutionLevel} fallbackVariant={item.insect} size={Math.max(34, item.bugSize * 0.62)} />
-        ))}
+        {userTiers.map((item) => {
+          const unlocked = user.totalPoints >= item.minPoints;
+          return (
+            <BugArtImage
+              key={item.title}
+              bugId={unlocked ? item.bugArtId : undefined}
+              fallbackLevel={unlocked ? item.evolutionLevel : 1}
+              fallbackVariant={unlocked ? item.insect : "larva"}
+              opacity={unlocked ? 1 : 0.3}
+              size={Math.max(34, item.bugSize * 0.62)}
+            />
+          );
+        })}
       </View>
       <View style={styles.tierWrap}>
         <TierBadge points={user.totalPoints} />
@@ -86,9 +100,12 @@ export function HomeScreen({ user, onNavigate }: Props) {
           <Text style={styles.dexMeta}>{dexCount}/{bugDexEntries.length} gevangen</Text>
         </View>
         <View style={styles.dexBugs}>
-          <BugArtImage bugId="pissebed" size={48} />
-          <BugArtImage bugId="neushoornkever" size={58} />
-          <BugArtImage bugId="goliathkever" size={50} />
+          {dexPreviewEntries.map((entry) => (
+            <BugArtImage key={entry.id} bugId={entry.id} size={50} />
+          ))}
+          {Array.from({ length: Math.max(0, 3 - dexPreviewEntries.length) }).map((_, index) => (
+            <BugArtImage key={`locked-${index}`} fallbackLevel={1} fallbackVariant="larva" opacity={0.28} size={44} />
+          ))}
         </View>
       </Pressable>
       <View style={styles.missionCard}>
@@ -219,8 +236,10 @@ const styles = StyleSheet.create({
     borderColor: "#d0dfcf",
     borderRadius: 8,
     borderWidth: 1,
+    flexWrap: "wrap",
     flexDirection: "row",
-    justifyContent: "space-around",
+    gap: 8,
+    justifyContent: "center",
     marginBottom: 12,
     padding: 12
   },

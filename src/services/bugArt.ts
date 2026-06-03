@@ -36,7 +36,16 @@ export const bugArt = {
 
 export type BugArtId = keyof typeof bugArt;
 
-export const tierBugArtIds: BugArtId[] = ["zilvervisje", "mier", "sprinkhaan", "wesp", "goliathkever"];
+export const tierBugArtIds: BugArtId[] = [
+  "zilvervisje",
+  "mier",
+  "sprinkhaan",
+  "lieveheersbeestje",
+  "duizendpoot",
+  "schorpioen",
+  "neushoornkever",
+  "goliathkever"
+];
 
 export function getBugArtSource(id: string | undefined): ImageSourcePropType | null {
   if (!id) return null;

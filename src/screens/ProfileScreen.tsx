@@ -61,11 +61,20 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onS
       <TierBadge points={user.totalPoints} />
 
       <View style={styles.stage}>
-        {userTiers.map((item) => (
+        {userTiers.map((item) => {
+          const unlocked = user.totalPoints >= item.minPoints;
+          return (
           <View key={item.title} style={[styles.stageItem, item.title === tier.title && styles.stageItemActive]}>
-            <BugArtImage bugId={item.bugArtId} fallbackLevel={item.evolutionLevel} fallbackVariant={item.insect} size={Math.max(34, item.bugSize * 0.54)} />
+            <BugArtImage
+              bugId={unlocked ? item.bugArtId : undefined}
+              fallbackLevel={unlocked ? item.evolutionLevel : 1}
+              fallbackVariant={unlocked ? item.insect : "larva"}
+              opacity={unlocked ? 1 : 0.3}
+              size={Math.max(34, item.bugSize * 0.54)}
+            />
           </View>
-        ))}
+          );
+        })}
       </View>
 
       <View style={styles.card}>
@@ -197,8 +206,10 @@ const styles = StyleSheet.create({
     borderColor: "#d0dfcf",
     borderRadius: 8,
     borderWidth: 1,
+    flexWrap: "wrap",
     flexDirection: "row",
-    justifyContent: "space-around",
+    gap: 8,
+    justifyContent: "center",
     marginTop: 12,
     padding: 10
   },

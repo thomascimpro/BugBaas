@@ -5,6 +5,7 @@ export type User = {
   uid: string;
   displayName: string;
   email: string;
+  nameSet?: boolean;
   totalPoints: number;
   bugCount: number;
   title: string;
@@ -37,6 +38,47 @@ export type BugComment = {
   text: string;
   reaction: string;
   createdAt: string;
+};
+
+export type BugDexInventoryItem = {
+  bugId: string;
+  count: number;
+  firstUnlockedAt: string;
+  lastUnlockedAt: string;
+  rarity: string;
+  sources: string[];
+  lastTradeId?: string;
+};
+
+export type NotificationType = "trade" | "new_bug" | "comment" | "bug_update" | "bugdex";
+
+export type NotificationSettings = Record<NotificationType, boolean>;
+
+export type AppNotification = {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  createdAt: string;
+  actorId: string;
+  actorName: string;
+  bugId?: string;
+  read: boolean;
+};
+
+export type TradeStatus = "Open" | "Geaccepteerd" | "Afgewezen";
+
+export type TradeRequest = {
+  id: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  offerBugId: string;
+  requestBugId: string;
+  status: TradeStatus;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type NewBugInput = {

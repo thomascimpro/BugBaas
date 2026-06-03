@@ -30,8 +30,8 @@ export type BugDexEntry = {
 export const userTiers: UserTier[] = [
   {
     minPoints: 0,
-    title: "Larve",
-    description: "Net uit het test-ei, klaar voor de eerste vondst.",
+    title: "Zilvervisje Starter",
+    description: "Glijdt stil door de eerste randgevallen.",
     color: "#6f7f5f",
     bugArtId: "zilvervisje",
     insect: "larva",
@@ -40,8 +40,8 @@ export const userTiers: UserTier[] = [
   },
   {
     minPoints: 25,
-    title: "Keverscout",
-    description: "Ziet kleine foutjes voordat ze groter worden.",
+    title: "Mierenmelder",
+    description: "Draagt reproduceerstappen netjes naar het team.",
     color: "#2f6b4f",
     bugArtId: "mier",
     insect: "beetle",
@@ -50,7 +50,7 @@ export const userTiers: UserTier[] = [
   },
   {
     minPoints: 75,
-    title: "Sprinkhaan Specialist",
+    title: "Sprinkhaan Speurder",
     description: "Springt snel naar reproduceerbare bugs.",
     color: "#587c2d",
     bugArtId: "sprinkhaan",
@@ -60,22 +60,52 @@ export const userTiers: UserTier[] = [
   },
   {
     minPoints: 150,
-    title: "Libelle Leider",
-    description: "Houdt overzicht over status, prioriteit en fix.",
-    color: "#356d7c",
-    bugArtId: "wesp",
-    insect: "dragonfly",
+    title: "Lieveheers Fixer",
+    description: "Maakt van losse meldingen nette fixes.",
+    color: "#b83227",
+    bugArtId: "lieveheersbeestje",
+    insect: "ladybug",
     bugSize: 76,
     evolutionLevel: 4
   },
   {
     minPoints: 300,
-    title: "Opperbugmeister",
-    description: "De baas van de bugjacht.",
-    color: "#b83227",
+    title: "Duizendpoot Regisseur",
+    description: "Houdt meerdere flows tegelijk scherp.",
+    color: "#8a5a2b",
+    bugArtId: "duizendpoot",
+    insect: "crawler",
+    bugSize: 88,
+    evolutionLevel: 5
+  },
+  {
+    minPoints: 500,
+    title: "Schorpioen Sentinel",
+    description: "Steekt regressies voordat ze terugkomen.",
+    color: "#6f4c38",
+    bugArtId: "schorpioen",
+    insect: "crawler",
+    bugSize: 96,
+    evolutionLevel: 5
+  },
+  {
+    minPoints: 850,
+    title: "Neushoorn Commander",
+    description: "Duwt zware blokkades uit de release.",
+    color: "#1d6f52",
+    bugArtId: "neushoornkever",
+    insect: "beetle",
+    bugSize: 104,
+    evolutionLevel: 5
+  },
+  {
+    minPoints: 1350,
+    title: "Goliath BugBaas",
+    description: "Legendarische eindbaas van de BugDex.",
+    color: "#d7bd57",
     bugArtId: "goliathkever",
     insect: "ladybug",
-    bugSize: 88,
+    bugSize: 112,
     evolutionLevel: 5
   }
 ];
