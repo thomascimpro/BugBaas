@@ -14,6 +14,56 @@ service cloud.firestore {
       return severity in ['Laag', 'Normaal', 'Hoog', 'Kritiek'];
     }
 
+    function validNotificationType(type) {
+      return type in ['trade', 'new_bug', 'comment', 'bug_update', 'bugdex'];
+    }
+
+    function validInventoryData(bugId) {
+      return request.resource.data.bugId == bugId
+        && request.resource.data.count is int
+        && request.resource.data.count >= 1
+        && request.resource.data.firstUnlockedAt is string
+        && request.resource.data.lastUnlockedAt is string
+        && request.resource.data.rarity is string
+        && request.resource.data.sources is list;
+    }
+
+    function acceptedTradeData() {
+      return request.resource.data.lastTradeId is string
+        && getAfter(/databases/$(database)/documents/trades/$(request.resource.data.lastTradeId)).data.status == 'Geaccepteerd'
+        && getAfter(/databases/$(database)/documents/trades/$(request.resource.data.lastTradeId)).data.toUserId == request.auth.uid;
+    }
+
+    function tradeGain(userId, bugId) {
+      let trade = getAfter(/databases/$(database)/documents/trades/$(request.resource.data.lastTradeId)).data;
+      return (userId == trade.fromUserId && bugId == trade.requestBugId)
+        || (userId == trade.toUserId && bugId == trade.offerBugId);
+    }
+
+    function tradeLoss(userId, bugId) {
+      let trade = getAfter(/databases/$(database)/documents/trades/$(request.resource.data.lastTradeId)).data;
+      return (userId == trade.fromUserId && bugId == trade.offerBugId)
+        || (userId == trade.toUserId && bugId == trade.requestBugId);
+    }
+
+    function tradeInventoryCreate(userId, bugId) {
+      return signedIn()
+        && validInventoryData(bugId)
+        && acceptedTradeData()
+        && tradeGain(userId, bugId)
+        && request.resource.data.count == 1;
+    }
+
+    function tradeInventoryUpdate(userId, bugId) {
+      return signedIn()
+        && validInventoryData(bugId)
+        && acceptedTradeData()
+        && (
+          (tradeGain(userId, bugId) && request.resource.data.count == resource.data.count + 1)
+          || (tradeLoss(userId, bugId) && resource.data.count >= 2 && request.resource.data.count == resource.data.count - 1)
+        );
+    }
+
     function validUpvotes(data) {
       return data.upvoteUserIds is list
         && data.upvoteCount is int
@@ -83,6 +133,62 @@ service cloud.firestore {
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email;
       allow delete: if false;
+
+      match /bugdex/{bugId} {
+        allow read: if signedIn();
+        allow create: if (signedIn()
+          && request.auth.uid == userId
+          && validInventoryData(bugId))
+          || tradeInventoryCreate(userId, bugId);
+        allow update: if (signedIn()
+          && request.auth.uid == userId
+          && validInventoryData(bugId))
+          || tradeInventoryUpdate(userId, bugId);
+        allow delete: if false;
+      }
+
+      match /bugdexEvents/{eventId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.id == eventId
+          && request.resource.data.source is string
+          && request.resource.data.createdAt is string;
+        allow update, delete: if false;
+      }
+
+      match /settings/{settingId} {
+        allow read: if signedIn()
+          && request.auth.uid == userId
+          && settingId == 'notifications';
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && settingId == 'notifications'
+          && request.resource.data.trade is bool
+          && request.resource.data.new_bug is bool
+          && request.resource.data.comment is bool
+          && request.resource.data.bug_update is bool
+          && request.resource.data.bugdex is bool;
+        allow delete: if false;
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if signedIn()
+          && request.resource.data.id == notificationId
+          && validNotificationType(request.resource.data.type)
+          && request.resource.data.title is string
+          && request.resource.data.body is string
+          && request.resource.data.actorId == request.auth.uid
+          && request.resource.data.actorName is string
+          && request.resource.data.createdAt is string
+          && request.resource.data.read == false;
+        allow update: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+          && request.resource.data.read is bool;
+        allow delete: if false;
+      }
     }
 
     match /bugs/{bugId} {
@@ -103,6 +209,31 @@ service cloud.firestore {
           && request.resource.data.createdAt is string;
         allow update, delete: if false;
       }
+    }
+
+    match /trades/{tradeId} {
+      allow read: if signedIn()
+        && (resource.data.fromUserId == request.auth.uid || resource.data.toUserId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.id == tradeId
+        && request.resource.data.fromUserId == request.auth.uid
+        && request.resource.data.toUserId is string
+        && request.resource.data.toUserId != request.auth.uid
+        && request.resource.data.fromUserName is string
+        && request.resource.data.toUserName is string
+        && request.resource.data.offerBugId is string
+        && request.resource.data.requestBugId is string
+        && request.resource.data.offerBugId != request.resource.data.requestBugId
+        && request.resource.data.status == 'Open'
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string;
+      allow update: if signedIn()
+        && resource.data.status == 'Open'
+        && resource.data.toUserId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status in ['Geaccepteerd', 'Afgewezen']
+        && request.resource.data.updatedAt is string;
+      allow delete: if false;
     }
   }
 }

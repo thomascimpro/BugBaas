@@ -21,7 +21,10 @@ const paths: BugPath[] = [
   { delay: 5200, duration: 22500, top: 0.57, size: 44, bugId: "lieveheersbeestje", direction: "left", drift: 46, opacity: 0.3 },
   { delay: 7100, duration: 26800, top: 0.7, size: 38, bugId: "duizendpoot", direction: "right", drift: 62, opacity: 0.22 },
   { delay: 9400, duration: 19000, top: 0.82, size: 48, bugId: "sprinkhaan", direction: "left", drift: 58, opacity: 0.26 },
-  { delay: 11800, duration: 28500, top: 0.92, size: 54, bugId: "neushoornkever", direction: "right", drift: 32, opacity: 0.2 }
+  { delay: 11800, duration: 28500, top: 0.92, size: 54, bugId: "neushoornkever", direction: "right", drift: 32, opacity: 0.2 },
+  { delay: 15100, duration: 34000, top: 0.37, size: 42, bugId: "schorpioen", direction: "left", drift: 86, opacity: 0.16 },
+  { delay: 18800, duration: 38000, top: 0.64, size: 50, bugId: "vogelspin", direction: "right", drift: 74, opacity: 0.14 },
+  { delay: 23100, duration: 42000, top: 0.24, size: 58, bugId: "goliathkever", direction: "left", drift: 40, opacity: 0.12 }
 ];
 
 export function WalkingBugsLayer() {
