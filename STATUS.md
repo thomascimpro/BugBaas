@@ -5,6 +5,7 @@
 - Google-login toegevoegd; volledige OAuth-test vereist dev/standalone Android build.
 - Eerste standalone APK gebouwd en getest op Pixel 8.
 - GitHub Release `v0.1.0` met APK: klaar.
+- Bug melden concept/herstel en screenshot verwijderen: klaar.
 - Bug CRUD V1: aanmaken, tonen en status wijzigen klaar.
 - Upvotes op bugmeldingen: klaar.
 - Screenshot V1: client-side resize/compressie klaar; opgeslagen als Firestore data-URL voor Spark-only gebruik.

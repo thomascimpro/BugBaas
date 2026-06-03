@@ -237,3 +237,26 @@ Datum: 2026-06-02
   - `pixel8-apk-release-login.png`.
   - `pixel8-apk-release-home.png`.
 - Gefilterde logcat-check: geen app-crash, React Native JS-fout, FirebaseError, `permission-denied` of low-memory kill gevonden.
+
+## Bug form draft and screenshot update
+
+- `npm run typecheck`: geslaagd.
+- `npx expo install --check`: geslaagd.
+- `Opslaan` blijft zichtbaar op `Bug melden` door extra scroll-bottom padding.
+- Screenshotpreview heeft nu een `X` knop om de afbeelding te verwijderen.
+- Bugmeldingsconcept wordt lokaal opgeslagen bij ingevulde velden of screenshot.
+- Bij terugkomen op `Bug melden` verschijnt `Concept gevonden` met `Verder` en `Nieuw`.
+- Pixel 8 standalone APK-check:
+  - `release/CimPro-BugBaas-0.1.1.apk` geinstalleerd.
+  - Standalone launch voor package `nl.cimpro.bugbaas`: geslaagd.
+  - Concept met titel gemaakt.
+  - Naar Home genavigeerd.
+  - Terug naar `Meld` genavigeerd.
+  - Prompt `Concept gevonden` verscheen.
+  - `Verder` herstelde titel `DraftBug`.
+- Screenshotbewijs:
+  - `pixel8-v011-launch.png`.
+  - `pixel8-v011-newbug.png`.
+  - `pixel8-newbug-draft-restore.png`.
+  - `pixel8-newbug-draft-applied.png`.
+- Gefilterde logcat-check: geen app-crash, React Native JS-fout, FirebaseError, `permission-denied` of low-memory kill gevonden.
