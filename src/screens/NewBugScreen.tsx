@@ -102,7 +102,13 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
     setScreenshotDataUrl(undefined);
   }
 
+  async function saveDraftSnapshot(nextDraft: BugDraft = draft) {
+    if (!draftReady) return;
+    await AsyncStorage.setItem(draftKey, JSON.stringify(nextDraft));
+  }
+
   async function pickImage() {
+    if (hasDraftContent) await saveDraftSnapshot();
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
     if (result.canceled) return;
 
@@ -117,8 +123,10 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
       format: ImageManipulator.SaveFormat.JPEG,
       base64: true
     });
+    const nextScreenshotDataUrl = compressed.base64 ? `data:image/jpeg;base64,${compressed.base64}` : undefined;
     setScreenshotPreviewUri(compressed.uri);
-    setScreenshotDataUrl(compressed.base64 ? `data:image/jpeg;base64,${compressed.base64}` : undefined);
+    setScreenshotDataUrl(nextScreenshotDataUrl);
+    await saveDraftSnapshot({ ...draft, screenshotPreviewUri: compressed.uri, screenshotDataUrl: nextScreenshotDataUrl });
   }
 
   async function save() {

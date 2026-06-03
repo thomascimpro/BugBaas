@@ -1,10 +1,11 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { getTierForPoints } from "../services/pointsService";
 import { User } from "../types";
 import { InsectIllustration } from "./InsectIllustration";
+import { MedalIcon } from "./MedalIcon";
 
-export function LeaderboardRow({ index, user }: { index: number; user: User }) {
+export function LeaderboardRow({ index, user, onPress }: { index: number; user: User; onPress: () => void }) {
   const isLeader = index === 0;
   const tier = isLeader ? getTierForPoints(Number.MAX_SAFE_INTEGER) : getTierForPoints(user.totalPoints);
   const title = isLeader ? "Opperbugmeister" : tier.title;
@@ -13,11 +14,11 @@ export function LeaderboardRow({ index, user }: { index: number; user: User }) {
   const extraBadges = user.badges.length - visibleBadges.length;
 
   return (
-    <View style={[styles.row, isLeader && styles.leader]}>
-      <View style={[styles.rankBadge, isLeader && styles.leaderRank]}>
-        <Text style={[styles.rank, isLeader && styles.leaderRankText]}>{index + 1}</Text>
+    <Pressable style={[styles.row, isLeader && styles.leader]} onPress={onPress}>
+      <View style={styles.rankSlot}>
+        <MedalIcon index={index} size={index < 3 ? 52 : 38} />
       </View>
-      <InsectIllustration size={isLeader ? Math.min(68, tier.bugSize) : Math.min(58, tier.bugSize * 0.72)} variant={tier.insect} evolutionLevel={tier.evolutionLevel} />
+      <InsectIllustration size={isLeader ? Math.min(64, tier.bugSize) : Math.min(52, tier.bugSize * 0.72)} variant={tier.insect} evolutionLevel={tier.evolutionLevel} />
       <View style={styles.body}>
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{user.displayName}</Text>
@@ -41,7 +42,7 @@ export function LeaderboardRow({ index, user }: { index: number; user: User }) {
         <Text style={styles.points}>{user.totalPoints}</Text>
         <Text style={styles.pointsLabel}>pt</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -76,24 +77,10 @@ const styles = StyleSheet.create({
     borderColor: "#d7bd57",
     borderWidth: 2
   },
-  rankBadge: {
+  rankSlot: {
     alignItems: "center",
-    backgroundColor: "#e8f1e6",
-    borderRadius: 8,
-    height: 34,
     justifyContent: "center",
-    width: 34
-  },
-  leaderRank: {
-    backgroundColor: "#102018"
-  },
-  rank: {
-    color: "#17211c",
-    fontSize: 16,
-    fontWeight: "900"
-  },
-  leaderRankText: {
-    color: "#d7bd57"
+    width: 54
   },
   body: {
     flex: 1,

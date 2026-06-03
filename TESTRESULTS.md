@@ -260,3 +260,41 @@ Datum: 2026-06-02
   - `pixel8-newbug-draft-restore.png`.
   - `pixel8-newbug-draft-applied.png`.
 - Gefilterde logcat-check: geen app-crash, React Native JS-fout, FirebaseError, `permission-denied` of low-memory kill gevonden.
+
+## Native Google login and app icon update
+
+- Google-login omgezet van Expo AuthSession browserflow naar native `@react-native-google-signin/google-signin`.
+- Oude `expo-auth-session` en `expo-web-browser` dependencies verwijderd.
+- Nieuw app-icon gegenereerd met `imagegen` en gekoppeld aan Expo/Android launcher assets.
+- `npm run typecheck`: geslaagd.
+- `npx expo install --check`: geslaagd.
+- `assembleRelease`: geslaagd.
+- Pixel 8 APK install: geslaagd.
+- Pixel 8 native Google-login: geslaagd; login kwam uit op Home.
+- Gefilterde logcat-check: geen `invalid_request`, `DEVELOPER_ERROR`, app-crash, React Native JS-fout, FirebaseError of `permission-denied` gevonden.
+- Screenshotbewijs:
+  - `pixel8-google-native-final.png`.
+  - `pixel8-app-icon-launch.png`.
+
+## Bug save, shared upvote and comments update
+
+- Firestore bug create gefixt: `screenshotDataUrl` wordt niet meer meegeschreven als die `undefined` is.
+- Firestore rules gedeployed voor `bugs/{bugId}/comments`.
+- Comments/reacties toegevoegd met bug-emoticons.
+- Upvote-bonus toegevoegd aan ranglijstscore: `+3 pt` per upvote, afgeleid uit Firestore bugs.
+- `npm run typecheck`: geslaagd.
+- `npx expo install --check`: geslaagd.
+- `firebase deploy --only firestore:rules`: geslaagd.
+- `assembleRelease`: geslaagd.
+- Pixel 8 twee-account flow:
+  - Account A maakte bug zonder screenshot.
+  - Account B zag de bug in de buglijst.
+  - Account B upvotete de bug.
+  - Account B plaatste commentaar met bug-emoticon.
+  - Ranglijstscore van account A ging van `45` naar `48`.
+- Gefilterde logcat-check: geen `Function setDoc`, `Unsupported field value`, FirebaseError, `permission-denied`, app-crash of React Native JS-fout gevonden.
+- Screenshotbewijs:
+  - `pixel8-bug-created-noscreenshot-2.png`.
+  - `pixel8-account-b-buglist.png`.
+  - `pixel8-account-b-upvote-comment.png`.
+  - `pixel8-upvote-leaderboard.png`.

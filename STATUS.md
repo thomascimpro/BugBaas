@@ -2,7 +2,7 @@
 
 - Projectbasis: klaar.
 - Auth-flow: klaar met Firebase integratie en demo-fallback.
-- Google-login toegevoegd; volledige OAuth-test vereist dev/standalone Android build.
+- Google-login werkt via native Google Sign-In in standalone APK.
 - Eerste standalone APK gebouwd en getest op Pixel 8.
 - GitHub Release `v0.1.0` met APK: klaar.
 - Bug melden concept/herstel en screenshot verwijderen: klaar.

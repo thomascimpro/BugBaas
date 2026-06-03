@@ -1,12 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { InsectIllustration } from "../components/InsectIllustration";
 import { LeaderboardRow } from "../components/LeaderboardRow";
+import { MedalIcon } from "../components/MedalIcon";
+import { getTierForPoints } from "../services/pointsService";
 import { listUsers } from "../services/userService";
 import { User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
-export function LeaderboardScreen({ onBack: _onBack }: { onBack: () => void }) {
+type Props = {
+  onBack: () => void;
+  onSelectUser: (user: User) => void;
+};
+
+export function LeaderboardScreen({ onBack: _onBack, onSelectUser }: Props) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,6 +26,7 @@ export function LeaderboardScreen({ onBack: _onBack }: { onBack: () => void }) {
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={[sharedStyles.title, styles.headerTitle]}>Ranglijst</Text>
+          <Text style={styles.headerSubtitle}>Top bugjagers van CimPro</Text>
         </View>
         <InsectIllustration size={64} variant="ladybug" />
       </View>
@@ -26,12 +34,31 @@ export function LeaderboardScreen({ onBack: _onBack }: { onBack: () => void }) {
         <FlatList
           data={users}
           keyExtractor={(user) => user.uid}
+          ListHeaderComponent={users.length ? <Podium users={users.slice(0, 3)} onSelectUser={onSelectUser} /> : null}
           ListEmptyComponent={<Text style={sharedStyles.subtitle}>Nog geen deelnemers.</Text>}
-          renderItem={({ item, index }) => <LeaderboardRow user={item} index={index} />}
+          renderItem={({ item, index }) => <LeaderboardRow user={item} index={index} onPress={() => onSelectUser(item)} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
       )}
+    </View>
+  );
+}
+
+function Podium({ users, onSelectUser }: { users: User[]; onSelectUser: (user: User) => void }) {
+  return (
+    <View style={styles.podium}>
+      {users.map((user, index) => {
+        const tier = index === 0 ? getTierForPoints(Number.MAX_SAFE_INTEGER) : getTierForPoints(user.totalPoints);
+        return (
+          <Pressable key={user.uid} style={[styles.podiumCard, index === 0 && styles.podiumLeader]} onPress={() => onSelectUser(user)}>
+            <MedalIcon index={index} size={index === 0 ? 76 : 58} />
+            <Text style={[styles.podiumRank, index === 0 && styles.podiumLeaderText]}>#{index + 1}</Text>
+            <Text style={[styles.podiumName, index === 0 && styles.podiumLeaderText]} numberOfLines={1}>{user.displayName}</Text>
+            <Text style={[styles.podiumMeta, { color: index === 0 ? "#d7bd57" : tier.color }]}>{user.totalPoints} pt</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -52,6 +79,56 @@ const styles = StyleSheet.create({
     flex: 1
   },
   headerTitle: {
+    color: "#ffffff"
+  },
+  headerSubtitle: {
+    color: "#dce9df",
+    fontSize: 13,
+    fontWeight: "800"
+  },
+  podium: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12
+  },
+  podiumCard: {
+    alignItems: "center",
+    backgroundColor: "#fdfefb",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    elevation: 2,
+    flex: 1,
+    minHeight: 148,
+    padding: 10,
+    shadowColor: "#102018",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6
+  },
+  podiumLeader: {
+    backgroundColor: "#102018",
+    borderColor: "#d7bd57"
+  },
+  podiumRank: {
+    color: "#17211c",
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 4
+  },
+  podiumName: {
+    color: "#17211c",
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 2,
+    maxWidth: "100%"
+  },
+  podiumMeta: {
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  podiumLeaderText: {
     color: "#ffffff"
   },
   listContent: {

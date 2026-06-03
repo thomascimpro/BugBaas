@@ -1,10 +1,11 @@
 import { collection, doc, getDocs, orderBy, query, runTransaction, setDoc, updateDoc } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
-import { BugReport, BugStatus, NewBugInput, User } from "../types";
+import { BugComment, BugReport, BugStatus, NewBugInput, User } from "../types";
 import { calculateBugPoints } from "./pointsService";
 import { applyUserPoints } from "./userService";
 
 const demoBugs: BugReport[] = [];
+const demoComments: BugComment[] = [];
 
 function normalizeBug(bug: BugReport, fallbackId = bug.id): BugReport {
   const upvoteUserIds = Array.isArray(bug.upvoteUserIds) ? bug.upvoteUserIds : [];
@@ -51,7 +52,8 @@ export async function createBug(input: NewBugInput, user: User): Promise<BugRepo
   }
 
   const docRef = doc(collection(db, "bugs"));
-  const bug = { ...baseBug, id: docRef.id, screenshotDataUrl: input.screenshotDataUrl };
+  const bug: BugReport = { ...baseBug, id: docRef.id };
+  if (input.screenshotDataUrl) bug.screenshotDataUrl = input.screenshotDataUrl;
   await setDoc(docRef, bug);
   await applyUserPoints(user.uid, points, 1);
   return bug;
@@ -88,6 +90,7 @@ export async function updateBugStatus(bug: BugReport, status: BugStatus): Promis
 
 export async function toggleBugUpvote(bug: BugReport, user: User): Promise<BugReport> {
   const current = normalizeBug(bug);
+  if (current.reporterId === user.uid) throw new Error("Je kunt je eigen bug niet upvoten.");
   const hasVoted = current.upvoteUserIds.includes(user.uid);
   const upvoteUserIds = hasVoted
     ? current.upvoteUserIds.filter((uid) => uid !== user.uid)
@@ -110,6 +113,7 @@ export async function toggleBugUpvote(bug: BugReport, user: User): Promise<BugRe
     const snapshot = await transaction.get(bugRef);
     if (!snapshot.exists()) throw new Error("Bug niet gevonden.");
     const fresh = normalizeBug(snapshot.data() as BugReport, snapshot.id);
+    if (fresh.reporterId === user.uid) throw new Error("Je kunt je eigen bug niet upvoten.");
     const voted = fresh.upvoteUserIds.includes(user.uid);
     const nextUserIds = voted
       ? fresh.upvoteUserIds.filter((uid) => uid !== user.uid)
@@ -127,4 +131,40 @@ export async function toggleBugUpvote(bug: BugReport, user: User): Promise<BugRe
     });
     return next;
   });
+}
+
+export async function listBugComments(bugId: string): Promise<BugComment[]> {
+  if (!isFirebaseConfigured) {
+    return demoComments.filter((comment) => comment.bugId === bugId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  const snapshot = await getDocs(query(collection(db, "bugs", bugId, "comments"), orderBy("createdAt", "asc")));
+  return snapshot.docs.map((item) => ({ ...(item.data() as BugComment), id: item.id, bugId }));
+}
+
+export async function addBugComment(bug: BugReport, user: User, text: string, reaction: string): Promise<BugComment> {
+  const trimmed = text.trim();
+  if (!trimmed && !reaction) throw new Error("Kies een reactie of typ commentaar.");
+  if (trimmed.length > 500) throw new Error("Commentaar mag maximaal 500 tekens zijn.");
+
+  const now = new Date().toISOString();
+  const baseComment: BugComment = {
+    id: `comment-${Date.now()}`,
+    bugId: bug.id,
+    authorId: user.uid,
+    authorName: user.displayName,
+    text: trimmed,
+    reaction,
+    createdAt: now
+  };
+
+  if (!isFirebaseConfigured) {
+    demoComments.push(baseComment);
+    return baseComment;
+  }
+
+  const ref = doc(collection(db, "bugs", bug.id, "comments"));
+  const comment = { ...baseComment, id: ref.id };
+  await setDoc(ref, comment);
+  return comment;
 }

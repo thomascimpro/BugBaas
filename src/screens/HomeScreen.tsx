@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { DimensionValue, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { RouteName } from "../../App";
 import { InsectIllustration } from "../components/InsectIllustration";
 import { TierBadge } from "../components/TierBadge";
-import { getTierForPoints, userTiers } from "../services/pointsService";
+import { listBugs } from "../services/bugService";
+import { bugDexEntries, getTierForPoints, unlockedBugDexCount, userTiers } from "../services/pointsService";
 import { listUsers } from "../services/userService";
-import { User } from "../types";
+import { weeklyMissionLabel, weeklyMissionSet } from "../services/weeklyMissionService";
+import { BugReport, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
@@ -16,11 +18,15 @@ type Props = {
 export function HomeScreen({ user, onNavigate }: Props) {
   const tier = getTierForPoints(user.totalPoints);
   const [users, setUsers] = useState<User[]>([]);
+  const [bugs, setBugs] = useState<BugReport[]>([]);
   const leaders = users.slice(0, 3);
   const userRank = Math.max(1, users.findIndex((item) => item.uid === user.uid) + 1);
+  const dexCount = unlockedBugDexCount(user);
+  const missions = weeklyMissionSet(user, bugs);
 
   useEffect(() => {
     listUsers().then(setUsers);
+    listBugs().then(setBugs);
   }, [user.totalPoints]);
 
   return (
@@ -74,6 +80,44 @@ export function HomeScreen({ user, onNavigate }: Props) {
           ))}
         </View>
       </Pressable>
+      <Pressable style={styles.dexCard} onPress={() => onNavigate("bugdex")}>
+        <View style={styles.dexText}>
+          <Text style={styles.dexTitle}>BugDex</Text>
+          <Text style={styles.dexMeta}>{dexCount}/{bugDexEntries.length} gevangen</Text>
+        </View>
+        <View style={styles.dexBugs}>
+          <InsectIllustration size={42} variant="crawler" evolutionLevel={2} />
+          <InsectIllustration size={52} variant="beetle" evolutionLevel={4} />
+          <InsectIllustration size={44} variant="ladybug" evolutionLevel={5} />
+        </View>
+      </Pressable>
+      <View style={styles.missionCard}>
+        <View style={styles.missionHeader}>
+          <View>
+            <Text style={styles.missionTitle}>Weekly missies</Text>
+            <Text style={styles.missionWeek}>{weeklyMissionLabel()}</Text>
+          </View>
+          <InsectIllustration size={40} variant="grasshopper" evolutionLevel={3} />
+        </View>
+        <View style={styles.missionList}>
+          {missions.map((mission) => {
+            const done = mission.progress >= mission.target;
+            const width: DimensionValue = `${Math.min(100, Math.round((mission.progress / mission.target) * 100))}%`;
+            return (
+              <View key={mission.id} style={styles.missionItem}>
+                <View style={styles.missionLine}>
+                  <Text style={styles.missionName}>{mission.title}</Text>
+                  <Text style={[styles.missionCount, done && styles.missionDone]}>{mission.progress}/{mission.target}</Text>
+                </View>
+                <View style={styles.missionTrack}>
+                  <View style={[styles.missionFill, { width }]} />
+                </View>
+                <Text style={styles.missionReward}>{done ? "Extra vrijgespeeld" : mission.reward}</Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
       <View style={styles.quickCard}>
         <Text style={styles.newsTitle}>Acties</Text>
         <View style={styles.newsGrid}>
@@ -85,10 +129,10 @@ export function HomeScreen({ user, onNavigate }: Props) {
             <InsectIllustration size={28} variant="beetle" />
             <Text style={styles.newsItemTitle}>Fix +15</Text>
           </View>
-          <View style={styles.updatePill}>
+          <Pressable style={styles.updatePill} onPress={() => onNavigate("bugdex")}>
             <InsectIllustration size={28} variant="ladybug" />
-            <Text style={styles.newsItemTitle}>Badges</Text>
-          </View>
+            <Text style={styles.newsItemTitle}>BugDex</Text>
+          </Pressable>
         </View>
       </View>
       <Pressable style={[sharedStyles.button, styles.actionButton]} onPress={() => onNavigate("bugs")}>
@@ -101,7 +145,7 @@ export function HomeScreen({ user, onNavigate }: Props) {
 
 const styles = StyleSheet.create({
   content: {
-    paddingBottom: 18
+    paddingBottom: 160
   },
   hero: {
     alignItems: "center",
@@ -190,6 +234,107 @@ const styles = StyleSheet.create({
     gap: 12,
     justifyContent: "space-between",
     padding: 14
+  },
+  dexCard: {
+    alignItems: "center",
+    backgroundColor: "#fdfefb",
+    borderColor: "#cddfd3",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    marginTop: 12,
+    padding: 14
+  },
+  dexText: {
+    flex: 1
+  },
+  dexTitle: {
+    color: "#102018",
+    fontSize: 20,
+    fontWeight: "900"
+  },
+  dexMeta: {
+    color: "#52665d",
+    fontSize: 13,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  dexBugs: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 0
+  },
+  missionCard: {
+    backgroundColor: "#102018",
+    borderColor: "#294338",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 12,
+    padding: 14
+  },
+  missionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10
+  },
+  missionTitle: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  missionWeek: {
+    color: "#d7bd57",
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  missionList: {
+    gap: 9
+  },
+  missionItem: {
+    backgroundColor: "#fdfefb",
+    borderRadius: 8,
+    padding: 10
+  },
+  missionLine: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8
+  },
+  missionName: {
+    color: "#102018",
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  missionCount: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  missionDone: {
+    color: "#15724f"
+  },
+  missionTrack: {
+    backgroundColor: "#dbe8de",
+    borderRadius: 8,
+    height: 8,
+    marginTop: 7,
+    overflow: "hidden"
+  },
+  missionFill: {
+    backgroundColor: "#15724f",
+    height: "100%"
+  },
+  missionReward: {
+    color: "#15724f",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 6
   },
   rankingHeader: {
     alignItems: "center",

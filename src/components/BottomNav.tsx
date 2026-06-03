@@ -40,20 +40,18 @@ const styles = StyleSheet.create({
     borderColor: "#c8d5ce",
     borderRadius: 8,
     borderWidth: 1,
-    bottom: 14,
     elevation: 8,
     flexDirection: "row",
     gap: 10,
     justifyContent: "space-between",
-    left: 18,
+    marginBottom: 14,
+    marginHorizontal: 18,
     padding: 9,
-    position: "absolute",
-    right: 18,
     shadowColor: "#102018",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.18,
     shadowRadius: 12,
-    zIndex: 20
+    zIndex: 100
   },
   item: {
     alignItems: "center",

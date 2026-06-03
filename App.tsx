@@ -9,17 +9,19 @@ import { BugDetailScreen } from "./src/screens/BugDetailScreen";
 import { NewBugScreen } from "./src/screens/NewBugScreen";
 import { LeaderboardScreen } from "./src/screens/LeaderboardScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { BugDexScreen } from "./src/screens/BugDexScreen";
 import { BugReport } from "./src/types";
 import { AppBackground } from "./src/components/AppBackground";
 import { BottomNav } from "./src/components/BottomNav";
 import { WalkingBugsLayer } from "./src/components/WalkingBugsLayer";
 
-export type RouteName = "home" | "bugs" | "new" | "detail" | "leaderboard" | "profile";
+export type RouteName = "home" | "bugs" | "new" | "detail" | "leaderboard" | "profile" | "userProfile" | "bugdex";
 
 export default function App() {
   const [route, setRoute] = useState<RouteName>("home");
   const [user, setUser] = useState<User | null>(null);
   const [selectedBug, setSelectedBug] = useState<BugReport | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
 
@@ -67,6 +69,7 @@ export default function App() {
     await logout();
     setUser(null);
     setSelectedBug(null);
+    setSelectedUser(null);
     setRoute("home");
   }
 
@@ -78,7 +81,13 @@ export default function App() {
 
   function navigateMain(nextRoute: "home" | "new" | "leaderboard") {
     setSelectedBug(null);
+    setSelectedUser(null);
     setRoute(nextRoute);
+  }
+
+  function openUserProfile(nextUser: User) {
+    setSelectedUser(nextUser);
+    setRoute(nextUser.uid === user?.uid ? "profile" : "userProfile");
   }
 
   if (!user) {
@@ -116,14 +125,37 @@ export default function App() {
             bug={selectedBug}
             user={user}
             onBack={() => setRoute("bugs")}
+            onOpenProfile={openUserProfile}
             onBugChanged={(bug) => {
               setSelectedBug(bug);
               void refreshUser();
             }}
           />
         )}
-        {route === "leaderboard" && <LeaderboardScreen onBack={() => setRoute("home")} />}
-        {route === "profile" && <ProfileScreen user={user} onBack={() => setRoute("home")} onLogout={handleLogout} />}
+        {route === "leaderboard" && <LeaderboardScreen onBack={() => setRoute("home")} onSelectUser={openUserProfile} />}
+        {route === "profile" && (
+          <ProfileScreen
+            user={user}
+            onBack={() => setRoute("home")}
+            onLogout={handleLogout}
+            onSelectBug={(bug) => {
+              setSelectedBug(bug);
+              setRoute("detail");
+            }}
+          />
+        )}
+        {route === "userProfile" && selectedUser && (
+          <ProfileScreen
+            user={selectedUser}
+            isOwnProfile={false}
+            onBack={() => setRoute("leaderboard")}
+            onSelectBug={(bug) => {
+              setSelectedBug(bug);
+              setRoute("detail");
+            }}
+          />
+        )}
+        {route === "bugdex" && <BugDexScreen user={user} onBack={() => setRoute("home")} />}
       </View>
       <BottomNav activeRoute={route} onNavigate={navigateMain} />
     </SafeAreaView>
@@ -137,6 +169,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    zIndex: 1
+    zIndex: 0
   }
 });

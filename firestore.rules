@@ -68,6 +68,7 @@ service cloud.firestore {
 
     function upvoteUpdate() {
       return onlyUpvoteFieldsChanged()
+        && resource.data.reporterId != request.auth.uid
         && (firstLegacyUpvote() || toggledOwnUpvote());
     }
 
@@ -89,6 +90,19 @@ service cloud.firestore {
       allow create: if signedIn() && validBugCreate();
       allow update: if signedIn() && (reporterBugUpdate() || upvoteUpdate());
       allow delete: if false;
+
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.bugId == bugId
+          && request.resource.data.authorName is string
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.reaction is string
+          && request.resource.data.createdAt is string;
+        allow update, delete: if false;
+      }
     }
   }
 }
