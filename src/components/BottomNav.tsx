@@ -1,7 +1,8 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { RouteName } from "../../App";
-import { InsectIllustration } from "./InsectIllustration";
+import { BugArtId } from "../services/bugArt";
+import { BugArtImage } from "./BugArtImage";
 
 type NavRoute = "home" | "new" | "leaderboard";
 
@@ -10,10 +11,10 @@ type Props = {
   onNavigate: (route: NavRoute) => void;
 };
 
-const items: Array<{ route: NavRoute; label: string; variant: "larva" | "crawler" | "ladybug" }> = [
-  { route: "home", label: "Home", variant: "larva" },
-  { route: "new", label: "Meld", variant: "crawler" },
-  { route: "leaderboard", label: "Ranglijst", variant: "ladybug" }
+const items: Array<{ route: NavRoute; label: string; bugId: BugArtId }> = [
+  { route: "home", label: "Home", bugId: "zilvervisje" },
+  { route: "new", label: "Meld", bugId: "mier" },
+  { route: "leaderboard", label: "Ranglijst", bugId: "goliathkever" }
 ];
 
 export function BottomNav({ activeRoute, onNavigate }: Props) {
@@ -24,7 +25,7 @@ export function BottomNav({ activeRoute, onNavigate }: Props) {
         const primary = item.route === "new";
         return (
           <Pressable key={item.route} style={[styles.item, primary && styles.primaryItem, active && styles.activeItem, primary && active && styles.activePrimary]} onPress={() => onNavigate(item.route)}>
-            <InsectIllustration size={primary ? 40 : active ? 30 : 24} variant={item.variant} />
+            <BugArtImage bugId={item.bugId} size={primary ? 44 : active ? 32 : 26} />
             <Text style={[styles.label, primary && styles.primaryLabel, active && styles.activeLabel, primary && active && styles.activePrimaryLabel]}>{item.label}</Text>
           </Pressable>
         );

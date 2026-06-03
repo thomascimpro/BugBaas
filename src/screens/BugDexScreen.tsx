@@ -1,6 +1,6 @@
 import React from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { InsectIllustration } from "../components/InsectIllustration";
+import { BugArtImage } from "../components/BugArtImage";
 import { bugDexEntries, BugDexRarity, isBugDexEntryUnlocked, unlockedBugDexCount } from "../services/pointsService";
 import { User } from "../types";
 import { sharedStyles } from "./sharedStyles";
@@ -31,7 +31,7 @@ export function BugDexScreen({ user, onBack }: Props) {
           <Text style={[sharedStyles.title, styles.headerTitle]}>BugDex</Text>
           <Text style={styles.headerMeta}>{unlockedCount}/{totalCount} ontdekt - {progress}%</Text>
         </View>
-        <InsectIllustration size={66} variant="ladybug" evolutionLevel={5} />
+        <BugArtImage bugId="goliathkever" size={74} />
       </View>
 
       <View style={styles.banner}>
@@ -70,7 +70,7 @@ export function BugDexScreen({ user, onBack }: Props) {
                 <Text style={[styles.rarity, { color }]}>{entry.rarity}</Text>
               </View>
               <View style={styles.bugWrap}>
-                <InsectIllustration size={unlocked ? 58 : 46} variant={entry.insect} evolutionLevel={unlocked ? entry.evolutionLevel : 1} />
+                <BugArtImage bugId={entry.id} fallbackLevel={unlocked ? entry.evolutionLevel : 1} fallbackVariant={entry.insect} opacity={unlocked ? 1 : 0.52} size={unlocked ? 70 : 54} />
                 {!unlocked && <View style={styles.lockOverlay}><Text style={styles.lockText}>?</Text></View>}
               </View>
               <Text style={[styles.name, !unlocked && styles.lockedText]}>{unlocked ? entry.name : "Onbekende bug"}</Text>

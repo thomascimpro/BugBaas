@@ -7,6 +7,7 @@ export type UserTier = {
   title: string;
   description: string;
   color: string;
+  bugArtId: string;
   insect: InsectVariant;
   bugSize: number;
   evolutionLevel: number;
@@ -32,6 +33,7 @@ export const userTiers: UserTier[] = [
     title: "Larve",
     description: "Net uit het test-ei, klaar voor de eerste vondst.",
     color: "#6f7f5f",
+    bugArtId: "zilvervisje",
     insect: "larva",
     bugSize: 46,
     evolutionLevel: 1
@@ -41,6 +43,7 @@ export const userTiers: UserTier[] = [
     title: "Keverscout",
     description: "Ziet kleine foutjes voordat ze groter worden.",
     color: "#2f6b4f",
+    bugArtId: "mier",
     insect: "beetle",
     bugSize: 56,
     evolutionLevel: 2
@@ -50,6 +53,7 @@ export const userTiers: UserTier[] = [
     title: "Sprinkhaan Specialist",
     description: "Springt snel naar reproduceerbare bugs.",
     color: "#587c2d",
+    bugArtId: "sprinkhaan",
     insect: "grasshopper",
     bugSize: 66,
     evolutionLevel: 3
@@ -59,6 +63,7 @@ export const userTiers: UserTier[] = [
     title: "Libelle Leider",
     description: "Houdt overzicht over status, prioriteit en fix.",
     color: "#356d7c",
+    bugArtId: "wesp",
     insect: "dragonfly",
     bugSize: 76,
     evolutionLevel: 4
@@ -68,6 +73,7 @@ export const userTiers: UserTier[] = [
     title: "Opperbugmeister",
     description: "De baas van de bugjacht.",
     color: "#b83227",
+    bugArtId: "goliathkever",
     insect: "ladybug",
     bugSize: 88,
     evolutionLevel: 5

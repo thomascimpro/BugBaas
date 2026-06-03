@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { InsectIllustration } from "../components/InsectIllustration";
+import { BugArtImage } from "../components/BugArtImage";
 import { LeaderboardRow } from "../components/LeaderboardRow";
 import { MedalIcon } from "../components/MedalIcon";
 import { getTierForPoints } from "../services/pointsService";
@@ -28,7 +28,7 @@ export function LeaderboardScreen({ onBack: _onBack, onSelectUser }: Props) {
           <Text style={[sharedStyles.title, styles.headerTitle]}>Ranglijst</Text>
           <Text style={styles.headerSubtitle}>Top bugjagers van CimPro</Text>
         </View>
-        <InsectIllustration size={64} variant="ladybug" />
+        <BugArtImage bugId="goliathkever" size={72} />
       </View>
       {loading ? <ActivityIndicator /> : (
         <FlatList
@@ -53,6 +53,7 @@ function Podium({ users, onSelectUser }: { users: User[]; onSelectUser: (user: U
         return (
           <Pressable key={user.uid} style={[styles.podiumCard, index === 0 && styles.podiumLeader]} onPress={() => onSelectUser(user)}>
             <MedalIcon index={index} size={index === 0 ? 76 : 58} />
+            <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={index === 0 ? 58 : 44} />
             <Text style={[styles.podiumRank, index === 0 && styles.podiumLeaderText]}>#{index + 1}</Text>
             <Text style={[styles.podiumName, index === 0 && styles.podiumLeaderText]} numberOfLines={1}>{user.displayName}</Text>
             <Text style={[styles.podiumMeta, { color: index === 0 ? "#d7bd57" : tier.color }]}>{user.totalPoints} pt</Text>

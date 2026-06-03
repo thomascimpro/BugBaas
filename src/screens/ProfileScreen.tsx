@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { InsectIllustration } from "../components/InsectIllustration";
+import { BugArtImage } from "../components/BugArtImage";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { StatusBadge } from "../components/StatusBadge";
 import { TierBadge } from "../components/TierBadge";
@@ -40,7 +40,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onS
           <Text style={styles.name} numberOfLines={1}>{user.displayName}</Text>
           <Text style={styles.email} numberOfLines={1}>{user.email}</Text>
         </View>
-        <InsectIllustration size={tier.bugSize + 12} variant={tier.insect} evolutionLevel={tier.evolutionLevel} />
+        <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={tier.bugSize + 22} />
       </View>
 
       <View style={styles.stats}>
@@ -63,7 +63,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onS
       <View style={styles.stage}>
         {userTiers.map((item) => (
           <View key={item.title} style={[styles.stageItem, item.title === tier.title && styles.stageItemActive]}>
-            <InsectIllustration size={Math.max(32, item.bugSize * 0.48)} variant={item.insect} evolutionLevel={item.evolutionLevel} />
+            <BugArtImage bugId={item.bugArtId} fallbackLevel={item.evolutionLevel} fallbackVariant={item.insect} size={Math.max(34, item.bugSize * 0.54)} />
           </View>
         ))}
       </View>
@@ -85,7 +85,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onS
         <View style={styles.badges}>
           {badges.map((badge) => (
             <View key={badge} style={styles.badge}>
-              <InsectIllustration size={22} variant="ladybug" />
+              <BugArtImage bugId="lieveheersbeestje" size={24} />
               <Text style={styles.badgeText}>{badge}</Text>
             </View>
           ))}
