@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { InsectIllustration } from "./InsectIllustration";
 import { getTierForPoints, pointsUntilNextTier } from "../services/pointsService";
+import { BugArtImage } from "./BugArtImage";
 
 type Props = {
   points: number;
@@ -15,7 +15,7 @@ export function TierBadge({ points, compact = false, rank }: Props) {
 
   return (
     <View style={[styles.card, compact && styles.compact, { borderColor: tier.color }]}>
-      <InsectIllustration size={compact ? Math.max(36, tier.bugSize * 0.62) : tier.bugSize} variant={tier.insect} evolutionLevel={tier.evolutionLevel} />
+      <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={compact ? Math.max(36, tier.bugSize * 0.62) : tier.bugSize} />
       <View style={styles.body}>
         <Text style={[styles.name, { color: tier.color }]}>{rank === 0 ? "Opperbugmeister" : tier.title}</Text>
         <Text style={styles.meta}>{points} pt</Text>

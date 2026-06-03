@@ -1,21 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Dimensions, Easing, Pressable, StyleSheet, View } from "react-native";
-import { InsectVariant } from "../services/pointsService";
-import { WalkingBug } from "./WalkingBug";
+import { BugArtId } from "../services/bugArt";
+import { BugArtImage } from "./BugArtImage";
 
 type BugPath = {
   delay: number;
   duration: number;
   top: number;
   size: number;
-  variant: InsectVariant;
+  bugId: BugArtId;
   direction: "right" | "left";
+  drift: number;
+  opacity: number;
 };
 
 const paths: BugPath[] = [
-  { delay: 400, duration: 17000, top: 0.2, size: 34, variant: "beetle", direction: "right" },
-  { delay: 3600, duration: 21000, top: 0.53, size: 30, variant: "crawler", direction: "left" },
-  { delay: 7200, duration: 19000, top: 0.8, size: 32, variant: "ladybug", direction: "right" }
+  { delay: 300, duration: 17500, top: 0.16, size: 42, bugId: "mier", direction: "right", drift: 38, opacity: 0.34 },
+  { delay: 1600, duration: 24000, top: 0.29, size: 34, bugId: "zilvervisje", direction: "left", drift: 54, opacity: 0.24 },
+  { delay: 3300, duration: 20500, top: 0.43, size: 46, bugId: "pissebed", direction: "right", drift: 72, opacity: 0.28 },
+  { delay: 5200, duration: 22500, top: 0.57, size: 44, bugId: "lieveheersbeestje", direction: "left", drift: 46, opacity: 0.3 },
+  { delay: 7100, duration: 26800, top: 0.7, size: 38, bugId: "duizendpoot", direction: "right", drift: 62, opacity: 0.22 },
+  { delay: 9400, duration: 19000, top: 0.82, size: 48, bugId: "sprinkhaan", direction: "left", drift: 58, opacity: 0.26 },
+  { delay: 11800, duration: 28500, top: 0.92, size: 54, bugId: "neushoornkever", direction: "right", drift: 32, opacity: 0.2 }
 ];
 
 export function WalkingBugsLayer() {
@@ -76,20 +82,31 @@ export function WalkingBugsLayer() {
           inputRange: [0, 1],
           outputRange: track.direction === "right" ? [-80, width + 80] : [width + 80, -80]
         });
+        const translateY = track.progress.interpolate({
+          inputRange: [0, 0.25, 0.5, 0.75, 1],
+          outputRange: [0, track.drift, -track.drift * 0.5, track.drift * 0.72, 0]
+        });
+        const rotate = track.progress.interpolate({
+          inputRange: [0, 0.25, 0.5, 0.75, 1],
+          outputRange:
+            track.direction === "right"
+              ? ["82deg", "96deg", "77deg", "101deg", "88deg"]
+              : ["-82deg", "-96deg", "-77deg", "-101deg", "-88deg"]
+        });
         return (
           <Animated.View
-            key={track.variant}
+            key={`${track.bugId}-${index}`}
             style={[
               styles.bug,
               {
                 top: height * track.top,
-                opacity: splatted[index] ? 0.78 : index === 1 ? 0.28 : 0.32,
-                transform: [{ translateX }]
+                opacity: splatted[index] ? 0.78 : track.opacity,
+                transform: [{ translateX }, { translateY }, { rotate }]
               }
             ]}
           >
             <Pressable hitSlop={12} onPress={() => splatBug(index)} style={[styles.hitbox, { minHeight: track.size + 18, minWidth: track.size * 1.8 }]}>
-              {splatted[index] ? <SplatMark size={track.size + 20} /> : <WalkingBug size={track.size} variant={track.variant} direction={track.direction} />}
+              {splatted[index] ? <SplatMark size={track.size + 20} /> : <BugArtImage bugId={track.bugId} size={track.size} />}
             </Pressable>
           </Animated.View>
         );

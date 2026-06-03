@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { getTierForPoints } from "../services/pointsService";
 import { User } from "../types";
-import { InsectIllustration } from "./InsectIllustration";
+import { BugArtImage } from "./BugArtImage";
 import { MedalIcon } from "./MedalIcon";
 
 export function LeaderboardRow({ index, user, onPress }: { index: number; user: User; onPress: () => void }) {
@@ -18,7 +18,7 @@ export function LeaderboardRow({ index, user, onPress }: { index: number; user: 
       <View style={styles.rankSlot}>
         <MedalIcon index={index} size={index < 3 ? 52 : 38} />
       </View>
-      <InsectIllustration size={isLeader ? Math.min(64, tier.bugSize) : Math.min(52, tier.bugSize * 0.72)} variant={tier.insect} evolutionLevel={tier.evolutionLevel} />
+      <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={isLeader ? Math.min(64, tier.bugSize) : Math.min(52, tier.bugSize * 0.72)} />
       <View style={styles.body}>
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{user.displayName}</Text>

@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 import { AppBackground } from "../components/AppBackground";
-import { InsectIllustration } from "../components/InsectIllustration";
+import { BugArtImage } from "../components/BugArtImage";
 import { sharedStyles } from "./sharedStyles";
 
 const splashBadge = require("../../assets/generated/bugbaas-splash-badge-hd.png");
@@ -108,7 +108,7 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
         <Animated.Image accessibilityLabel="CimPro BugBaas logo" resizeMode="contain" source={splashBadge} style={[styles.badge, { transform: [{ scale: badgeScale }] }]} />
         <View style={styles.brandRow}>
           <Text style={sharedStyles.title}>CimPro BugBaas</Text>
-          <InsectIllustration size={58} variant="beetle" />
+          <BugArtImage bugId="neushoornkever" size={62} />
         </View>
         <TextInput autoCapitalize="none" keyboardType="email-address" placeholder="E-mail" style={sharedStyles.input} value={email} onChangeText={setEmail} />
         <TextInput placeholder="Wachtwoord" secureTextEntry style={sharedStyles.input} value={password} onChangeText={setPassword} />

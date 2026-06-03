@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { DimensionValue, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { RouteName } from "../../App";
-import { InsectIllustration } from "../components/InsectIllustration";
+import { BugArtImage } from "../components/BugArtImage";
 import { TierBadge } from "../components/TierBadge";
 import { listBugs } from "../services/bugService";
 import { bugDexEntries, getTierForPoints, unlockedBugDexCount, userTiers } from "../services/pointsService";
@@ -41,7 +41,7 @@ export function HomeScreen({ user, onNavigate }: Props) {
           </View>
           <Text style={styles.scoreText}>{user.totalPoints} pt - {user.title}</Text>
         </View>
-        <InsectIllustration size={tier.bugSize + 10} variant={tier.insect} evolutionLevel={tier.evolutionLevel} />
+        <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={tier.bugSize + 20} />
       </View>
       <View style={styles.statsGrid}>
         <View style={styles.statTile}>
@@ -53,13 +53,13 @@ export function HomeScreen({ user, onNavigate }: Props) {
           <Text style={styles.statLabel}>Rank</Text>
         </View>
         <View style={styles.statTile}>
-          <InsectIllustration size={Math.max(34, tier.bugSize * 0.52)} variant={tier.insect} evolutionLevel={tier.evolutionLevel} />
+          <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={Math.max(38, tier.bugSize * 0.58)} />
           <Text style={styles.statLabel}>{tier.title}</Text>
         </View>
       </View>
       <View style={styles.stage}>
         {userTiers.map((item) => (
-          <InsectIllustration key={item.title} size={Math.max(30, item.bugSize * 0.55)} variant={item.insect} evolutionLevel={item.evolutionLevel} />
+          <BugArtImage key={item.title} bugId={item.bugArtId} fallbackLevel={item.evolutionLevel} fallbackVariant={item.insect} size={Math.max(34, item.bugSize * 0.62)} />
         ))}
       </View>
       <View style={styles.tierWrap}>
@@ -68,7 +68,7 @@ export function HomeScreen({ user, onNavigate }: Props) {
       <Pressable style={styles.rankingCard} onPress={() => onNavigate("leaderboard")}>
         <View style={styles.rankingHeader}>
           <Text style={styles.sectionTitle}>Top</Text>
-          <InsectIllustration size={34} variant="ladybug" />
+          <BugArtImage bugId="goliathkever" size={38} />
         </View>
         <View style={styles.rankingList}>
           {leaders.map((leader, index) => (
@@ -86,9 +86,9 @@ export function HomeScreen({ user, onNavigate }: Props) {
           <Text style={styles.dexMeta}>{dexCount}/{bugDexEntries.length} gevangen</Text>
         </View>
         <View style={styles.dexBugs}>
-          <InsectIllustration size={42} variant="crawler" evolutionLevel={2} />
-          <InsectIllustration size={52} variant="beetle" evolutionLevel={4} />
-          <InsectIllustration size={44} variant="ladybug" evolutionLevel={5} />
+          <BugArtImage bugId="pissebed" size={48} />
+          <BugArtImage bugId="neushoornkever" size={58} />
+          <BugArtImage bugId="goliathkever" size={50} />
         </View>
       </Pressable>
       <View style={styles.missionCard}>
@@ -97,7 +97,7 @@ export function HomeScreen({ user, onNavigate }: Props) {
             <Text style={styles.missionTitle}>Weekly missies</Text>
             <Text style={styles.missionWeek}>{weeklyMissionLabel()}</Text>
           </View>
-          <InsectIllustration size={40} variant="grasshopper" evolutionLevel={3} />
+          <BugArtImage bugId="sprinkhaan" size={48} />
         </View>
         <View style={styles.missionList}>
           {missions.map((mission) => {
@@ -122,21 +122,21 @@ export function HomeScreen({ user, onNavigate }: Props) {
         <Text style={styles.newsTitle}>Acties</Text>
         <View style={styles.newsGrid}>
           <View style={styles.updatePill}>
-            <InsectIllustration size={28} variant="crawler" />
+            <BugArtImage bugId="pissebed" size={32} />
             <Text style={styles.newsItemTitle}>3 bugs</Text>
           </View>
           <View style={styles.updatePill}>
-            <InsectIllustration size={28} variant="beetle" />
+            <BugArtImage bugId="mestkever" size={32} />
             <Text style={styles.newsItemTitle}>Fix +15</Text>
           </View>
           <Pressable style={styles.updatePill} onPress={() => onNavigate("bugdex")}>
-            <InsectIllustration size={28} variant="ladybug" />
+            <BugArtImage bugId="lieveheersbeestje" size={32} />
             <Text style={styles.newsItemTitle}>BugDex</Text>
           </Pressable>
         </View>
       </View>
       <Pressable style={[sharedStyles.button, styles.actionButton]} onPress={() => onNavigate("bugs")}>
-        <InsectIllustration size={34} variant="beetle" />
+        <BugArtImage bugId="neushoornkever" size={38} />
         <Text style={sharedStyles.buttonText}>Bugs bekijken</Text>
       </Pressable>
     </ScrollView>
