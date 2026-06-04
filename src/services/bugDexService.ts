@@ -1,7 +1,7 @@
 import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, User } from "../types";
-import { BugDexEntry, BugDexRarity, bugDexEntries } from "./pointsService";
+import { badgesForUser, BugDexEntry, BugDexRarity, bugDexEntries, titleForPoints } from "./pointsService";
 
 export type BugDexDropSource =
   | "daily_login"
@@ -16,14 +16,30 @@ export type BugDexDropSource =
   | "combine";
 
 export type BugDexDropResult = {
+  rewardType: "bug";
   entry: BugDexEntry;
   item: BugDexInventoryItem;
   isNew: boolean;
   source: BugDexDropSource;
+  streakDay?: number;
+  daysUntilBetterReward?: number;
+  updatedUser?: User;
+} | {
+  rewardType: "points";
+  points: number;
+  isNew: false;
+  source: BugDexDropSource;
+  streakDay?: number;
+  daysUntilBetterReward?: number;
+  updatedUser?: User;
 };
 
 const demoInventory = new Map<string, Map<string, BugDexInventoryItem>>();
 const demoEvents = new Set<string>();
+const demoDailyStreaks = new Map<string, number>();
+
+const dailyPointReward = 5;
+const dailyStreakLength = 5;
 
 const dropChances: Record<BugDexDropSource, number> = {
   daily_login: 0.35,
@@ -76,21 +92,88 @@ export async function listBugDexInventory(user: User): Promise<BugDexInventoryIt
 }
 
 export async function claimDailyLoginBug(user: User): Promise<BugDexDropResult | null> {
-  const day = new Date().toISOString().slice(0, 10);
+  const day = localDayId();
+  const previousDay = localDayId(addDays(new Date(), -1));
   const eventId = `daily-login-${day}`;
+  const previousEventId = `daily-login-${previousDay}`;
   const demoKey = `${user.uid}:${eventId}`;
 
   if (!isFirebaseConfigured) {
     if (demoEvents.has(demoKey)) return null;
     demoEvents.add(demoKey);
-    return rollBugDexDrop(user, "daily_login");
+    const streakDay = demoEvents.has(`${user.uid}:${previousEventId}`) ? (demoDailyStreaks.get(user.uid) ?? 0) + 1 : 1;
+    demoDailyStreaks.set(user.uid, streakDay);
+    return grantDailyReward(user, streakDay);
   }
 
   const eventRef = doc(db, "users", user.uid, "bugdexEvents", eventId);
-  const eventSnapshot = await getDoc(eventRef);
-  if (eventSnapshot.exists()) return null;
-  await setDoc(eventRef, { id: eventId, source: "daily_login", createdAt: new Date().toISOString() });
-  return rollBugDexDrop(user, "daily_login");
+  const previousEventRef = doc(db, "users", user.uid, "bugdexEvents", previousEventId);
+  const userRef = doc(db, "users", user.uid);
+  return runTransaction(db, async (transaction) => {
+    const eventSnapshot = await transaction.get(eventRef);
+    if (eventSnapshot.exists()) return null;
+
+    const previousEventSnapshot = await transaction.get(previousEventRef);
+    const previousStreak = previousEventSnapshot.exists() ? Number(previousEventSnapshot.data().streakDay ?? 0) : 0;
+    const streakDay = previousStreak + 1;
+    const daysUntilBetterReward = daysUntilNextDailyStreakReward(streakDay);
+    const isStreakReward = streakDay % dailyStreakLength === 0;
+    const now = new Date().toISOString();
+
+    if (isStreakReward || Math.random() < 0.42) {
+      const entry = isStreakReward ? pickDailyStreakEntry() : pickDailyBaseEntry();
+      const inventoryRef = doc(db, "users", user.uid, "bugdex", entry.id);
+      const inventorySnapshot = await transaction.get(inventoryRef);
+      const existing = inventorySnapshot.exists() ? inventorySnapshot.data() as BugDexInventoryItem : null;
+      const item: BugDexInventoryItem = existing
+        ? { ...existing, count: existing.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, "daily_login"])) }
+        : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: ["daily_login"] };
+
+      transaction.set(inventoryRef, item);
+      transaction.set(eventRef, {
+        id: eventId,
+        source: "daily_login",
+        rewardType: "bug",
+        rewardValue: entry.id,
+        streakDay,
+        localDay: day,
+        createdAt: now
+      });
+      return { rewardType: "bug", entry, item, isNew: !existing, source: "daily_login", streakDay, daysUntilBetterReward };
+    }
+
+    const userSnapshot = await transaction.get(userRef);
+    if (!userSnapshot.exists()) throw new Error("Gebruiker niet gevonden.");
+    const current = userSnapshot.data() as User;
+    const totalPoints = Math.max(0, current.totalPoints + dailyPointReward);
+    const updatedUser = { ...current, totalPoints, title: titleForPoints(totalPoints) };
+    updatedUser.badges = badgesForUser(updatedUser);
+
+    transaction.update(userRef, {
+      active: true,
+      totalPoints: updatedUser.totalPoints,
+      title: updatedUser.title,
+      badges: updatedUser.badges
+    });
+    transaction.set(eventRef, {
+      id: eventId,
+      source: "daily_login",
+      rewardType: "points",
+      rewardValue: dailyPointReward,
+      streakDay,
+      localDay: day,
+      createdAt: now
+    });
+    return {
+      rewardType: "points",
+      points: dailyPointReward,
+      isNew: false,
+      source: "daily_login",
+      streakDay,
+      daysUntilBetterReward,
+      updatedUser
+    };
+  });
 }
 
 export async function rollBugDexDrop(user: User, source: BugDexDropSource): Promise<BugDexDropResult | null> {
@@ -118,7 +201,7 @@ export async function rollBugDexDrop(user: User, source: BugDexDropSource): Prom
         };
     inventory.set(entry.id, item);
     demoInventory.set(user.uid, inventory);
-    return { entry, item, isNew: !existing, source };
+    return { rewardType: "bug", entry, item, isNew: !existing, source };
   }
 
   const ref = doc(db, "users", user.uid, "bugdex", entry.id);
@@ -141,7 +224,7 @@ export async function rollBugDexDrop(user: User, source: BugDexDropSource): Prom
           sources: [source]
         };
     transaction.set(ref, item);
-    return { entry, item, isNew: !existing, source };
+    return { rewardType: "bug", entry, item, isNew: !existing, source };
   });
 }
 
@@ -167,7 +250,7 @@ export async function combineBugDexDuplicates(user: User, bugId: string): Promis
       : { bugId: targetEntry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: targetEntry.rarity, sources: ["combine"] };
     inventory.set(targetEntry.id, targetItem);
     demoInventory.set(user.uid, inventory);
-    return { entry: targetEntry, item: targetItem, isNew: !existingTarget, source: "combine" };
+    return { rewardType: "bug", entry: targetEntry, item: targetItem, isNew: !existingTarget, source: "combine" };
   }
 
   const sourceRef = doc(db, "users", user.uid, "bugdex", bugId);
@@ -186,8 +269,98 @@ export async function combineBugDexDuplicates(user: User, bugId: string): Promis
       : { bugId: targetEntry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: targetEntry.rarity, sources: ["combine"] };
     transaction.set(sourceRef, { ...sourceItem, count: nextSourceCount, lastUnlockedAt: now });
     transaction.set(targetRef, targetItem);
-    return { entry: targetEntry, item: targetItem, isNew: !existingTarget, source: "combine" };
+    return { rewardType: "bug", entry: targetEntry, item: targetItem, isNew: !existingTarget, source: "combine" };
   });
+}
+
+async function grantDailyReward(user: User, streakDay: number): Promise<BugDexDropResult> {
+  const daysUntilBetterReward = daysUntilNextDailyStreakReward(streakDay);
+  const isStreakReward = streakDay % dailyStreakLength === 0;
+  if (isStreakReward || Math.random() < 0.42) {
+    const entry = isStreakReward ? pickDailyStreakEntry() : pickDailyBaseEntry();
+    const result = await grantSpecificBug(user, entry, "daily_login");
+    return { ...result, streakDay, daysUntilBetterReward };
+  }
+  const updatedUser = await grantDailyPoints(user, dailyPointReward);
+  return {
+    rewardType: "points",
+    points: dailyPointReward,
+    isNew: false,
+    source: "daily_login",
+    streakDay,
+    daysUntilBetterReward,
+    updatedUser
+  };
+}
+
+async function grantSpecificBug(user: User, entry: BugDexEntry, source: BugDexDropSource): Promise<BugDexDropResult> {
+  const now = new Date().toISOString();
+
+  if (!isFirebaseConfigured) {
+    const inventory = demoInventory.get(user.uid) ?? new Map<string, BugDexInventoryItem>();
+    const existing = inventory.get(entry.id);
+    const item = existing
+      ? { ...existing, count: existing.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
+      : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
+    inventory.set(entry.id, item);
+    demoInventory.set(user.uid, inventory);
+    return { rewardType: "bug", entry, item, isNew: !existing, source };
+  }
+
+  const ref = doc(db, "users", user.uid, "bugdex", entry.id);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const existing = snapshot.exists() ? snapshot.data() as BugDexInventoryItem : null;
+    const item: BugDexInventoryItem = existing
+      ? { ...existing, count: existing.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
+      : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
+    transaction.set(ref, item);
+    return { rewardType: "bug", entry, item, isNew: !existing, source };
+  });
+}
+
+async function grantDailyPoints(user: User, points: number): Promise<User> {
+  const totalPoints = Math.max(0, user.totalPoints + points);
+  const updated = { ...user, totalPoints, title: titleForPoints(totalPoints) };
+  updated.badges = badgesForUser(updated);
+
+  if (!isFirebaseConfigured) return updated;
+
+  await setDoc(doc(db, "users", user.uid), {
+    totalPoints: updated.totalPoints,
+    title: updated.title,
+    badges: updated.badges,
+    active: true
+  }, { merge: true });
+  return updated;
+}
+
+function pickDailyBaseEntry(): BugDexEntry {
+  const rarity: BugDexRarity = Math.random() < 0.82 ? "Gewoon" : "Zeldzaam";
+  return pickFrom(bugDexEntries.filter((entry) => entry.rarity === rarity)) ?? bugDexEntries[0];
+}
+
+function pickDailyStreakEntry(): BugDexEntry {
+  const rarity: BugDexRarity = Math.random() < 0.82 ? "Zeldzaam" : "Episch";
+  return pickFrom(bugDexEntries.filter((entry) => entry.rarity === rarity)) ?? bugDexEntries[0];
+}
+
+function daysUntilNextDailyStreakReward(streakDay: number): number {
+  const remainder = streakDay % dailyStreakLength;
+  return remainder === 0 ? dailyStreakLength : dailyStreakLength - remainder;
+}
+
+function localDayId(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, amount: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
 }
 
 export function combineRequiredCount(rarity: BugDexRarity): number {

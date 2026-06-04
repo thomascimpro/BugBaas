@@ -138,6 +138,7 @@ export default function App() {
   async function maybeShowBugDexDrop(dropPromise: Promise<BugDexDropResult | null>) {
     try {
       const drop = await dropPromise;
+      if (drop?.updatedUser) setUser(drop.updatedUser);
       if (drop) setBugDexDrop(drop);
     } catch {
       // BugDex rewards should never block core app actions.

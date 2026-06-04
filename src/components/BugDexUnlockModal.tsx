@@ -34,8 +34,19 @@ export function BugDexUnlockModal({ drop, onClose }: Props) {
   }, [drop, glow, scale]);
 
   if (!drop) return null;
-  const title = drop.source === "combine" ? "Combine gelukt" : drop.isNew ? "Bug unlocked" : "Dubbele bug";
-  const subtitle = drop.source === "combine" && drop.isNew ? "Nieuwe vondst gemaakt" : drop.isNew ? "Nieuw in je BugDex" : "Extra exemplaar";
+  const isPointsReward = drop.rewardType === "points";
+  const isDailyReward = drop.source === "daily_login";
+  const title = isDailyReward ? "Daily bonus" : drop.source === "combine" ? "Combine gelukt" : drop.isNew ? "Bug unlocked" : "Dubbele bug";
+  const subtitle = isPointsReward
+    ? `+${drop.points} punten`
+    : drop.source === "combine" && drop.isNew
+      ? "Nieuwe vondst gemaakt"
+      : drop.isNew
+        ? "Nieuw in je BugDex"
+        : "Extra exemplaar";
+  const streakText = isDailyReward && drop.streakDay
+    ? `Dag ${drop.streakDay} streak - nog ${drop.daysUntilBetterReward ?? 0} dagen voor betere reward`
+    : "";
   const glowScale = glow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
   const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.75] });
 
@@ -47,10 +58,13 @@ export function BugDexUnlockModal({ drop, onClose }: Props) {
           <Text style={styles.subtitle}>{subtitle}</Text>
           <View style={styles.artStage}>
             <Animated.View style={[styles.glow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
-            <BugArtImage bugId={drop.entry.id} size={138} />
+            {isPointsReward ? <Text style={styles.pointsReward}>+{drop.points}</Text> : <BugArtImage bugId={drop.entry.id} size={138} />}
           </View>
-          <Text style={styles.name}>{drop.entry.name}</Text>
-          <Text style={styles.meta}>{drop.entry.rarity}{drop.item.count > 1 ? ` - x${drop.item.count}` : ""}</Text>
+          <Text style={styles.name}>{isPointsReward ? "Punten gevonden" : drop.entry.name}</Text>
+          <Text style={styles.meta}>
+            {isPointsReward ? "Daily login" : `${drop.entry.rarity}${drop.item.count > 1 ? ` - x${drop.item.count}` : ""}`}
+          </Text>
+          {!!streakText && <Text style={styles.streak}>{streakText}</Text>}
           <Pressable style={styles.button} onPress={onClose}>
             <Text style={styles.buttonText}>Mooi</Text>
           </Pressable>
@@ -115,6 +129,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
     marginTop: 4
+  },
+  pointsReward: {
+    color: "#102018",
+    fontSize: 54,
+    fontWeight: "900"
+  },
+  streak: {
+    color: "#15724f",
+    fontSize: 13,
+    fontWeight: "900",
+    marginTop: 8,
+    textAlign: "center"
   },
   button: {
     alignItems: "center",
