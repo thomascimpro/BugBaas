@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.3
+
+- Daily login geeft nu altijd een beloning: punten of een lage BugDex bug.
+- Elke 5-daagse streak geeft een betere BugDex reward.
+- Daily bonus popup toont streakdag en hoeveel dagen nog tot betere reward.
+- Daily login gebruikt lokale dag en transactionele claim om dubbele rewards te voorkomen.
+
 ## 1.0.2
 
 - Ranglijst top-3 toont geen prestige/tiertekst meer onder de rank.
