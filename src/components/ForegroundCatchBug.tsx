@@ -27,12 +27,12 @@ type Props = {
 const spawnCheckMs = 60000;
 const spawnChance = 0.28;
 const catchDurationMs = 20000;
-const movementInput = [0, 0.12, 0.24, 0.38, 0.52, 0.66, 0.8, 0.92, 1];
+const movementInput = [0, 0.06, 0.12, 0.2, 0.28, 0.36, 0.46, 0.56, 0.66, 0.76, 0.86, 0.94, 1];
 
 const raritySettings: Record<SpawnRarity, { motionCycleMs: number; rewardXp: number; requiredTaps: number; size: number; verticalDrift: number }> = {
-  common: { motionCycleMs: 2300, rewardXp: 1, requiredTaps: 2, size: 64, verticalDrift: 0.24 },
-  rare: { motionCycleMs: 1650, rewardXp: 4, requiredTaps: 4, size: 78, verticalDrift: 0.42 },
-  epic: { motionCycleMs: 1180, rewardXp: 10, requiredTaps: 6, size: 94, verticalDrift: 0.62 }
+  common: { motionCycleMs: 3400, rewardXp: 1, requiredTaps: 2, size: 64, verticalDrift: 0.22 },
+  rare: { motionCycleMs: 2600, rewardXp: 4, requiredTaps: 4, size: 78, verticalDrift: 0.34 },
+  epic: { motionCycleMs: 2050, rewardXp: 10, requiredTaps: 6, size: 94, verticalDrift: 0.46 }
 };
 
 const commonBugs: BugArtId[] = ["zilvervisje", "fruitvlieg", "mier", "pissebed", "mot", "boekluis"];
@@ -45,6 +45,7 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
   const [hits, setHits] = useState(0);
   const [caught, setCaught] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
+  const hitFeedback = useRef(new Animated.Value(0)).current;
   const poof = useRef(new Animated.Value(0)).current;
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const moveAnimation = useRef<Animated.CompositeAnimation | null>(null);
@@ -79,6 +80,7 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
   useEffect(() => {
     if (!activeBug) return;
     progress.setValue(0);
+    hitFeedback.setValue(0);
     poof.setValue(0);
     setCaught(false);
     setHits(0);
@@ -100,7 +102,7 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
       animation.stop();
       if (moveAnimation.current === animation) moveAnimation.current = null;
     };
-  }, [activeBug, progress, poof]);
+  }, [activeBug, hitFeedback, progress, poof]);
 
   const left = useMemo(() => {
     if (!activeBug) return 0;
@@ -109,8 +111,8 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
     const maxLeft = Math.max(minLeft, width - hitboxWidth - 10);
     const range = maxLeft - minLeft;
     const fractions = activeBug.direction === "right"
-      ? [0.05, 0.82, 0.28, 0.96, 0.16, 0.68, 0.42, 0.88, 0.05]
-      : [0.95, 0.18, 0.72, 0.04, 0.84, 0.32, 0.58, 0.12, 0.95];
+      ? [0.08, 0.1, 0.1, 0.24, 0.33, 0.33, 0.5, 0.58, 0.58, 0.74, 0.88, 0.88, 0.08]
+      : [0.92, 0.9, 0.9, 0.76, 0.67, 0.67, 0.5, 0.42, 0.42, 0.26, 0.12, 0.12, 0.92];
     return progress.interpolate({
       inputRange: movementInput,
       outputRange: fractions.map((fraction) => minLeft + range * fraction)
@@ -127,13 +129,17 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
     const drift = activeBug.verticalDrift;
     const fractions = [
       center,
-      center + drift * 0.56,
-      center - drift * 0.38,
-      center + drift,
-      center - drift * 0.74,
-      center + drift * 0.24,
-      center - drift,
-      center + drift * 0.48,
+      center + drift * 0.12,
+      center + drift * 0.12,
+      center + drift * 0.54,
+      center - drift * 0.26,
+      center - drift * 0.26,
+      center + drift * 0.82,
+      center + drift * 0.18,
+      center + drift * 0.18,
+      center - drift * 0.62,
+      center - drift * 0.12,
+      center - drift * 0.12,
       center
     ];
     return progress.interpolate({
@@ -144,18 +150,40 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
 
   const transform = useMemo(() => {
     if (!activeBug) return [];
+    const crawlBob = progress.interpolate({
+      inputRange: movementInput,
+      outputRange: [0, -7, 0, -10, 0, -6, 0, -9, 0, -8, 0, -5, 0]
+    });
     const rotate = progress.interpolate({
       inputRange: movementInput,
       outputRange: activeBug.direction === "right"
-        ? ["83deg", "101deg", "76deg", "96deg", "82deg", "104deg", "78deg", "92deg", "83deg"]
-        : ["-83deg", "-101deg", "-76deg", "-96deg", "-82deg", "-104deg", "-78deg", "-92deg", "-83deg"]
+        ? ["86deg", "92deg", "88deg", "80deg", "91deg", "87deg", "98deg", "84deg", "88deg", "95deg", "82deg", "89deg", "86deg"]
+        : ["-86deg", "-92deg", "-88deg", "-80deg", "-91deg", "-87deg", "-98deg", "-84deg", "-88deg", "-95deg", "-82deg", "-89deg", "-86deg"]
     });
     const scale = poof.interpolate({
       inputRange: [0, 1],
       outputRange: [1, 1.28]
     });
-    return [{ rotate }, { scale }];
-  }, [activeBug, poof, progress]);
+    const hitShake = hitFeedback.interpolate({
+      inputRange: [0, 0.25, 0.5, 0.75, 1],
+      outputRange: [0, -8, 7, -4, 0]
+    });
+    const hitScale = hitFeedback.interpolate({
+      inputRange: [0, 0.45, 1],
+      outputRange: [1, 1.12, 1]
+    });
+    return [{ translateY: crawlBob }, { translateX: hitShake }, { rotate }, { scale }, { scale: hitScale }];
+  }, [activeBug, hitFeedback, poof, progress]);
+
+  const hitOpacity = hitFeedback.interpolate({
+    inputRange: [0, 0.18, 1],
+    outputRange: [0, 0.9, 0]
+  });
+
+  const hitRingScale = hitFeedback.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.72, 1.45]
+  });
 
   function spawnBug() {
     const rarity = pickRarity();
@@ -193,6 +221,7 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
     if (!activeBug || caught) return;
     const nextHits = hitsRef.current + 1;
     hitsRef.current = nextHits;
+    playHitFeedback();
     if (nextHits < activeBug.requiredTaps) {
       setHits(nextHits);
       return;
@@ -211,6 +240,17 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
 
     if (clearTimer.current) clearTimeout(clearTimer.current);
     clearTimer.current = setTimeout(clearActiveBug, 680);
+  }
+
+  function playHitFeedback() {
+    hitFeedback.stopAnimation();
+    hitFeedback.setValue(0);
+    Animated.timing(hitFeedback, {
+      duration: 240,
+      easing: Easing.out(Easing.quad),
+      toValue: 1,
+      useNativeDriver: true
+    }).start();
   }
 
   if (!enabled || !activeBug) return null;
@@ -235,10 +275,17 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
             </View>
           ) : (
             <>
+              <Animated.View style={[styles.hitFlashWrap, { height: activeBug.size + 18, width: activeBug.size + 18 }, { opacity: hitOpacity, transform: [{ scale: hitRingScale }] }]}>
+                <View style={styles.hitFlash} />
+              </Animated.View>
               <BugArtImage bugId={activeBug.bugId} size={activeBug.size} />
-              <View style={styles.tapCounter}>
-                <Text style={styles.tapCounterText}>{hits}/{activeBug.requiredTaps}</Text>
-              </View>
+              {activeBug.requiredTaps > 1 && (
+                <View style={[styles.hpBar, { width: Math.max(52, activeBug.size * 0.86) }]}>
+                  {Array.from({ length: activeBug.requiredTaps }).map((_, index) => (
+                    <View key={index} style={[styles.hpSegment, index < hits && styles.hpSegmentLost]} />
+                  ))}
+                </View>
+              )}
               {activeBug.requiredTaps > 1 && hits > 0 && <View style={[styles.damageRing, { height: activeBug.size + 12, width: activeBug.size + 12 }]} />}
             </>
           )}
@@ -278,30 +325,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center"
   },
+  hitFlashWrap: {
+    position: "absolute"
+  },
+  hitFlash: {
+    borderColor: "#fff2a8",
+    borderRadius: 999,
+    borderWidth: 3,
+    flex: 1
+  },
+  hpBar: {
+    bottom: 20,
+    flexDirection: "row",
+    gap: 3,
+    height: 8,
+    position: "absolute"
+  },
+  hpSegment: {
+    backgroundColor: "#d7bd57",
+    borderColor: "rgba(16,32,24,0.72)",
+    borderRadius: 999,
+    borderWidth: 1,
+    flex: 1
+  },
+  hpSegmentLost: {
+    backgroundColor: "rgba(255,255,255,0.28)"
+  },
   damageRing: {
     borderColor: "#d7bd57",
     borderRadius: 999,
     borderWidth: 2,
     opacity: 0.78,
     position: "absolute"
-  },
-  tapCounter: {
-    alignItems: "center",
-    backgroundColor: "rgba(16,32,24,0.82)",
-    borderColor: "#d7bd57",
-    borderRadius: 999,
-    borderWidth: 1,
-    bottom: 18,
-    height: 24,
-    justifyContent: "center",
-    minWidth: 38,
-    paddingHorizontal: 8,
-    position: "absolute"
-  },
-  tapCounterText: {
-    color: "#ffffff",
-    fontSize: 11,
-    fontWeight: "900"
   },
   poof: {
     alignItems: "center",
