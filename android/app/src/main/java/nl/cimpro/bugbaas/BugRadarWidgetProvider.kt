@@ -1,32 +1,57 @@
 package nl.cimpro.bugbaas
 
 import android.app.PendingIntent
+import android.app.AlarmManager
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.view.View
 import android.widget.RemoteViews
+import java.util.Calendar
 import kotlin.random.Random
 
 class BugRadarWidgetProvider : AppWidgetProvider() {
   override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
     for (appWidgetId in appWidgetIds) {
-      updateWidget(context, appWidgetManager, appWidgetId, pickRadarBug())
+      updateWidget(context, appWidgetManager, appWidgetId, null)
     }
+    scheduleNextSignal(context)
   }
 
-  private fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int, bug: RadarBug) {
+  override fun onReceive(context: Context, intent: Intent) {
+    super.onReceive(context, intent)
+    if (intent.action != actionSignal) return
+
+    val manager = AppWidgetManager.getInstance(context)
+    val widgetIds = manager.getAppWidgetIds(ComponentName(context, BugRadarWidgetProvider::class.java))
+    val bug = pickRadarBug()
+    for (widgetId in widgetIds) {
+      updateWidget(context, manager, widgetId, bug)
+    }
+    noteSignal(context)
+    scheduleNextSignal(context)
+  }
+
+  private fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int, bug: RadarBug?) {
     val views = RemoteViews(context.packageName, R.layout.bug_radar_widget)
-    views.setTextViewText(R.id.radarTitle, "BUG RADAR")
-    views.setTextViewText(R.id.radarBugName, bug.name)
-    views.setTextViewText(R.id.radarMeta, "${bug.rarity} signal")
-    views.setTextViewText(R.id.radarAction, "Tap to catch")
+    views.setImageViewResource(R.id.radarBackground, if (bug == null) R.drawable.bug_radar_scan_animation else R.drawable.ic_bug_radar)
+    views.setViewVisibility(R.id.radarBugImage, if (bug == null) View.GONE else View.VISIBLE)
+    views.setViewVisibility(R.id.radarLabel, if (bug == null) View.GONE else View.VISIBLE)
+    if (bug != null) {
+      views.setImageViewResource(R.id.radarBugImage, bug.imageRes)
+      views.setTextViewText(R.id.radarBugName, bug.name)
+      views.setTextViewText(R.id.radarRarity, bug.rarity)
+    }
 
     val intent = Intent(context, MainActivity::class.java).apply {
-      action = Intent.ACTION_VIEW
-      data = Uri.parse("bugbaas://radar?bugId=${Uri.encode(bug.id)}")
+      if (bug != null) {
+        action = Intent.ACTION_VIEW
+        data = Uri.parse("bugbaas://radar?bugId=${Uri.encode(bug.id)}")
+      }
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
     }
     val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -36,6 +61,85 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     }
     views.setOnClickPendingIntent(R.id.widgetRoot, PendingIntent.getActivity(context, widgetId, intent, flags))
     manager.updateAppWidget(widgetId, views)
+  }
+
+  private fun scheduleNextSignal(context: Context) {
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val intent = Intent(context, BugRadarWidgetProvider::class.java).apply { action = actionSignal }
+    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    } else {
+      PendingIntent.FLAG_UPDATE_CURRENT
+    }
+    val pendingIntent = PendingIntent.getBroadcast(context, signalRequestCode, intent, flags)
+    val triggerAt = nextSignalTime(context)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+    } else {
+      alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+    }
+  }
+
+  private fun nextSignalTime(context: Context): Long {
+    val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+    val now = Calendar.getInstance()
+    val today = dayId(now)
+    val count = if (prefs.getInt(prefDay, -1) == today) prefs.getInt(prefCount, 0) else 0
+    val start = now.clone() as Calendar
+
+    if (!isWorkday(start) || start.get(Calendar.HOUR_OF_DAY) >= workdayEndHour || count >= dailySignalCount) {
+      return randomTimeOnNextWorkday(start)
+    }
+
+    if (start.get(Calendar.HOUR_OF_DAY) < workdayStartHour) {
+      start.set(Calendar.HOUR_OF_DAY, workdayStartHour)
+      start.set(Calendar.MINUTE, 0)
+    } else {
+      start.add(Calendar.MINUTE, minMinutesBetweenSignals)
+    }
+    start.set(Calendar.SECOND, 0)
+    start.set(Calendar.MILLISECOND, 0)
+
+    val end = now.clone() as Calendar
+    end.set(Calendar.HOUR_OF_DAY, workdayEndHour)
+    end.set(Calendar.MINUTE, 0)
+    end.set(Calendar.SECOND, 0)
+    end.set(Calendar.MILLISECOND, 0)
+
+    if (start.timeInMillis >= end.timeInMillis) return randomTimeOnNextWorkday(now)
+    return Random.nextLong(start.timeInMillis, end.timeInMillis)
+  }
+
+  private fun randomTimeOnNextWorkday(from: Calendar): Long {
+    val next = from.clone() as Calendar
+    next.add(Calendar.DAY_OF_YEAR, 1)
+    while (!isWorkday(next)) next.add(Calendar.DAY_OF_YEAR, 1)
+    next.set(Calendar.HOUR_OF_DAY, workdayStartHour)
+    next.set(Calendar.MINUTE, 0)
+    next.set(Calendar.SECOND, 0)
+    next.set(Calendar.MILLISECOND, 0)
+    val end = next.clone() as Calendar
+    end.set(Calendar.HOUR_OF_DAY, workdayEndHour)
+    return Random.nextLong(next.timeInMillis, end.timeInMillis)
+  }
+
+  private fun noteSignal(context: Context) {
+    val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+    val today = dayId(Calendar.getInstance())
+    val currentCount = if (prefs.getInt(prefDay, -1) == today) prefs.getInt(prefCount, 0) else 0
+    prefs.edit()
+      .putInt(prefDay, today)
+      .putInt(prefCount, currentCount + 1)
+      .apply()
+  }
+
+  private fun dayId(calendar: Calendar): Int {
+    return calendar.get(Calendar.YEAR) * 1000 + calendar.get(Calendar.DAY_OF_YEAR)
+  }
+
+  private fun isWorkday(calendar: Calendar): Boolean {
+    val day = calendar.get(Calendar.DAY_OF_WEEK)
+    return day != Calendar.SATURDAY && day != Calendar.SUNDAY
   }
 
   private fun pickRadarBug(): RadarBug {
@@ -54,127 +158,137 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     }
   }
 
-  private data class RadarBug(val id: String, val name: String, val rarity: String)
+  private data class RadarBug(val id: String, val name: String, val rarity: String, val imageRes: Int)
 
   companion object {
+    private const val actionSignal = "nl.cimpro.bugbaas.action.BUG_RADAR_SIGNAL"
+    private const val dailySignalCount = 3
+    private const val minMinutesBetweenSignals = 60
+    private const val prefsName = "bug_radar_widget"
+    private const val prefCount = "signal_count"
+    private const val prefDay = "signal_day"
+    private const val signalRequestCode = 4242
+    private const val workdayEndHour = 17
+    private const val workdayStartHour = 9
+
     private val radarBugs = listOf(
-    RadarBug("zilvervisje", "Zilvervisje", "Gewoon"),
-    RadarBug("fruitvlieg", "Fruitvlieg", "Gewoon"),
-    RadarBug("bladluis", "Bladluis", "Gewoon"),
-    RadarBug("mug", "Mug", "Gewoon"),
-    RadarBug("mot", "Mot", "Gewoon"),
-    RadarBug("mier", "Mier", "Gewoon"),
-    RadarBug("vlo", "Vlo", "Gewoon"),
-    RadarBug("pissebed", "Pissebed", "Gewoon"),
-    RadarBug("stinkwants", "Stinkwants", "Zeldzaam"),
-    RadarBug("snuitkever", "Snuitkever", "Zeldzaam"),
-    RadarBug("lieveheersbeestje", "Lieveheersbeestje", "Zeldzaam"),
-    RadarBug("kakkerlak", "Kakkerlak", "Gewoon"),
-    RadarBug("oorworm", "Oorworm", "Gewoon"),
-    RadarBug("boktor", "Boktor", "Episch"),
-    RadarBug("tapijtkever", "Tapijtkever", "Zeldzaam"),
-    RadarBug("roofwants", "Roofwants", "Zeldzaam"),
-    RadarBug("duizendpoot", "Duizendpoot", "Zeldzaam"),
-    RadarBug("sprinkhaan", "Sprinkhaan", "Zeldzaam"),
-    RadarBug("wesp", "Wesp", "Zeldzaam"),
-    RadarBug("hoornaar", "Hoornaar", "Episch"),
-    RadarBug("schorpioen", "Schorpioen", "Legendarisch"),
-    RadarBug("termiet", "Termiet", "Gewoon"),
-    RadarBug("mestkever", "Mestkever", "Zeldzaam"),
-    RadarBug("wandelende-tak", "Wandelende tak", "Zeldzaam"),
-    RadarBug("vogelspin", "Vogelspin", "Episch"),
-    RadarBug("reuzenkakkerlak", "Reuzenkakkerlak", "Episch"),
-    RadarBug("reuzen-duizendpoot", "Reuzenduizendpoot", "Legendarisch"),
-    RadarBug("neushoornkever", "Neushoornkever", "Legendarisch"),
-    RadarBug("atlaskever", "Atlaskever", "Legendarisch"),
-    RadarBug("herculeskever", "Herculeskever", "Legendarisch"),
-    RadarBug("goliathkever", "Goliathkever", "Legendarisch"),
-    RadarBug("motmug", "Motmug", "Gewoon"),
-    RadarBug("langpootmug", "Langpootmug", "Gewoon"),
-    RadarBug("faraomier", "Faraomier", "Gewoon"),
-    RadarBug("boekluis", "Boekluis", "Gewoon"),
-    RadarBug("stofluis", "Stofluis", "Gewoon"),
-    RadarBug("teek", "Teek", "Gewoon"),
-    RadarBug("fluweelmijt", "Fluweelmijt", "Gewoon"),
-    RadarBug("schildwants", "Schildwants", "Zeldzaam"),
-    RadarBug("houtmier", "Houtmier", "Zeldzaam"),
-    RadarBug("kniptor", "Kniptor", "Zeldzaam"),
-    RadarBug("loopkever", "Loopkever", "Zeldzaam"),
-    RadarBug("waterkever", "Waterkever", "Zeldzaam"),
-    RadarBug("schrijvertje", "Schrijvertje", "Gewoon"),
-    RadarBug("schaatsenrijder", "Schaatsenrijder", "Zeldzaam"),
-    RadarBug("goudtor", "Goudtor", "Zeldzaam"),
-    RadarBug("tijgerkever", "Tijgerkever", "Zeldzaam"),
-    RadarBug("doodgraver", "Doodgraver", "Zeldzaam"),
-    RadarBug("waterschorpioen", "Waterschorpioen", "Zeldzaam"),
-    RadarBug("bidsprinkhaan", "Bidsprinkhaan", "Episch"),
-    RadarBug("wandelend-blad", "Wandelend blad", "Episch"),
-    RadarBug("wespspin", "Wespspin", "Zeldzaam"),
-    RadarBug("kruisspin", "Kruisspin", "Zeldzaam"),
-    RadarBug("springspin", "Springspin", "Zeldzaam"),
-    RadarBug("libel", "Libel", "Episch"),
-    RadarBug("waterjuffer", "Waterjuffer", "Episch"),
-    RadarBug("gaasvlieg", "Gaasvlieg", "Episch"),
-    RadarBug("doodshoofdvlinder", "Doodshoofdvlinder", "Episch"),
-    RadarBug("kolibrievlinder", "Kolibrievlinder", "Episch"),
-    RadarBug("koninginnenpage", "Koninginnenpage", "Episch"),
-    RadarBug("atalanta", "Atalanta", "Episch"),
-    RadarBug("dagpauwoog", "Dagpauwoog", "Episch"),
-    RadarBug("eikenprocessierups", "Eikenprocessierups", "Zeldzaam"),
-    RadarBug("pijlstaartrups", "Pijlstaartrups", "Episch"),
-    RadarBug("cicade", "Cicade", "Zeldzaam"),
-    RadarBug("schuimcicade", "Schuimcicade", "Gewoon"),
-    RadarBug("vliegend-hert", "Vliegend hert", "Legendarisch"),
-    RadarBug("juweelkever", "Juweelkever", "Episch"),
-    RadarBug("orchidee-bidsprinkhaan", "Orchidee-bidsprinkhaan", "Legendarisch"),
-    RadarBug("pauwspin", "Pauwspin", "Episch"),
-    RadarBug("juweelwesp", "Juweelwesp", "Episch"),
-    RadarBug("goudschildkever", "Goudschildkever", "Episch"),
-    RadarBug("harlekijnwants", "Harlekijnwants", "Episch"),
-    RadarBug("lantaarnvlieg", "Lantaarnvlieg", "Episch"),
-    RadarBug("vioolspin", "Vioolspin", "Episch"),
-    RadarBug("gespikkelde-houtvlinder", "Gespikkelde houtvlinder", "Episch"),
-    RadarBug("zebra-springspin", "Zebra-springspin", "Episch"),
-    RadarBug("smaragdlibel", "Smaragdlibel", "Legendarisch"),
-    RadarBug("glasvleugelvlinder", "Glasvleugelvlinder", "Episch"),
-    RadarBug("komeetmot", "Komeetmot", "Episch"),
-    RadarBug("maanmot", "Maanmot", "Episch"),
-    RadarBug("atlasvlinder", "Atlasvlinder", "Legendarisch"),
-    RadarBug("rozekever", "Rozekever", "Zeldzaam"),
-    RadarBug("kardinaalkever", "Kardinaalkever", "Episch"),
-    RadarBug("vuurwants", "Vuurwants", "Zeldzaam"),
-    RadarBug("sabelsprinkhaan", "Sabelsprinkhaan", "Episch"),
-    RadarBug("mierenleeuw", "Mierenleeuw", "Gewoon"),
-    RadarBug("dobsonvlieg", "Dobsonvlieg", "Legendarisch"),
-    RadarBug("helikopterjuffer", "Helikopterjuffer", "Episch"),
-    RadarBug("spookinsect", "Spookinsect", "Legendarisch"),
-    RadarBug("bladpootwants", "Bladpootwants", "Episch"),
-    RadarBug("assassin-bug", "Assassin bug", "Legendarisch"),
-    RadarBug("tijgermug", "Tijgermug", "Episch"),
-    RadarBug("dolksteekwesp", "Dolksteekwesp", "Legendarisch"),
-    RadarBug("roofvlieg", "Roofvlieg", "Episch"),
-    RadarBug("kameelhalsvlieg", "Kameelhalsvlieg", "Episch"),
-    RadarBug("zweefvlieg", "Zweefvlieg", "Gewoon"),
-    RadarBug("goudwesp", "Goudwesp", "Episch"),
-    RadarBug("sluipwesp", "Sluipwesp", "Zeldzaam"),
-    RadarBug("fluweelmier", "Fluweelmier", "Episch"),
-    RadarBug("reuzenwaterwants", "Reuzenwaterwants", "Legendarisch"),
-    RadarBug("zweepschorpioen", "Zweepschorpioen", "Legendarisch"),
-    RadarBug("azuren-waterjuffer", "Azuren waterjuffer", "Episch"),
-    RadarBug("rouwmantelvlinder", "Rouwmantelvlinder", "Legendarisch"),
-    RadarBug("keizersmantel", "Keizersmantel", "Legendarisch"),
-    RadarBug("gouden-tor", "Gouden tor", "Zeldzaam"),
-    RadarBug("soldaatje", "Soldaatje", "Zeldzaam"),
-    RadarBug("doodgraverkever", "Doodgraverkever", "Episch"),
-    RadarBug("olifantskever", "Olifantskever", "Legendarisch"),
-    RadarBug("regenboogmestkever", "Regenboogmestkever", "Legendarisch"),
-    RadarBug("titanus-kever", "Titanus-kever", "Legendarisch"),
-    RadarBug("langsprietboktor", "Langsprietboktor", "Episch"),
-    RadarBug("schildpadkever", "Schildpadkever", "Episch"),
-    RadarBug("vuurkever", "Vuurkever", "Zeldzaam"),
-    RadarBug("blauwe-ertsbij", "Blauwe ertsbij", "Legendarisch"),
-    RadarBug("wespboktor", "Wespboktor", "Episch"),
-    RadarBug("groene-zandloopkever", "Groene zandloopkever", "Legendarisch")
+    RadarBug("zilvervisje", "Zilvervisje", "Gewoon", R.drawable.bugdex_zilvervisje),
+    RadarBug("fruitvlieg", "Fruitvlieg", "Gewoon", R.drawable.bugdex_fruitvlieg),
+    RadarBug("bladluis", "Bladluis", "Gewoon", R.drawable.bugdex_bladluis),
+    RadarBug("mug", "Mug", "Gewoon", R.drawable.bugdex_mug),
+    RadarBug("mot", "Mot", "Gewoon", R.drawable.bugdex_mot),
+    RadarBug("mier", "Mier", "Gewoon", R.drawable.bugdex_mier),
+    RadarBug("vlo", "Vlo", "Gewoon", R.drawable.bugdex_vlo),
+    RadarBug("pissebed", "Pissebed", "Gewoon", R.drawable.bugdex_pissebed),
+    RadarBug("stinkwants", "Stinkwants", "Zeldzaam", R.drawable.bugdex_stinkwants),
+    RadarBug("snuitkever", "Snuitkever", "Zeldzaam", R.drawable.bugdex_snuitkever),
+    RadarBug("lieveheersbeestje", "Lieveheersbeestje", "Zeldzaam", R.drawable.bugdex_lieveheersbeestje),
+    RadarBug("kakkerlak", "Kakkerlak", "Gewoon", R.drawable.bugdex_kakkerlak),
+    RadarBug("oorworm", "Oorworm", "Gewoon", R.drawable.bugdex_oorworm),
+    RadarBug("boktor", "Boktor", "Episch", R.drawable.bugdex_boktor),
+    RadarBug("tapijtkever", "Tapijtkever", "Zeldzaam", R.drawable.bugdex_tapijtkever),
+    RadarBug("roofwants", "Roofwants", "Zeldzaam", R.drawable.bugdex_roofwants),
+    RadarBug("duizendpoot", "Duizendpoot", "Zeldzaam", R.drawable.bugdex_duizendpoot),
+    RadarBug("sprinkhaan", "Sprinkhaan", "Zeldzaam", R.drawable.bugdex_sprinkhaan),
+    RadarBug("wesp", "Wesp", "Zeldzaam", R.drawable.bugdex_wesp),
+    RadarBug("hoornaar", "Hoornaar", "Episch", R.drawable.bugdex_hoornaar),
+    RadarBug("schorpioen", "Schorpioen", "Legendarisch", R.drawable.bugdex_schorpioen),
+    RadarBug("termiet", "Termiet", "Gewoon", R.drawable.bugdex_termiet),
+    RadarBug("mestkever", "Mestkever", "Zeldzaam", R.drawable.bugdex_mestkever),
+    RadarBug("wandelende-tak", "Wandelende tak", "Zeldzaam", R.drawable.bugdex_wandelende_tak),
+    RadarBug("vogelspin", "Vogelspin", "Episch", R.drawable.bugdex_vogelspin),
+    RadarBug("reuzenkakkerlak", "Reuzenkakkerlak", "Episch", R.drawable.bugdex_reuzenkakkerlak),
+    RadarBug("reuzen-duizendpoot", "Reuzenduizendpoot", "Legendarisch", R.drawable.bugdex_reuzen_duizendpoot),
+    RadarBug("neushoornkever", "Neushoornkever", "Legendarisch", R.drawable.bugdex_neushoornkever),
+    RadarBug("atlaskever", "Atlaskever", "Legendarisch", R.drawable.bugdex_atlaskever),
+    RadarBug("herculeskever", "Herculeskever", "Legendarisch", R.drawable.bugdex_herculeskever),
+    RadarBug("goliathkever", "Goliathkever", "Legendarisch", R.drawable.bugdex_goliathkever),
+    RadarBug("motmug", "Motmug", "Gewoon", R.drawable.bugdex_motmug),
+    RadarBug("langpootmug", "Langpootmug", "Gewoon", R.drawable.bugdex_langpootmug),
+    RadarBug("faraomier", "Faraomier", "Gewoon", R.drawable.bugdex_faraomier),
+    RadarBug("boekluis", "Boekluis", "Gewoon", R.drawable.bugdex_boekluis),
+    RadarBug("stofluis", "Stofluis", "Gewoon", R.drawable.bugdex_stofluis),
+    RadarBug("teek", "Teek", "Gewoon", R.drawable.bugdex_teek),
+    RadarBug("fluweelmijt", "Fluweelmijt", "Gewoon", R.drawable.bugdex_fluweelmijt),
+    RadarBug("schildwants", "Schildwants", "Zeldzaam", R.drawable.bugdex_schildwants),
+    RadarBug("houtmier", "Houtmier", "Zeldzaam", R.drawable.bugdex_houtmier),
+    RadarBug("kniptor", "Kniptor", "Zeldzaam", R.drawable.bugdex_kniptor),
+    RadarBug("loopkever", "Loopkever", "Zeldzaam", R.drawable.bugdex_loopkever),
+    RadarBug("waterkever", "Waterkever", "Zeldzaam", R.drawable.bugdex_waterkever),
+    RadarBug("schrijvertje", "Schrijvertje", "Gewoon", R.drawable.bugdex_schrijvertje),
+    RadarBug("schaatsenrijder", "Schaatsenrijder", "Zeldzaam", R.drawable.bugdex_schaatsenrijder),
+    RadarBug("goudtor", "Goudtor", "Zeldzaam", R.drawable.bugdex_goudtor),
+    RadarBug("tijgerkever", "Tijgerkever", "Zeldzaam", R.drawable.bugdex_tijgerkever),
+    RadarBug("doodgraver", "Doodgraver", "Zeldzaam", R.drawable.bugdex_doodgraver),
+    RadarBug("waterschorpioen", "Waterschorpioen", "Zeldzaam", R.drawable.bugdex_waterschorpioen),
+    RadarBug("bidsprinkhaan", "Bidsprinkhaan", "Episch", R.drawable.bugdex_bidsprinkhaan),
+    RadarBug("wandelend-blad", "Wandelend blad", "Episch", R.drawable.bugdex_wandelend_blad),
+    RadarBug("wespspin", "Wespspin", "Zeldzaam", R.drawable.bugdex_wespspin),
+    RadarBug("kruisspin", "Kruisspin", "Zeldzaam", R.drawable.bugdex_kruisspin),
+    RadarBug("springspin", "Springspin", "Zeldzaam", R.drawable.bugdex_springspin),
+    RadarBug("libel", "Libel", "Episch", R.drawable.bugdex_libel),
+    RadarBug("waterjuffer", "Waterjuffer", "Episch", R.drawable.bugdex_waterjuffer),
+    RadarBug("gaasvlieg", "Gaasvlieg", "Episch", R.drawable.bugdex_gaasvlieg),
+    RadarBug("doodshoofdvlinder", "Doodshoofdvlinder", "Episch", R.drawable.bugdex_doodshoofdvlinder),
+    RadarBug("kolibrievlinder", "Kolibrievlinder", "Episch", R.drawable.bugdex_kolibrievlinder),
+    RadarBug("koninginnenpage", "Koninginnenpage", "Episch", R.drawable.bugdex_koninginnenpage),
+    RadarBug("atalanta", "Atalanta", "Episch", R.drawable.bugdex_atalanta),
+    RadarBug("dagpauwoog", "Dagpauwoog", "Episch", R.drawable.bugdex_dagpauwoog),
+    RadarBug("eikenprocessierups", "Eikenprocessierups", "Zeldzaam", R.drawable.bugdex_eikenprocessierups),
+    RadarBug("pijlstaartrups", "Pijlstaartrups", "Episch", R.drawable.bugdex_pijlstaartrups),
+    RadarBug("cicade", "Cicade", "Zeldzaam", R.drawable.bugdex_cicade),
+    RadarBug("schuimcicade", "Schuimcicade", "Gewoon", R.drawable.bugdex_schuimcicade),
+    RadarBug("vliegend-hert", "Vliegend hert", "Legendarisch", R.drawable.bugdex_vliegend_hert),
+    RadarBug("juweelkever", "Juweelkever", "Episch", R.drawable.bugdex_juweelkever),
+    RadarBug("orchidee-bidsprinkhaan", "Orchidee-bidsprinkhaan", "Legendarisch", R.drawable.bugdex_orchidee_bidsprinkhaan),
+    RadarBug("pauwspin", "Pauwspin", "Episch", R.drawable.bugdex_pauwspin),
+    RadarBug("juweelwesp", "Juweelwesp", "Episch", R.drawable.bugdex_juweelwesp),
+    RadarBug("goudschildkever", "Goudschildkever", "Episch", R.drawable.bugdex_goudschildkever),
+    RadarBug("harlekijnwants", "Harlekijnwants", "Episch", R.drawable.bugdex_harlekijnwants),
+    RadarBug("lantaarnvlieg", "Lantaarnvlieg", "Episch", R.drawable.bugdex_lantaarnvlieg),
+    RadarBug("vioolspin", "Vioolspin", "Episch", R.drawable.bugdex_vioolspin),
+    RadarBug("gespikkelde-houtvlinder", "Gespikkelde houtvlinder", "Episch", R.drawable.bugdex_gespikkelde_houtvlinder),
+    RadarBug("zebra-springspin", "Zebra-springspin", "Episch", R.drawable.bugdex_zebra_springspin),
+    RadarBug("smaragdlibel", "Smaragdlibel", "Legendarisch", R.drawable.bugdex_smaragdlibel),
+    RadarBug("glasvleugelvlinder", "Glasvleugelvlinder", "Episch", R.drawable.bugdex_glasvleugelvlinder),
+    RadarBug("komeetmot", "Komeetmot", "Episch", R.drawable.bugdex_komeetmot),
+    RadarBug("maanmot", "Maanmot", "Episch", R.drawable.bugdex_maanmot),
+    RadarBug("atlasvlinder", "Atlasvlinder", "Legendarisch", R.drawable.bugdex_atlasvlinder),
+    RadarBug("rozekever", "Rozekever", "Zeldzaam", R.drawable.bugdex_rozekever),
+    RadarBug("kardinaalkever", "Kardinaalkever", "Episch", R.drawable.bugdex_kardinaalkever),
+    RadarBug("vuurwants", "Vuurwants", "Zeldzaam", R.drawable.bugdex_vuurwants),
+    RadarBug("sabelsprinkhaan", "Sabelsprinkhaan", "Episch", R.drawable.bugdex_sabelsprinkhaan),
+    RadarBug("mierenleeuw", "Mierenleeuw", "Gewoon", R.drawable.bugdex_mierenleeuw),
+    RadarBug("dobsonvlieg", "Dobsonvlieg", "Legendarisch", R.drawable.bugdex_dobsonvlieg),
+    RadarBug("helikopterjuffer", "Helikopterjuffer", "Episch", R.drawable.bugdex_helikopterjuffer),
+    RadarBug("spookinsect", "Spookinsect", "Legendarisch", R.drawable.bugdex_spookinsect),
+    RadarBug("bladpootwants", "Bladpootwants", "Episch", R.drawable.bugdex_bladpootwants),
+    RadarBug("assassin-bug", "Assassin bug", "Legendarisch", R.drawable.bugdex_assassin_bug),
+    RadarBug("tijgermug", "Tijgermug", "Episch", R.drawable.bugdex_tijgermug),
+    RadarBug("dolksteekwesp", "Dolksteekwesp", "Legendarisch", R.drawable.bugdex_dolksteekwesp),
+    RadarBug("roofvlieg", "Roofvlieg", "Episch", R.drawable.bugdex_roofvlieg),
+    RadarBug("kameelhalsvlieg", "Kameelhalsvlieg", "Episch", R.drawable.bugdex_kameelhalsvlieg),
+    RadarBug("zweefvlieg", "Zweefvlieg", "Gewoon", R.drawable.bugdex_zweefvlieg),
+    RadarBug("goudwesp", "Goudwesp", "Episch", R.drawable.bugdex_goudwesp),
+    RadarBug("sluipwesp", "Sluipwesp", "Zeldzaam", R.drawable.bugdex_sluipwesp),
+    RadarBug("fluweelmier", "Fluweelmier", "Episch", R.drawable.bugdex_fluweelmier),
+    RadarBug("reuzenwaterwants", "Reuzenwaterwants", "Legendarisch", R.drawable.bugdex_reuzenwaterwants),
+    RadarBug("zweepschorpioen", "Zweepschorpioen", "Legendarisch", R.drawable.bugdex_zweepschorpioen),
+    RadarBug("azuren-waterjuffer", "Azuren waterjuffer", "Episch", R.drawable.bugdex_azuren_waterjuffer),
+    RadarBug("rouwmantelvlinder", "Rouwmantelvlinder", "Legendarisch", R.drawable.bugdex_rouwmantelvlinder),
+    RadarBug("keizersmantel", "Keizersmantel", "Legendarisch", R.drawable.bugdex_keizersmantel),
+    RadarBug("gouden-tor", "Gouden tor", "Zeldzaam", R.drawable.bugdex_gouden_tor),
+    RadarBug("soldaatje", "Soldaatje", "Zeldzaam", R.drawable.bugdex_soldaatje),
+    RadarBug("doodgraverkever", "Doodgraverkever", "Episch", R.drawable.bugdex_doodgraverkever),
+    RadarBug("olifantskever", "Olifantskever", "Legendarisch", R.drawable.bugdex_olifantskever),
+    RadarBug("regenboogmestkever", "Regenboogmestkever", "Legendarisch", R.drawable.bugdex_regenboogmestkever),
+    RadarBug("titanus-kever", "Titanus-kever", "Legendarisch", R.drawable.bugdex_titanus_kever),
+    RadarBug("langsprietboktor", "Langsprietboktor", "Episch", R.drawable.bugdex_langsprietboktor),
+    RadarBug("schildpadkever", "Schildpadkever", "Episch", R.drawable.bugdex_schildpadkever),
+    RadarBug("vuurkever", "Vuurkever", "Zeldzaam", R.drawable.bugdex_vuurkever),
+    RadarBug("blauwe-ertsbij", "Blauwe ertsbij", "Legendarisch", R.drawable.bugdex_blauwe_ertsbij),
+    RadarBug("wespboktor", "Wespboktor", "Episch", R.drawable.bugdex_wespboktor),
+    RadarBug("groene-zandloopkever", "Groene zandloopkever", "Legendarisch", R.drawable.bugdex_groene_zandloopkever)
     )
   }
 }

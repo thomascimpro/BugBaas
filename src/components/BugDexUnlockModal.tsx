@@ -1,11 +1,19 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { BugDexDropResult } from "../services/bugDexService";
+import { bugDexFacts, BugDexRarity } from "../services/pointsService";
 import { BugArtImage } from "./BugArtImage";
 
 type Props = {
   drop: BugDexDropResult | null;
   onClose: () => void;
+};
+
+const rarityColors: Record<BugDexRarity, string> = {
+  Gewoon: "#6f7f5f",
+  Zeldzaam: "#15724f",
+  Episch: "#356d7c",
+  Legendarisch: "#b83227"
 };
 
 export function BugDexUnlockModal({ drop, onClose }: Props) {
@@ -36,6 +44,8 @@ export function BugDexUnlockModal({ drop, onClose }: Props) {
   if (!drop) return null;
   const isPointsReward = drop.rewardType === "points";
   const isDailyReward = drop.source === "daily_login";
+  const rarityColor = isPointsReward ? "#d7bd57" : rarityColors[drop.entry.rarity];
+  const bugFact = isPointsReward ? "Daily login" : bugDexFacts[drop.entry.id] ?? drop.entry.note;
   const title = isDailyReward ? "Daily bonus" : drop.source === "combine" ? "Combine gelukt" : drop.isNew ? "Bug unlocked" : "Dubbele bug";
   const subtitle = isPointsReward
     ? `+${drop.points} punten`
@@ -53,17 +63,15 @@ export function BugDexUnlockModal({ drop, onClose }: Props) {
   return (
     <Modal transparent animationType="fade" visible={Boolean(drop)} onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
+        <Animated.View style={[styles.card, { borderColor: rarityColor, transform: [{ scale }] }]}>
           <Text style={styles.kicker}>{title}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
           <View style={styles.artStage}>
-            <Animated.View style={[styles.glow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+            <Animated.View style={[styles.glow, { backgroundColor: rarityColor, opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
             {isPointsReward ? <Text style={styles.pointsReward}>+{drop.points}</Text> : <BugArtImage bugId={drop.entry.id} size={138} />}
           </View>
           <Text style={styles.name}>{isPointsReward ? "Punten gevonden" : drop.entry.name}</Text>
-          <Text style={styles.meta}>
-            {isPointsReward ? "Daily login" : `${drop.entry.rarity}${drop.item.count > 1 ? ` - x${drop.item.count}` : ""}`}
-          </Text>
+          <Text style={styles.meta}>{bugFact}</Text>
           {!!streakText && <Text style={styles.streak}>{streakText}</Text>}
           <Pressable style={styles.button} onPress={onClose}>
             <Text style={styles.buttonText}>Mooi</Text>
