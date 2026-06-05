@@ -185,16 +185,6 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
     return [{ translateX }, { translateY }, { translateY: crawlBob }, { translateX: hitShake }, { rotate }, { scale }, { scale: hitScale }];
   }, [activeBug, hitFeedback, poof, progress, translateX, translateY]);
 
-  const hitOpacity = hitFeedback.interpolate({
-    inputRange: [0, 0.18, 1],
-    outputRange: [0, 0.9, 0]
-  });
-
-  const hitRingScale = hitFeedback.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.72, 1.45]
-  });
-
   function spawnBug() {
     const rarity = pickRarity();
     const bugId = pickBugId(rarity);
@@ -291,9 +281,6 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
             </View>
           ) : (
             <>
-              <Animated.View style={[styles.hitFlashWrap, { height: activeBug.size + 18, width: activeBug.size + 18 }, { opacity: hitOpacity, transform: [{ scale: hitRingScale }] }]}>
-                <View style={styles.hitFlash} />
-              </Animated.View>
               <BugArtImage bugId={activeBug.bugId} size={activeBug.size} />
               {activeBug.requiredTaps > 1 && (
                 <View style={[styles.hpBar, { width: Math.max(52, activeBug.size * 0.86) }]}>
@@ -302,7 +289,6 @@ export function ForegroundCatchBug({ enabled, onCaught }: Props) {
                   ))}
                 </View>
               )}
-              {activeBug.requiredTaps > 1 && hits > 0 && <View style={[styles.damageRing, { height: activeBug.size + 12, width: activeBug.size + 12 }]} />}
             </>
           )}
         </Pressable>
@@ -341,15 +327,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center"
   },
-  hitFlashWrap: {
-    position: "absolute"
-  },
-  hitFlash: {
-    borderColor: "#fff2a8",
-    borderRadius: 999,
-    borderWidth: 3,
-    flex: 1
-  },
   hpBar: {
     bottom: 20,
     flexDirection: "row",
@@ -358,21 +335,15 @@ const styles = StyleSheet.create({
     position: "absolute"
   },
   hpSegment: {
-    backgroundColor: "#d7bd57",
-    borderColor: "rgba(16,32,24,0.72)",
+    backgroundColor: "#d83a34",
+    borderColor: "rgba(82,12,12,0.78)",
     borderRadius: 999,
     borderWidth: 1,
     flex: 1
   },
   hpSegmentLost: {
-    backgroundColor: "rgba(255,255,255,0.28)"
-  },
-  damageRing: {
-    borderColor: "#d7bd57",
-    borderRadius: 999,
-    borderWidth: 2,
-    opacity: 0.78,
-    position: "absolute"
+    backgroundColor: "rgba(255,255,255,0.3)",
+    borderColor: "rgba(82,12,12,0.28)"
   },
   poof: {
     alignItems: "center",

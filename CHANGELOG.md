@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.3
+
+- Foreground catch bugs tonen geen cirkel meer na een hit.
+- HP-bar voor foreground bugs is rood en blijft de enige health-indicator.
+
 ## 1.2.2
 
 - Foreground catch bugs bewegen smoother en minder robotisch met native transform-animatie.
