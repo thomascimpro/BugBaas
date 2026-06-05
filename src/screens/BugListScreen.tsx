@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
 import { BugCard } from "../components/BugCard";
 import { listBugs } from "../services/bugService";
@@ -14,6 +14,13 @@ const reportFilters: Array<{ value: ReportType | "all"; label: string }> = [
   { value: "workaround", label: "Tricks" },
   { value: "idea", label: "Idee" }
 ];
+const projectFilters = ["TBox", "TConnect", "SkySpark", "Infinite", "VTScada", "Alert", "Anders"];
+const reportTypeLabels: Record<ReportType, string> = {
+  bug: "bug",
+  tip: "tip",
+  workaround: "trick",
+  idea: "idee"
+};
 
 type Props = {
   onBack: () => void;
@@ -24,13 +31,20 @@ type Props = {
 export function BugListScreen({ onBack, onNew, onSelect }: Props) {
   const [filter, setFilter] = useState<BugStatus | undefined>();
   const [typeFilter, setTypeFilter] = useState<ReportType | "all">("all");
+  const [projectFilter, setProjectFilter] = useState<string | undefined>();
+  const [projectOpen, setProjectOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [reports, setReports] = useState<BugReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const normalizedSearch = normalizeSearch(searchQuery);
+  const hasActiveFilters = Boolean(filter || projectFilter || typeFilter !== "all" || normalizedSearch);
   const visibleReports = reports.filter((report) => {
     const reportType = report.reportType ?? "bug";
     if (typeFilter !== "all" && reportType !== typeFilter) return false;
+    if (projectFilter && report.project !== projectFilter) return false;
     if (filter && reportType === "bug" && report.status !== filter) return false;
     if (filter && reportType !== "bug") return false;
+    if (normalizedSearch && !reportMatchesSearch(report, normalizedSearch)) return false;
     return true;
   });
 
@@ -42,6 +56,14 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
   function changeTypeFilter(nextFilter: ReportType | "all") {
     setTypeFilter(nextFilter);
     if (nextFilter !== "bug") setFilter(undefined);
+  }
+
+  function resetFilters() {
+    setFilter(undefined);
+    setTypeFilter("all");
+    setProjectFilter(undefined);
+    setProjectOpen(false);
+    setSearchQuery("");
   }
 
   return (
@@ -57,6 +79,25 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
         </Pressable>
       </View>
 
+      <View style={styles.searchRow}>
+        <TextInput
+          accessibilityLabel="Zoek meldingen"
+          autoCapitalize="none"
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+          placeholder="Zoek op titel, product, melder of tekst"
+          placeholderTextColor="#77847f"
+          style={styles.searchInput}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {hasActiveFilters && (
+          <Pressable style={styles.resetButton} onPress={resetFilters}>
+            <Text style={styles.resetButtonText}>Reset</Text>
+          </Pressable>
+        )}
+      </View>
+
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filters}>
         {reportFilters.map((item) => {
           const active = typeFilter === item.value;
@@ -67,6 +108,39 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
           );
         })}
       </ScrollView>
+
+      <Pressable style={styles.projectButton} onPress={() => setProjectOpen((current) => !current)}>
+        <Text style={[styles.projectButtonText, !projectFilter && styles.projectButtonPlaceholder]}>Product: {projectFilter ?? "Alles"}</Text>
+        <Text style={styles.projectChevron}>{projectOpen ? "^" : "v"}</Text>
+      </Pressable>
+      {projectOpen && (
+        <View style={styles.projectMenu}>
+          <Pressable
+            style={[styles.projectOption, !projectFilter && styles.projectOptionActive]}
+            onPress={() => {
+              setProjectFilter(undefined);
+              setProjectOpen(false);
+            }}
+          >
+            <Text style={[styles.projectOptionText, !projectFilter && styles.projectOptionTextActive]}>Alles</Text>
+          </Pressable>
+          {projectFilters.map((project) => {
+            const active = projectFilter === project;
+            return (
+              <Pressable
+                key={project}
+                style={[styles.projectOption, active && styles.projectOptionActive]}
+                onPress={() => {
+                  setProjectFilter(project);
+                  setProjectOpen(false);
+                }}
+              >
+                <Text style={[styles.projectOptionText, active && styles.projectOptionTextActive]}>{project}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       {(typeFilter === "all" || typeFilter === "bug") && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filters}>
@@ -92,7 +166,7 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
             <View style={styles.empty}>
               <BugArtImage bugId="zilvervisje" size={74} opacity={0.72} />
               <Text style={styles.emptyTitle}>Geen meldingen</Text>
-              <Text style={styles.emptyText}>Kies een andere filter of maak een nieuwe melding.</Text>
+              <Text style={styles.emptyText}>Geen resultaat. Pas je zoektekst of filters aan.</Text>
             </View>
           }
           renderItem={({ item }) => <BugCard bug={item} onPress={() => onSelect(item)} />}
@@ -106,6 +180,25 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
       </Pressable>
     </View>
   );
+}
+
+function normalizeSearch(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function reportMatchesSearch(report: BugReport, query: string): boolean {
+  const reportType = report.reportType ?? "bug";
+  const haystack = [
+    report.title,
+    report.project,
+    report.reporterName,
+    report.description,
+    report.steps,
+    report.status,
+    report.severity,
+    reportTypeLabels[reportType]
+  ].join(" ").toLowerCase();
+  return haystack.includes(query);
 }
 
 const styles = StyleSheet.create({
@@ -139,6 +232,35 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "900"
   },
+  searchRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10
+  },
+  searchInput: {
+    backgroundColor: "#fdfefb",
+    borderColor: "#c8d5ce",
+    borderRadius: 8,
+    borderWidth: 1,
+    color: "#17211c",
+    flex: 1,
+    fontWeight: "800",
+    minHeight: 46,
+    paddingHorizontal: 12
+  },
+  resetButton: {
+    alignItems: "center",
+    backgroundColor: "#102018",
+    borderRadius: 8,
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 12
+  },
+  resetButtonText: {
+    color: "#ffffff",
+    fontWeight: "900"
+  },
   filterScroll: {
     flexGrow: 0,
     marginBottom: 10
@@ -167,6 +289,56 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   filterTextActive: {
+    color: "#ffffff"
+  },
+  projectButton: {
+    alignItems: "center",
+    backgroundColor: "#fdfefb",
+    borderColor: "#cbd8d1",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+    minHeight: 42,
+    paddingHorizontal: 12
+  },
+  projectButtonText: {
+    color: "#17211c",
+    fontWeight: "900"
+  },
+  projectButtonPlaceholder: {
+    color: "#53645d"
+  },
+  projectChevron: {
+    color: "#15724f",
+    fontWeight: "900"
+  },
+  projectMenu: {
+    backgroundColor: "#fdfefb",
+    borderColor: "#cbd8d1",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 10,
+    padding: 8
+  },
+  projectOption: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  projectOptionActive: {
+    backgroundColor: "#15724f"
+  },
+  projectOptionText: {
+    color: "#17211c",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  projectOptionTextActive: {
     color: "#ffffff"
   },
   statusPill: {
