@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+
+- Nieuw HD app-logo met een bug hunter die softwarebugs in een pc vangt.
+- Foreground catch bugs tonen nu duidelijke hit-feedback met shake, pulse en hit-ring.
+- Foreground catch bugs gebruiken een tekstloze HP-bar in plaats van een zichtbare teller.
+- Foreground catch bugs bewegen meer buglike met kruipstappen, bobbing en korte pauzes.
+
 ## 1.1.8
 
 - Foreground catch bugs zijn nu een korte challenge in plaats van een simpele tap.
