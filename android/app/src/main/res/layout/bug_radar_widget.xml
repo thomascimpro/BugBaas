@@ -1,58 +1,59 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
   android:id="@+id/widgetRoot"
   android:layout_width="match_parent"
   android:layout_height="match_parent"
-  android:background="@drawable/bug_radar_widget_background"
-  android:gravity="center_vertical"
-  android:orientation="horizontal">
+  android:background="@drawable/bug_radar_widget_background">
 
   <ImageView
-    android:id="@+id/radarIcon"
-    android:layout_width="58dp"
-    android:layout_height="58dp"
+    android:id="@+id/radarBackground"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:alpha="0.96"
     android:contentDescription="@null"
-    android:src="@drawable/ic_bug_radar" />
+    android:scaleType="centerCrop"
+    android:src="@drawable/bug_radar_scan_animation" />
+
+  <ImageView
+    android:id="@+id/radarBugImage"
+    android:layout_width="86dp"
+    android:layout_height="70dp"
+    android:layout_gravity="center"
+    android:contentDescription="@null"
+    android:scaleType="fitCenter"
+    android:src="@drawable/bugdex_zilvervisje"
+    android:visibility="gone" />
 
   <LinearLayout
-    android:layout_width="0dp"
-    android:layout_height="wrap_content"
-    android:layout_marginLeft="10dp"
-    android:layout_weight="1"
-    android:orientation="vertical">
-
-    <TextView
-      android:id="@+id/radarTitle"
-      android:layout_width="wrap_content"
-      android:layout_height="wrap_content"
-      android:textColor="#D7BD57"
-      android:textSize="11sp"
-      android:textStyle="bold" />
+    android:id="@+id/radarLabel"
+    android:layout_width="match_parent"
+    android:layout_height="24dp"
+    android:layout_gravity="bottom"
+    android:background="@drawable/bug_radar_label_background"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:paddingLeft="8dp"
+    android:paddingRight="8dp"
+    android:visibility="gone">
 
     <TextView
       android:id="@+id/radarBugName"
-      android:layout_width="wrap_content"
+      android:layout_width="0dp"
       android:layout_height="wrap_content"
+      android:layout_weight="1"
       android:ellipsize="end"
+      android:gravity="center"
       android:maxLines="1"
       android:textColor="#FFFFFF"
-      android:textSize="17sp"
+      android:textSize="12sp"
       android:textStyle="bold" />
 
     <TextView
-      android:id="@+id/radarMeta"
+      android:id="@+id/radarRarity"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:ellipsize="end"
-      android:maxLines="1"
-      android:textColor="#B7E7CB"
-      android:textSize="12sp" />
-
-    <TextView
-      android:id="@+id/radarAction"
-      android:layout_width="wrap_content"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="3dp"
-      android:textColor="#FFFFFF"
-      android:textSize="12sp" />
+      android:layout_marginLeft="6dp"
+      android:textColor="#D7BD57"
+      android:textSize="10sp"
+      android:textStyle="bold" />
   </LinearLayout>
-</LinearLayout>
+</FrameLayout>

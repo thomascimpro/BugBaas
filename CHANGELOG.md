@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.5
+
+- Bug Radar widget compacter gemaakt met full-widget radar en echte BugDex afbeelding bij een gevonden bug.
+- Widget gebruikt nu een radar scan-animatie en plant maximaal drie signalen per werkdag.
+- Unlock popup toont geen rarity-tekst meer, maar een bug-weetje.
+- Alle 117 BugDex bugs hebben nu een eigen weetje.
+- Rarity blijft zichtbaar via border- en glowkleur.
+
 ## 1.2.4
 
 - Android Bug Radar widget toegevoegd: toont een radar bug en opent exact die foreground catch.
