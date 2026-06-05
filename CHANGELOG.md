@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.7
+
+- Bug Radar widget-signalen kunnen nu soms random buiten kantooruren verschijnen.
+- Buiten kantooruren gebruikt vroege ochtend, avond en weekendvensters.
+- Daglimiet en minimale spreiding blijven hetzelfde: maximaal 3 signalen per dag en minimaal 60 minuten ertussen.
+
 ## 1.2.6
 
 - Bug Radar widget gebruikt nu HD bitmap radarframes in plaats van de oude vector-radar.

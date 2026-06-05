@@ -103,42 +103,59 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     val now = Calendar.getInstance()
     val today = dayId(now)
     val count = if (prefs.getInt(prefDay, -1) == today) prefs.getInt(prefCount, 0) else 0
-    val start = now.clone() as Calendar
-
-    if (!isWorkday(start) || start.get(Calendar.HOUR_OF_DAY) >= workdayEndHour || count >= dailySignalCount) {
-      return randomTimeOnNextWorkday(start)
-    }
-
-    if (start.get(Calendar.HOUR_OF_DAY) < workdayStartHour) {
-      start.set(Calendar.HOUR_OF_DAY, workdayStartHour)
-      start.set(Calendar.MINUTE, 0)
+    val earliest = now.clone() as Calendar
+    if (count >= dailySignalCount) {
+      earliest.add(Calendar.DAY_OF_YEAR, 1)
+      earliest.set(Calendar.HOUR_OF_DAY, 0)
+      earliest.set(Calendar.MINUTE, 0)
     } else {
-      start.add(Calendar.MINUTE, minMinutesBetweenSignals)
+      earliest.add(Calendar.MINUTE, minMinutesBetweenSignals)
     }
-    start.set(Calendar.SECOND, 0)
-    start.set(Calendar.MILLISECOND, 0)
+    earliest.set(Calendar.SECOND, 0)
+    earliest.set(Calendar.MILLISECOND, 0)
 
-    val end = now.clone() as Calendar
-    end.set(Calendar.HOUR_OF_DAY, workdayEndHour)
-    end.set(Calendar.MINUTE, 0)
-    end.set(Calendar.SECOND, 0)
-    end.set(Calendar.MILLISECOND, 0)
-
-    if (start.timeInMillis >= end.timeInMillis) return randomTimeOnNextWorkday(now)
-    return Random.nextLong(start.timeInMillis, end.timeInMillis)
+    val outsideOfficeHours = Random.nextInt(100) < outsideOfficeHoursChancePercent
+    return randomSignalTimeAfter(earliest, outsideOfficeHours)
   }
 
-  private fun randomTimeOnNextWorkday(from: Calendar): Long {
-    val next = from.clone() as Calendar
-    next.add(Calendar.DAY_OF_YEAR, 1)
-    while (!isWorkday(next)) next.add(Calendar.DAY_OF_YEAR, 1)
-    next.set(Calendar.HOUR_OF_DAY, workdayStartHour)
-    next.set(Calendar.MINUTE, 0)
-    next.set(Calendar.SECOND, 0)
-    next.set(Calendar.MILLISECOND, 0)
-    val end = next.clone() as Calendar
-    end.set(Calendar.HOUR_OF_DAY, workdayEndHour)
-    return Random.nextLong(next.timeInMillis, end.timeInMillis)
+  private fun randomSignalTimeAfter(from: Calendar, outsideOfficeHours: Boolean): Long {
+    val day = from.clone() as Calendar
+    day.set(Calendar.HOUR_OF_DAY, 0)
+    day.set(Calendar.MINUTE, 0)
+    day.set(Calendar.SECOND, 0)
+    day.set(Calendar.MILLISECOND, 0)
+
+    repeat(signalLookaheadDays) {
+      val windows = signalWindows(day, outsideOfficeHours)
+        .mapNotNull { windowBounds(from, day, it.first, it.second) }
+      if (windows.isNotEmpty()) {
+        val window = windows.random()
+        return Random.nextLong(window.first, window.second)
+      }
+      day.add(Calendar.DAY_OF_YEAR, 1)
+    }
+
+    val fallback = from.clone() as Calendar
+    fallback.add(Calendar.MINUTE, minMinutesBetweenSignals)
+    return fallback.timeInMillis
+  }
+
+  private fun signalWindows(day: Calendar, outsideOfficeHours: Boolean): List<Pair<Int, Int>> {
+    if (!isWorkday(day)) return if (outsideOfficeHours) listOf(weekendStartHour to eveningEndHour) else emptyList()
+    return if (outsideOfficeHours) {
+      listOf(morningStartHour to workdayStartHour, workdayEndHour to eveningEndHour)
+    } else {
+      listOf(workdayStartHour to workdayEndHour)
+    }
+  }
+
+  private fun windowBounds(from: Calendar, day: Calendar, startHour: Int, endHour: Int): Pair<Long, Long>? {
+    val start = day.clone() as Calendar
+    start.set(Calendar.HOUR_OF_DAY, startHour)
+    val end = day.clone() as Calendar
+    end.set(Calendar.HOUR_OF_DAY, endHour)
+    val startMillis = maxOf(from.timeInMillis, start.timeInMillis)
+    return if (startMillis < end.timeInMillis) startMillis to end.timeInMillis else null
   }
 
   private fun noteSignal(context: Context) {
@@ -181,11 +198,16 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
   companion object {
     private const val actionSignal = "nl.cimpro.bugbaas.action.BUG_RADAR_SIGNAL"
     private const val dailySignalCount = 3
+    private const val eveningEndHour = 22
     private const val minMinutesBetweenSignals = 60
+    private const val morningStartHour = 7
+    private const val outsideOfficeHoursChancePercent = 30
     private const val prefsName = "bug_radar_widget"
     private const val prefCount = "signal_count"
     private const val prefDay = "signal_day"
+    private const val signalLookaheadDays = 14
     private const val signalRequestCode = 4242
+    private const val weekendStartHour = 10
     private const val workdayEndHour = 17
     private const val workdayStartHour = 9
 
