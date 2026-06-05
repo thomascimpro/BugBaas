@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, AppState, Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { AppNotification, BugComment, NotificationSettings, User } from "./src/types";
 import { applyUserPoints, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, updateUserDisplayName } from "./src/services/userService";
 import { LoginScreen } from "./src/screens/LoginScreen";
@@ -53,6 +53,7 @@ export default function App() {
   const [versionNotice, setVersionNotice] = useState<VersionNotice | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
+  const appState = useRef(AppState.currentState);
   const foregroundBugEnabled = Boolean(
     user
     && user.nameSet === true
@@ -96,6 +97,13 @@ export default function App() {
   }, [versionNotice]);
 
   useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
     if (!user) return;
     void getNotificationSettings(user).then(setNotificationSettings);
     void initializePhoneNotifications().catch(() => undefined);
@@ -109,7 +117,10 @@ export default function App() {
   useEffect(() => {
     if (!user) return () => undefined;
     return subscribeUserNotifications(user, notificationSettings, (nextNotification) => {
-      setNotification(nextNotification);
+      if (appState.current === "active") {
+        setNotification(nextNotification);
+        return;
+      }
       void showPhoneNotification(nextNotification).catch(() => undefined);
     });
   }, [notificationSettings, user]);
@@ -198,7 +209,9 @@ export default function App() {
     if (!user) return;
     try {
       const updated = await applyUserPoints(user.uid, xp, 0);
-      if (updated) setUser(updated);
+      const splatResult = await recordBugSplat(updated ?? user);
+      setUser(splatResult.user);
+      if (splatResult.milestone) void maybeShowBugDexDrop(rollBugDexDrop(splatResult.user, "bug_splat"));
     } catch {
       // Foreground catch rewards should never interrupt normal app use.
     }

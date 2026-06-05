@@ -7,9 +7,9 @@ import { BugArtImage } from "./BugArtImage";
 import { MedalIcon } from "./MedalIcon";
 
 const topThreeStyles = [
-  { border: "#d7bd57", background: "#fff7d6", shine: "#f4d76a", pill: "#6f560c", pillText: "#fff7d6" },
-  { border: "#b9c1c8", background: "#f3f6f7", shine: "#dfe5e8", pill: "#5d6870", pillText: "#ffffff" },
-  { border: "#b87842", background: "#fff0df", shine: "#e2a56d", pill: "#7b431f", pillText: "#ffffff" }
+  { border: "#d7bd57", background: "#fff7d6", shine: "#f4d76a", pill: "#6f560c", pillText: "#fff7d6", bugId: "doodshoofdvlinder" },
+  { border: "#b9c1c8", background: "#f3f6f7", shine: "#dfe5e8", pill: "#5d6870", pillText: "#ffffff", bugId: "boktor" },
+  { border: "#b87842", background: "#fff0df", shine: "#e2a56d", pill: "#7b431f", pillText: "#ffffff", bugId: "duizendpoot" }
 ];
 
 export function LeaderboardRow({ index, user, onPress }: { index: number; user: User; onPress: () => void }) {
@@ -22,12 +22,12 @@ export function LeaderboardRow({ index, user, onPress }: { index: number; user: 
   const extraBadges = user.badges.length - visibleBadges.length;
 
   return (
-    <Pressable style={[styles.row, { backgroundColor: medal?.background ?? tier.frameBackground, borderColor: medal?.border ?? tier.frameColor }, medal && styles.topThreeRow, isLeader && styles.leader]} onPress={onPress}>
-      <View style={[styles.shine, { backgroundColor: medal?.shine ?? tier.frameAccent }]} />
+    <Pressable style={[styles.row, medal ? { backgroundColor: medal.background, borderColor: medal.border } : styles.standardRow, medal && styles.topThreeRow, isLeader && styles.leader]} onPress={onPress}>
+      {medal ? <View style={[styles.shine, { backgroundColor: medal.shine }]} /> : null}
       <View style={styles.rankSlot}>
         <MedalIcon index={index} size={index < 3 ? 52 : 38} />
       </View>
-      <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={isLeader ? Math.min(64, tier.bugSize) : Math.min(52, tier.bugSize * 0.72)} />
+      {medal ? <BugArtImage bugId={medal.bugId} size={isLeader ? 64 : 52} /> : null}
       <View style={styles.body}>
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{user.displayName}</Text>
@@ -82,6 +82,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6
+  },
+  standardRow: {
+    borderColor: "transparent",
+    borderWidth: 0
   },
   leader: {
     borderWidth: 3
