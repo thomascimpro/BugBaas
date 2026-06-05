@@ -1,6 +1,6 @@
 # CimPro BugBaas
 
-Android-first Expo/React Native app voor interne bugmeldingen, statusopvolging, punten en ranglijst.
+Android-first Expo/React Native app voor interne bugmeldingen, statusopvolging, punten, ranglijst en BugDex.
 
 Uitgangspunt: Firebase Spark/free plan. Zie `FIREBASE_SPARK_PLAN.md`.
 Tierwerking staat in `TIERS.md`.
@@ -29,6 +29,22 @@ Tierwerking staat in `TIERS.md`.
 
 Gebruik geen Cloud Functions, Cloud Storage of Blaze-only features voor V1. Screenshots worden client-side verkleind en als kleine JPEG data-URL in Firestore opgeslagen.
 
+## Meldingen op Firebase Spark
+
+BugBaas gebruikt `expo-notifications` en Firestore-notificatiedocumenten. Dit blijft binnen Firebase Spark:
+
+- App open: nieuwe notificaties verschijnen als ingame toast/banner.
+- App op achtergrond: de app probeert direct een local Android notification te tonen met high-importance channel, geluid en vibratie.
+- App volledig dicht: niet gegarandeerd en niet ondersteund zonder server push.
+
+Waarom niet volledig dicht op Spark:
+
+- Firestore listeners maken een gesloten Android-app niet wakker.
+- Echte push naar gesloten apps vraagt FCM/server-triggering.
+- Zonder Cloud Functions of eigen server is dat niet betrouwbaar te maken.
+
+Conclusie: dit is de maximale Spark/free implementatie zonder Blaze, Cloud Functions, server-side push of extra dependencies.
+
 ## Google login
 
 - `app.json` bevat een web OAuth client en Android OAuth client.
@@ -38,8 +54,7 @@ Gebruik geen Cloud Functions, Cloud Storage of Blaze-only features voor V1. Scre
 
 ## Interne APK
 
-- Eerste APK: `release/CimPro-BugBaas-0.1.1.apk`.
-- GitHub Release: https://github.com/thomascimpro/cimpro-bugbaas/releases/tag/v0.1.1
+- Laatste APK staat op GitHub Releases: https://github.com/thomascimpro/cimpro-bugbaas/releases
 - APK is bedoeld voor GitHub Releases en handmatige installatie door collega's.
 - Android vraagt gebruikers om installatie uit onbekende bron toe te staan.
 - Iedereen gebruikt hetzelfde Firebase project `<firebase-project-id>`, dus gebruikers, bugs, upvotes en ranglijst zijn gedeeld.

@@ -17,13 +17,14 @@ const demoNotifications = new Map<string, AppNotification[]>();
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldPlaySound: false,
+    shouldPlaySound: true,
     shouldSetBadge: false,
-    shouldShowAlert: true,
     shouldShowBanner: true,
     shouldShowList: true
   })
 });
+
+const phoneNotificationChannelId = "bugbaas";
 
 function nowIso() {
   return new Date().toISOString();
@@ -47,9 +48,17 @@ export async function saveNotificationSettings(user: User, settings: Notificatio
 
 export async function initializePhoneNotifications(): Promise<void> {
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("bugbaas", {
+    await Notifications.setNotificationChannelAsync(phoneNotificationChannelId, {
       name: "BugBaas",
-      importance: Notifications.AndroidImportance.DEFAULT
+      description: "BugBaas meldingen voor bugs, reacties, updates en ruilverzoeken.",
+      enableLights: true,
+      enableVibrate: true,
+      importance: Notifications.AndroidImportance.MAX,
+      lightColor: "#d7bd57",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      sound: "default",
+      vibrationPattern: [0, 250, 120, 250]
     });
   }
   await Notifications.requestPermissionsAsync();
@@ -62,12 +71,18 @@ export async function showPhoneNotification(notification: AppNotification): Prom
     content: {
       title: notification.title,
       body: notification.body,
+      autoDismiss: true,
+      color: "#15724f",
       data: {
         bugId: notification.bugId ?? "",
         type: notification.type
-      }
+      },
+      priority: Notifications.AndroidNotificationPriority.MAX,
+      sound: true,
+      sticky: false,
+      vibrate: [0, 250, 120, 250]
     },
-    trigger: null
+    trigger: Platform.OS === "android" ? { channelId: phoneNotificationChannelId } : null
   });
 }
 

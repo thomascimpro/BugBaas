@@ -3,7 +3,6 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "
 import { BugArtImage } from "../components/BugArtImage";
 import { LeaderboardRow } from "../components/LeaderboardRow";
 import { MedalIcon } from "../components/MedalIcon";
-import { getTierForPoints } from "../services/pointsService";
 import { listUsers } from "../services/userService";
 import { User } from "../types";
 import { sharedStyles } from "./sharedStyles";
@@ -14,9 +13,9 @@ type Props = {
 };
 
 const podiumStyles = [
-  { border: "#d7bd57", background: "#fff7d6", shine: "#f4d76a", text: "#6f560c" },
-  { border: "#b9c1c8", background: "#f3f6f7", shine: "#dfe5e8", text: "#4d5960" },
-  { border: "#b87842", background: "#fff0df", shine: "#e2a56d", text: "#6e3f1e" }
+  { border: "#d7bd57", background: "#fff7d6", shine: "#f4d76a", text: "#6f560c", bugId: "doodshoofdvlinder" },
+  { border: "#b9c1c8", background: "#f3f6f7", shine: "#dfe5e8", text: "#4d5960", bugId: "boktor" },
+  { border: "#b87842", background: "#fff0df", shine: "#e2a56d", text: "#6e3f1e", bugId: "duizendpoot" }
 ];
 
 export function LeaderboardScreen({ onBack: _onBack, onSelectUser }: Props) {
@@ -57,13 +56,12 @@ function Podium({ users, onSelectUser }: { users: User[]; onSelectUser: (user: U
   return (
     <View style={styles.podium}>
       {users.map((user, index) => {
-        const tier = index === 0 ? getTierForPoints(Number.MAX_SAFE_INTEGER) : getTierForPoints(user.totalPoints);
         const medal = podiumStyles[index] ?? podiumStyles[0];
         return (
           <Pressable key={user.uid} style={[styles.podiumCard, { backgroundColor: medal.background, borderColor: medal.border }, index === 0 && styles.podiumLeader]} onPress={() => onSelectUser(user)}>
             <View style={[styles.podiumShine, { backgroundColor: medal.shine }]} />
             <MedalIcon index={index} size={index === 0 ? 76 : 58} />
-            <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={index === 0 ? 58 : 44} />
+            <BugArtImage bugId={medal.bugId} size={index === 0 ? 58 : 44} />
             <Text style={[styles.podiumRank, { color: medal.text }]}>#{index + 1}</Text>
             <Text style={[styles.podiumName, { color: medal.text }]} numberOfLines={1}>{user.displayName}</Text>
             <Text style={styles.podiumPoints}>{user.totalPoints} pt</Text>
