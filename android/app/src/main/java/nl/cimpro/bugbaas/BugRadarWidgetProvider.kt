@@ -90,7 +90,7 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     val auraRes = bug?.let { rarityAuraRes(it.rarity) }
     views.setViewVisibility(R.id.radarRarityAura, if (auraRes == null) View.GONE else View.VISIBLE)
     if (auraRes != null) {
-      views.setInt(R.id.radarRarityAura, "setBackgroundResource", auraRes)
+      views.setImageViewResource(R.id.radarRarityAura, auraRes)
     }
     if (bug != null) {
       views.setImageViewResource(R.id.radarBugImage, bug.imageRes)
