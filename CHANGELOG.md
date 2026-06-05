@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.9
+
+- Bug Radar widget gefixt: de rarity-aura gebruikt nu een AppWidget-safe `ImageView` in plaats van een unsupported generic `View`.
+- Voorkomt de Android launcherfout waarbij de widget alleen “er is een fout opgetreden” toont.
+
 ## 1.2.8
 
 - Bug Radar widget gebruikt nu 12 radarframes voor een soepelere scan-animatie.

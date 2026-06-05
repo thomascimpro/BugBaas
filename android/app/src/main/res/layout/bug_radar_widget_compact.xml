@@ -102,12 +102,14 @@
     android:layout_height="1dp"
     android:visibility="gone" />
 
-  <View
+  <ImageView
     android:id="@+id/radarRarityAura"
     android:layout_width="72dp"
     android:layout_height="72dp"
     android:layout_gravity="center"
-    android:background="@drawable/bug_radar_aura_epic_art"
+    android:contentDescription="@null"
+    android:scaleType="fitCenter"
+    android:src="@drawable/bug_radar_aura_epic_art"
     android:visibility="gone" />
 
   <ImageView
