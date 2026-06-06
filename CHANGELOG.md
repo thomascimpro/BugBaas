@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.3
+
+- Beweeg radar labels volledig Nederlands gemaakt: Lopen, Hardlopen en Fietsen.
+
 ## 1.3.2
 
 - Home toont nu een compacte Beweeg radar kaart met dagelijkse km-doelen en rewardstatus.

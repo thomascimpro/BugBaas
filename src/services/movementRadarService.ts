@@ -144,9 +144,9 @@ export async function getMovementRadarProgress(uid: string): Promise<MovementRad
     available: true,
     awardedToday: state?.day === today ? state.awardedUnits : 0,
     goals: [
-      makeGoal("walking", "Loop", walkedKm, fallbackWalkingMetersPerRadarBug, earned),
-      makeGoal("running", "Run", 0, runningMetersPerRadarBug, 0),
-      makeGoal("cycling", "Fiets", 0, cyclingMetersPerRadarBug, 0)
+      makeGoal("walking", "Lopen", walkedKm, fallbackWalkingMetersPerRadarBug, earned),
+      makeGoal("running", "Hardlopen", 0, runningMetersPerRadarBug, 0),
+      makeGoal("cycling", "Fietsen", 0, cyclingMetersPerRadarBug, 0)
     ],
     maxRewards: maxMovementRadarBugsPerDay
   };
@@ -211,9 +211,9 @@ async function getHealthConnectProgress(uid: string): Promise<MovementRadarProgr
     available: true,
     awardedToday: state?.day === today ? state.awardedUnits : 0,
     goals: [
-      makeGoal("walking", "Loop", walkingKm, walkingMetersPerRadarBug, Math.floor((snapshot.walkingMeters ?? 0) / walkingMetersPerRadarBug)),
-      makeGoal("running", "Run", runningKm, runningMetersPerRadarBug, Math.floor((snapshot.runningMeters ?? 0) / runningMetersPerRadarBug)),
-      makeGoal("cycling", "Fiets", cyclingKm, cyclingMetersPerRadarBug, Math.floor((snapshot.cyclingMeters ?? 0) / cyclingMetersPerRadarBug))
+      makeGoal("walking", "Lopen", walkingKm, walkingMetersPerRadarBug, Math.floor((snapshot.walkingMeters ?? 0) / walkingMetersPerRadarBug)),
+      makeGoal("running", "Hardlopen", runningKm, runningMetersPerRadarBug, Math.floor((snapshot.runningMeters ?? 0) / runningMetersPerRadarBug)),
+      makeGoal("cycling", "Fietsen", cyclingKm, cyclingMetersPerRadarBug, Math.floor((snapshot.cyclingMeters ?? 0) / cyclingMetersPerRadarBug))
     ],
     maxRewards: maxMovementRadarBugsPerDay
   };
@@ -281,9 +281,9 @@ function emptyProgress(reason: string): MovementRadarProgress {
     available: false,
     awardedToday: 0,
     goals: [
-      makeGoal("walking", "Loop", 0, walkingMetersPerRadarBug, 0),
-      makeGoal("running", "Run", 0, runningMetersPerRadarBug, 0),
-      makeGoal("cycling", "Fiets", 0, cyclingMetersPerRadarBug, 0)
+      makeGoal("walking", "Lopen", 0, walkingMetersPerRadarBug, 0),
+      makeGoal("running", "Hardlopen", 0, runningMetersPerRadarBug, 0),
+      makeGoal("cycling", "Fietsen", 0, cyclingMetersPerRadarBug, 0)
     ],
     maxRewards: maxMovementRadarBugsPerDay,
     reason
