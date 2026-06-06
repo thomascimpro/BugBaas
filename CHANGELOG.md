@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.1
+
+- Foreground en background bugs bewegen natuurlijker met insectachtige paden en logische rotatie.
+- Bug Radar kan meerdere gevonden bugs stacken en opent ze een voor een als foreground catch.
+- Movement radar bonuses toegevoegd via Health Connect: lopen 2 km, hardlopen 4 km en fietsen 8 km per radar bug, maximaal 5 per dag.
+- Android Health Connect permissions en native widget-queue bridge toegevoegd.
+
 ## 1.3.0
 
 - Bug Radar widget gebruikt nu 24 radarframes in plaats van 12.
