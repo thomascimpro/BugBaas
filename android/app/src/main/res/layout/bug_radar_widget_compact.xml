@@ -206,6 +206,22 @@
     android:src="@drawable/bugdex_zilvervisje"
     android:visibility="gone" />
 
+  <TextView
+    android:id="@+id/radarQueueCount"
+    android:layout_width="28dp"
+    android:layout_height="20dp"
+    android:layout_gravity="top|right"
+    android:layout_marginTop="6dp"
+    android:layout_marginRight="6dp"
+    android:background="@drawable/bug_radar_label_background"
+    android:gravity="center"
+    android:maxLines="1"
+    android:text="x2"
+    android:textColor="#FFFFFF"
+    android:textSize="10sp"
+    android:textStyle="bold"
+    android:visibility="gone" />
+
   <LinearLayout
     android:id="@+id/radarLabel"
     android:layout_width="1dp"

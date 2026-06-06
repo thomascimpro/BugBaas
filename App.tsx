@@ -24,6 +24,7 @@ import { HelpTourOverlay } from "./src/components/HelpTourOverlay";
 import { allBugArtIds, BugArtId } from "./src/services/bugArt";
 import { listBugs } from "./src/services/bugService";
 import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, grantBugDexReward, rollBugDexDrop, rollSpecificBugDexDrop } from "./src/services/bugDexService";
+import { claimMovementRadarBonuses } from "./src/services/movementRadarService";
 import { checkLatestVersion, VersionNotice } from "./src/services/versionService";
 import {
   defaultNotificationSettings,
@@ -52,10 +53,12 @@ export default function App() {
   const [helpVisible, setHelpVisible] = useState(false);
   const [splatBonusVisible, setSplatBonusVisible] = useState(false);
   const [versionNotice, setVersionNotice] = useState<VersionNotice | null>(null);
-  const [pendingRadarBugId, setPendingRadarBugId] = useState<BugArtId | null>(null);
+  const [pendingRadarBugIds, setPendingRadarBugIds] = useState<BugArtId[]>([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const appState = useRef(AppState.currentState);
+  const movementCheckInProgress = useRef(false);
+  const userRef = useRef<User | null>(null);
   const foregroundBugEnabled = Boolean(
     user
     && user.nameSet === true
@@ -66,6 +69,10 @@ export default function App() {
     && !splatBonusVisible
     && !versionNotice
   );
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     return subscribeAuth(async (nextUser) => {
@@ -99,7 +106,7 @@ export default function App() {
       setSelectedBug(null);
       setSelectedUser(null);
       setRoute("home");
-      setPendingRadarBugId(bugId);
+      setPendingRadarBugIds((queue) => [...queue, bugId]);
     };
 
     void Linking.getInitialURL().then(openRadarBug).catch(() => undefined);
@@ -116,9 +123,17 @@ export default function App() {
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
       appState.current = nextState;
+      if (nextState === "active") void checkMovementRadarBonuses();
     });
     return () => subscription.remove();
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid || user.nameSet !== true) return;
+    void checkMovementRadarBonuses();
+    const interval = setInterval(() => void checkMovementRadarBonuses(), 15 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user?.uid, user?.nameSet]);
 
   useEffect(() => {
     if (!user) return;
@@ -260,6 +275,19 @@ export default function App() {
       }
     } catch {
       // Foreground catch rewards should never interrupt normal app use.
+    }
+  }
+
+  async function checkMovementRadarBonuses() {
+    const currentUser = userRef.current;
+    if (!currentUser || currentUser.nameSet !== true || movementCheckInProgress.current) return;
+    movementCheckInProgress.current = true;
+    try {
+      await claimMovementRadarBonuses(currentUser.uid);
+    } catch {
+      // Movement radar bonuses are optional and must never interrupt the app.
+    } finally {
+      movementCheckInProgress.current = false;
     }
   }
 
@@ -422,9 +450,9 @@ export default function App() {
       <InAppNotificationToast notification={notification} onClose={closeNotification} onOpen={openNotification} />
       <ForegroundCatchBug
         enabled={foregroundBugEnabled}
-        forcedBugId={pendingRadarBugId}
+        forcedBugIds={pendingRadarBugIds}
         onCaught={(xp, bugId, rarity) => void handleForegroundBugCaught(xp, bugId, rarity)}
-        onForcedBugConsumed={() => setPendingRadarBugId(null)}
+        onForcedBugConsumed={() => setPendingRadarBugIds((queue) => queue.slice(1))}
       />
       <BugDexUnlockModal drop={bugDexDrop} onClose={closeBugDexDrop} />
       <DisplayNameModal user={user} visible={Boolean(user && user.nameSet !== true)} onSave={handleDisplayNameSave} />

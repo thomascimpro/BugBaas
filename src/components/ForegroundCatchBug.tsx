@@ -6,42 +6,46 @@ import { BugArtImage } from "./BugArtImage";
 
 type SpawnRarity = "common" | "rare" | "epic" | "legendary";
 
+type MotionPath = {
+  rotate: string[];
+  x: number[];
+  y: number[];
+};
+
 type ActiveBug = {
   id: number;
   bugId: BugArtId;
   durationMs: number;
-  direction: "left" | "right";
-  lane: number;
+  facingScale: number;
   motionCycleMs: number;
-  pathShift: number;
+  pathRotate: string[];
+  pathX: number[];
+  pathY: number[];
   rarity: SpawnRarity;
   requiredTaps: number;
   rewardXp: number;
   size: number;
   stepBob: number;
-  verticalDrift: number;
-  wiggle: number;
 };
 
 type Props = {
   enabled: boolean;
-  forcedBugId?: BugArtId | null;
+  forcedBugIds?: BugArtId[];
   onCaught: (xp: number, bugId: BugArtId, rarity: SpawnRarity) => void;
-  onForcedBugConsumed?: () => void;
+  onForcedBugConsumed?: (bugId: BugArtId) => void;
 };
 
 const spawnCheckMs = 60000;
 const spawnChance = 0.28;
 const catchDurationMs = 30000;
 const tapDebounceMs = 140;
-const movementInput = [0, 0.066, 0.133, 0.2, 0.266, 0.333, 0.4, 0.466, 0.533, 0.6, 0.666, 0.733, 0.8, 0.866, 0.933, 1];
-const crawlFractions = [0.16, 0.2, 0.27, 0.35, 0.44, 0.53, 0.62, 0.71, 0.8, 0.86, 0.8, 0.71, 0.62, 0.5, 0.32, 0.16];
+const movementInput = [0, 0.055, 0.1, 0.16, 0.22, 0.3, 0.37, 0.45, 0.53, 0.61, 0.69, 0.76, 0.83, 0.9, 0.96, 1];
 
-const raritySettings: Record<SpawnRarity, { motionCycleMs: number; rewardXp: number; requiredTaps: number; size: number; stepBob: number; verticalDrift: number; wiggle: number }> = {
-  common: { motionCycleMs: 7600, rewardXp: 1, requiredTaps: 3, size: 68, stepBob: 4, verticalDrift: 0.1, wiggle: 0.015 },
-  rare: { motionCycleMs: 6400, rewardXp: 4, requiredTaps: 5, size: 74, stepBob: 5, verticalDrift: 0.16, wiggle: 0.028 },
-  epic: { motionCycleMs: 5400, rewardXp: 9, requiredTaps: 7, size: 82, stepBob: 6, verticalDrift: 0.24, wiggle: 0.04 },
-  legendary: { motionCycleMs: 4600, rewardXp: 15, requiredTaps: 9, size: 90, stepBob: 7, verticalDrift: 0.3, wiggle: 0.055 }
+const raritySettings: Record<SpawnRarity, { motionCycleMs: number; rewardXp: number; requiredTaps: number; size: number; stepBob: number; turn: number; verticalDrift: number; wiggle: number }> = {
+  common: { motionCycleMs: catchDurationMs, rewardXp: 1, requiredTaps: 3, size: 68, stepBob: 4, turn: 12, verticalDrift: 0.1, wiggle: 0.015 },
+  rare: { motionCycleMs: catchDurationMs, rewardXp: 4, requiredTaps: 5, size: 74, stepBob: 5, turn: 17, verticalDrift: 0.16, wiggle: 0.028 },
+  epic: { motionCycleMs: catchDurationMs, rewardXp: 9, requiredTaps: 7, size: 82, stepBob: 6, turn: 22, verticalDrift: 0.24, wiggle: 0.04 },
+  legendary: { motionCycleMs: catchDurationMs, rewardXp: 15, requiredTaps: 9, size: 90, stepBob: 7, turn: 28, verticalDrift: 0.3, wiggle: 0.055 }
 };
 
 const rarityLabels: Record<SpawnRarity, "Gewoon" | "Zeldzaam" | "Episch" | "Legendarisch"> = {
@@ -75,7 +79,7 @@ const bugPools = (Object.keys(rarityLabels) as SpawnRarity[]).reduce((pools, rar
   return pools;
 }, {} as Record<SpawnRarity, BugArtId[]>);
 
-export function ForegroundCatchBug({ enabled, forcedBugId, onCaught, onForcedBugConsumed }: Props) {
+export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onForcedBugConsumed }: Props) {
   const { height, width } = useWindowDimensions();
   const [activeBug, setActiveBug] = useState<ActiveBug | null>(null);
   const [hits, setHits] = useState(0);
@@ -101,12 +105,12 @@ export function ForegroundCatchBug({ enabled, forcedBugId, onCaught, onForcedBug
     }
 
     const interval = setInterval(() => {
-      if (activeRef.current || Math.random() > spawnChance) return;
+      if (activeRef.current || forcedBugIds.length > 0 || Math.random() > spawnChance) return;
       spawnBug();
     }, spawnCheckMs);
 
     return () => clearInterval(interval);
-  }, [enabled]);
+  }, [enabled, forcedBugIds.length]);
 
   useEffect(() => {
     return () => {
@@ -126,14 +130,12 @@ export function ForegroundCatchBug({ enabled, forcedBugId, onCaught, onForcedBug
     hitsRef.current = 0;
     lastTapAtRef.current = 0;
 
-    const animation = Animated.loop(
-      Animated.timing(progress, {
-        duration: activeBug.motionCycleMs,
-        easing: Easing.inOut(Easing.sin),
-        toValue: 1,
-        useNativeDriver: true
-      })
-    );
+    const animation = Animated.timing(progress, {
+      duration: activeBug.motionCycleMs,
+      easing: Easing.linear,
+      toValue: 1,
+      useNativeDriver: true
+    });
     moveAnimation.current = animation;
     animation.start();
 
@@ -145,11 +147,11 @@ export function ForegroundCatchBug({ enabled, forcedBugId, onCaught, onForcedBug
   }, [activeBug, hitFeedback, progress, poof]);
 
   useEffect(() => {
-    if (!enabled || !forcedBugId) return;
-    clearActiveBug();
-    spawnBug(forcedBugId);
-    onForcedBugConsumed?.();
-  }, [enabled, forcedBugId, onForcedBugConsumed]);
+    if (!enabled || activeRef.current || forcedBugIds.length === 0) return;
+    const [nextBugId] = forcedBugIds;
+    spawnBug(nextBugId);
+    onForcedBugConsumed?.(nextBugId);
+  }, [enabled, forcedBugIds, onForcedBugConsumed]);
 
   const translateX = useMemo(() => {
     if (!activeBug) return 0;
@@ -157,14 +159,9 @@ export function ForegroundCatchBug({ enabled, forcedBugId, onCaught, onForcedBug
     const minLeft = 10;
     const maxLeft = Math.max(minLeft, width - hitboxWidth - 10);
     const range = maxLeft - minLeft;
-    const fractions = crawlFractions.map((fraction, index) => {
-      const legWiggle = index % 2 === 0 ? activeBug.wiggle : -activeBug.wiggle * 0.65;
-      const shifted = clamp(fraction + activeBug.pathShift + legWiggle, 0.08, 0.92);
-      return activeBug.direction === "right" ? shifted : 1 - shifted;
-    });
     return progress.interpolate({
       inputRange: movementInput,
-      outputRange: fractions.map((fraction) => minLeft + range * fraction)
+      outputRange: activeBug.pathX.map((fraction) => minLeft + range * fraction)
     });
   }, [activeBug, progress, width]);
 
@@ -174,29 +171,9 @@ export function ForegroundCatchBug({ enabled, forcedBugId, onCaught, onForcedBug
     const minTop = Math.max(24, height * 0.1);
     const maxTop = Math.max(minTop, height - hitboxHeight - 96);
     const range = maxTop - minTop;
-    const center = activeBug.lane;
-    const drift = activeBug.verticalDrift;
-    const fractions = [
-      center,
-      center + drift * 0.08,
-      center - drift * 0.04,
-      center + drift * 0.16,
-      center - drift * 0.1,
-      center + drift * 0.24,
-      center - drift * 0.18,
-      center + drift * 0.32,
-      center - drift * 0.26,
-      center + drift * 0.2,
-      center - drift * 0.12,
-      center + drift * 0.1,
-      center - drift * 0.06,
-      center + drift * 0.04,
-      center - drift * 0.02,
-      center
-    ];
     return progress.interpolate({
       inputRange: movementInput,
-      outputRange: fractions.map((fraction) => minTop + range * clamp(fraction, 0, 1))
+      outputRange: activeBug.pathY.map((fraction) => minTop + range * clamp(fraction, 0, 1))
     });
   }, [activeBug, height, progress]);
 
@@ -205,13 +182,11 @@ export function ForegroundCatchBug({ enabled, forcedBugId, onCaught, onForcedBug
     const bob = activeBug.stepBob;
     const crawlBob = progress.interpolate({
       inputRange: movementInput,
-      outputRange: [0, -bob * 0.45, 0, -bob, 1, -bob * 0.7, 0, -bob * 1.1, 1, -bob * 0.85, 0, -bob * 0.65, 1, -bob * 0.4, 0, 0]
+      outputRange: [0, -bob * 0.55, -1, -bob * 0.92, 0, -bob * 0.35, -1, -bob, 0, -bob * 0.75, -1, -bob * 0.45, 0, -bob * 0.85, -1, 0]
     });
     const rotate = progress.interpolate({
       inputRange: movementInput,
-      outputRange: activeBug.direction === "right"
-        ? ["80deg", "84deg", "88deg", "82deg", "90deg", "86deg", "94deg", "88deg", "96deg", "90deg", "84deg", "80deg", "86deg", "92deg", "84deg", "80deg"]
-        : ["-80deg", "-84deg", "-88deg", "-82deg", "-90deg", "-86deg", "-94deg", "-88deg", "-96deg", "-90deg", "-84deg", "-80deg", "-86deg", "-92deg", "-84deg", "-80deg"]
+      outputRange: activeBug.pathRotate
     });
     const scale = poof.interpolate({
       inputRange: [0, 1],
@@ -228,25 +203,35 @@ export function ForegroundCatchBug({ enabled, forcedBugId, onCaught, onForcedBug
     return [{ translateX }, { translateY }, { translateY: crawlBob }, { translateX: hitShake }, { rotate }, { scale }, { scale: hitScale }];
   }, [activeBug, hitFeedback, poof, progress, translateX, translateY]);
 
+  const bugArtTransform = useMemo(() => {
+    if (!activeBug) return [];
+    const bodySquash = progress.interpolate({
+      inputRange: movementInput,
+      outputRange: [1, 0.97, 1.02, 1, 0.96, 1.03, 1, 0.98, 1.02, 1, 0.97, 1.03, 1, 0.98, 1.01, 1]
+    });
+    return [{ scaleX: activeBug.facingScale }, { scaleY: bodySquash }];
+  }, [activeBug, progress]);
+
   function spawnBug(forcedId?: BugArtId) {
     const rarity = forcedId ? rarityByBugId[forcedId] ?? "common" : pickRarity();
     const bugId = forcedId ?? pickBugId(rarity);
     const settings = raritySettings[rarity];
+    const direction = Math.random() > 0.5 ? "right" : "left";
+    const motionPath = createMotionPath(rarity, direction);
     setActiveBug({
       id: Date.now(),
       bugId,
       durationMs: catchDurationMs,
-      direction: Math.random() > 0.5 ? "right" : "left",
-      lane: 0.2 + Math.random() * 0.6,
+      facingScale: direction === "right" ? 1 : -1,
       motionCycleMs: settings.motionCycleMs,
-      pathShift: (Math.random() - 0.5) * 0.08,
+      pathRotate: motionPath.rotate,
+      pathX: motionPath.x,
+      pathY: motionPath.y,
       rarity,
       requiredTaps: settings.requiredTaps,
       rewardXp: settings.rewardXp,
       size: settings.size,
-      stepBob: settings.stepBob,
-      verticalDrift: settings.verticalDrift,
-      wiggle: settings.wiggle
+      stepBob: settings.stepBob
     });
   }
 
@@ -326,7 +311,9 @@ export function ForegroundCatchBug({ enabled, forcedBugId, onCaught, onForcedBug
             </View>
           ) : (
             <>
-              <BugArtImage bugId={activeBug.bugId} size={activeBug.size} />
+              <Animated.View style={{ transform: bugArtTransform }}>
+                <BugArtImage bugId={activeBug.bugId} size={activeBug.size} />
+              </Animated.View>
               {activeBug.requiredTaps > 1 && (
                 <View style={[styles.hpBar, { width: Math.max(52, activeBug.size * 0.86) }]}>
                   {Array.from({ length: activeBug.requiredTaps }).map((_, index) => (
@@ -340,6 +327,61 @@ export function ForegroundCatchBug({ enabled, forcedBugId, onCaught, onForcedBug
       </Animated.View>
     </View>
   );
+}
+
+function createMotionPath(rarity: SpawnRarity, direction: "left" | "right"): MotionPath {
+  const settings = raritySettings[rarity];
+  const lane = 0.2 + Math.random() * 0.6;
+  const pathShift = (Math.random() - 0.5) * 0.08;
+  const side = Math.random() > 0.5 ? 1 : -1;
+  const drift = settings.verticalDrift;
+  const wiggle = settings.wiggle;
+  const baseX = [
+    0.1,
+    0.14,
+    0.14 + wiggle,
+    0.22,
+    0.27 - wiggle * 0.6,
+    0.34,
+    0.39 + wiggle,
+    0.48,
+    0.53 - wiggle,
+    0.61,
+    0.66 + wiggle * 0.7,
+    0.72,
+    0.78 - wiggle * 0.5,
+    0.84,
+    0.88,
+    0.9
+  ].map((value) => clamp(value + pathShift, 0.06, 0.94));
+  const x = direction === "right" ? baseX : baseX.map((value) => 1 - value);
+  const yOffsets = [
+    0,
+    drift * 0.08 * side,
+    drift * 0.08 * side,
+    -drift * 0.18 * side,
+    -drift * 0.18 * side,
+    drift * 0.28 * side,
+    drift * 0.28 * side,
+    -drift * 0.14 * side,
+    -drift * 0.14 * side,
+    drift * 0.22 * side,
+    drift * 0.22 * side,
+    -drift * 0.1 * side,
+    -drift * 0.1 * side,
+    drift * 0.06 * side,
+    drift * 0.02 * side,
+    0
+  ];
+  const y = yOffsets.map((offset) => clamp(lane + offset, 0.06, 0.94));
+  const rotate = x.map((_, index) => {
+    if (index === x.length - 1) return "0deg";
+    const dx = x[index + 1] - x[index];
+    const dy = y[index + 1] - y[index];
+    const degrees = clamp((Math.atan2(dy, Math.max(Math.abs(dx), 0.01)) * 180) / Math.PI, -settings.turn, settings.turn);
+    return `${Math.round(degrees)}deg`;
+  });
+  return { rotate, x, y };
 }
 
 function pickRarity(): SpawnRarity {

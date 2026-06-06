@@ -17,9 +17,10 @@ import kotlin.random.Random
 
 class BugRadarWidgetProvider : AppWidgetProvider() {
   override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-    val bug = activeRadarBug(context)
+    val bugs = activeRadarBugs(context)
+    val bug = bugs.firstOrNull()
     for (appWidgetId in appWidgetIds) {
-      updateWidget(context, appWidgetManager, appWidgetId, bug)
+      updateWidget(context, appWidgetManager, appWidgetId, bug, bugs.size)
     }
     if (bug == null) scheduleNextSignal(context)
   }
@@ -36,16 +37,17 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     val manager = AppWidgetManager.getInstance(context)
     val widgetIds = manager.getAppWidgetIds(ComponentName(context, BugRadarWidgetProvider::class.java))
 
-    activeRadarBug(context)?.let { bug ->
-      for (widgetId in widgetIds) updateWidget(context, manager, widgetId, bug)
+    val activeBugs = activeRadarBugs(context)
+    activeBugs.firstOrNull()?.let { bug ->
+      for (widgetId in widgetIds) updateWidget(context, manager, widgetId, bug, activeBugs.size)
       return
     }
 
     val now = Calendar.getInstance()
     if (shouldSpawnOnRoll(context, now)) {
       val bug = pickRadarBug()
-      saveActiveRadarBug(context, bug)
-      for (widgetId in widgetIds) updateWidget(context, manager, widgetId, bug)
+      appendActiveRadarBugs(context, listOf(bug.id))
+      for (widgetId in widgetIds) updateWidget(context, manager, widgetId, bug, 1)
       noteSignal(context, now)
       return
     }
@@ -54,13 +56,14 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
   }
 
   private fun handleOpenBug(context: Context) {
-    val bug = activeRadarBug(context) ?: return
-    clearActiveRadarBug(context)
+    val bugs = activeRadarBugs(context)
+    val bug = bugs.firstOrNull() ?: return
+    val remainingBugs = popActiveRadarBug(context)
 
     val manager = AppWidgetManager.getInstance(context)
     val widgetIds = manager.getAppWidgetIds(ComponentName(context, BugRadarWidgetProvider::class.java))
-    for (widgetId in widgetIds) updateWidget(context, manager, widgetId, null)
-    scheduleNextSignal(context)
+    for (widgetId in widgetIds) updateWidget(context, manager, widgetId, remainingBugs.firstOrNull(), remainingBugs.size)
+    if (remainingBugs.isEmpty()) scheduleNextSignal(context)
 
     val intent = Intent(context, MainActivity::class.java).apply {
       action = Intent.ACTION_VIEW
@@ -77,16 +80,21 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     newOptions: Bundle
   ) {
     super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-    updateWidget(context, appWidgetManager, appWidgetId, activeRadarBug(context))
+    val bugs = activeRadarBugs(context)
+    updateWidget(context, appWidgetManager, appWidgetId, bugs.firstOrNull(), bugs.size)
   }
 
-  private fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int, bug: RadarBug?) {
+  private fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int, bug: RadarBug?, stackCount: Int) {
     val compact = isCompactWidget(manager.getAppWidgetOptions(widgetId))
     val layout = if (compact) R.layout.bug_radar_widget_compact else R.layout.bug_radar_widget
     val views = RemoteViews(context.packageName, layout)
     views.setViewVisibility(R.id.radarStatus, if (bug == null && !compact) View.VISIBLE else View.GONE)
     views.setViewVisibility(R.id.radarBugImage, if (bug == null) View.GONE else View.VISIBLE)
     views.setViewVisibility(R.id.radarLabel, if (bug == null || compact) View.GONE else View.VISIBLE)
+    views.setViewVisibility(R.id.radarQueueCount, if (stackCount > 1) View.VISIBLE else View.GONE)
+    if (stackCount > 1) {
+      views.setTextViewText(R.id.radarQueueCount, "x$stackCount")
+    }
     val auraRes = bug?.let { rarityAuraRes(it.rarity) }
     views.setViewVisibility(R.id.radarRarityAura, if (auraRes == null) View.GONE else View.VISIBLE)
     if (auraRes != null) {
@@ -113,6 +121,15 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     }
     views.setOnClickPendingIntent(R.id.widgetRoot, pendingIntent)
     manager.updateAppWidget(widgetId, views)
+  }
+
+  private fun updateAllWidgets(context: Context) {
+    val manager = AppWidgetManager.getInstance(context)
+    val widgetIds = manager.getAppWidgetIds(ComponentName(context, BugRadarWidgetProvider::class.java))
+    val bugs = activeRadarBugs(context)
+    for (widgetId in widgetIds) {
+      updateWidget(context, manager, widgetId, bugs.firstOrNull(), bugs.size)
+    }
   }
 
   private fun isCompactWidget(options: Bundle): Boolean {
@@ -215,23 +232,19 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     }
   }
 
-  private fun activeRadarBug(context: Context): RadarBug? {
-    val bugId = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE).getString(prefActiveBugId, null)
-    return bugId?.let { findRadarBug(it) }
+  private fun activeRadarBugs(context: Context): List<RadarBug> {
+    return readActiveRadarBugIds(context).mapNotNull { findRadarBug(it) }
   }
 
-  private fun saveActiveRadarBug(context: Context, bug: RadarBug) {
-    context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-      .edit()
-      .putString(prefActiveBugId, bug.id)
-      .apply()
+  private fun appendActiveRadarBugs(context: Context, bugIds: List<String>): List<RadarBug> {
+    val nextIds = writeActiveRadarBugIds(context, readActiveRadarBugIds(context) + bugIds)
+    updateAllWidgets(context)
+    return nextIds.mapNotNull { findRadarBug(it) }
   }
 
-  private fun clearActiveRadarBug(context: Context) {
-    context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-      .edit()
-      .remove(prefActiveBugId)
-      .apply()
+  private fun popActiveRadarBug(context: Context): List<RadarBug> {
+    val nextIds = writeActiveRadarBugIds(context, readActiveRadarBugIds(context).drop(1))
+    return nextIds.mapNotNull { findRadarBug(it) }
   }
 
   private fun noteSignal(context: Context, now: Calendar) {
@@ -297,6 +310,9 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     private const val openRequestCode = 5200
     private const val prefsName = "bug_radar_widget"
     private const val prefActiveBugId = "active_bug_id"
+    private const val prefActiveBugIds = "active_bug_ids"
+    private const val activeBugIdSeparator = "|"
+    private const val maxActiveRadarBugs = 5
     private const val prefCount = "signal_count"
     private const val prefDay = "signal_day"
     private const val prefLastSignalAt = "last_signal_at"
@@ -306,6 +322,40 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     private const val weekendStartHour = 10
     private const val workdayEndHour = 17
     private const val workdayStartHour = 9
+
+    fun enqueueRadarBugs(context: Context, bugIds: List<String>): Int {
+      val before = readActiveRadarBugIds(context)
+      val validBugIds = bugIds.filter { id -> radarBugs.any { it.id == id } }
+      val after = writeActiveRadarBugIds(context, before + validBugIds)
+      BugRadarWidgetProvider().updateAllWidgets(context)
+      return maxOf(0, after.size - before.size)
+    }
+
+    private fun readActiveRadarBugIds(context: Context): List<String> {
+      val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+      val stacked = prefs.getString(prefActiveBugIds, null)
+      val ids = if (!stacked.isNullOrBlank()) {
+        stacked.split(activeBugIdSeparator)
+      } else {
+        listOfNotNull(prefs.getString(prefActiveBugId, null))
+      }
+      return ids
+        .map { it.trim() }
+        .filter { id -> id.isNotEmpty() && radarBugs.any { it.id == id } }
+        .take(maxActiveRadarBugs)
+    }
+
+    private fun writeActiveRadarBugIds(context: Context, bugIds: List<String>): List<String> {
+      val cleanIds = bugIds
+        .filter { id -> radarBugs.any { it.id == id } }
+        .take(maxActiveRadarBugs)
+      context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        .edit()
+        .putString(prefActiveBugIds, cleanIds.joinToString(activeBugIdSeparator))
+        .remove(prefActiveBugId)
+        .apply()
+      return cleanIds
+    }
 
     private val radarBugs = listOf(
     RadarBug("zilvervisje", "Zilvervisje", "Gewoon", R.drawable.bugdex_zilvervisje),
