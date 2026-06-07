@@ -40,6 +40,7 @@ const spawnChance = 0.28;
 const catchDurationMs = 30000;
 const tapDebounceMs = 140;
 const movementInput = [0, 0.055, 0.1, 0.16, 0.22, 0.3, 0.37, 0.45, 0.53, 0.61, 0.69, 0.76, 0.83, 0.9, 0.96, 1];
+const timerSegments = Array.from({ length: 24 }, (_, index) => index);
 
 const raritySettings: Record<SpawnRarity, { motionCycleMs: number; rewardXp: number; requiredTaps: number; size: number; stepBob: number; turn: number; verticalDrift: number; wiggle: number }> = {
   common: { motionCycleMs: catchDurationMs, rewardXp: 1, requiredTaps: 3, size: 68, stepBob: 4, turn: 12, verticalDrift: 0.1, wiggle: 0.015 },
@@ -311,11 +312,7 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
   }
 
   if (!enabled || !activeBug) return null;
-  const timerSize = 20;
-  const timerFillHeight = timerProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [timerSize - 4, 0]
-  });
+  const timerSize = 24;
 
   return (
     <View pointerEvents="box-none" style={styles.layer}>
@@ -331,7 +328,29 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
         <View pointerEvents="box-none" style={[styles.bugVisual, { minHeight: activeBug.size + 30, width: activeBug.size }]}>
           {!caught && (
             <View pointerEvents="none" style={[styles.timerBadge, { height: timerSize, width: timerSize }]}>
-              <Animated.View style={[styles.timerFill, { height: timerFillHeight }]} />
+              {timerSegments.map((segment) => {
+                const cutoff = (segment + 1) / timerSegments.length;
+                const opacity = timerProgress.interpolate({
+                  inputRange: [Math.max(0, cutoff - 0.02), cutoff],
+                  outputRange: [1, 0.16],
+                  extrapolate: "clamp"
+                });
+                return (
+                  <Animated.View
+                    key={segment}
+                    style={[
+                      styles.timerSegment,
+                      {
+                        opacity,
+                        transform: [
+                          { rotate: `${segment * (360 / timerSegments.length)}deg` },
+                          { translateY: -timerSize / 2 + 2 }
+                        ]
+                      }
+                    ]}
+                  />
+                );
+              })}
             </View>
           )}
           {caught ? (
@@ -470,23 +489,20 @@ const styles = StyleSheet.create({
   },
   timerBadge: {
     alignItems: "center",
-    backgroundColor: "rgba(16,32,24,0.86)",
-    borderColor: "#ffffff",
+    backgroundColor: "rgba(16,32,24,0.74)",
     borderRadius: 999,
-    borderWidth: 2,
-    justifyContent: "flex-end",
-    overflow: "hidden",
+    justifyContent: "center",
     position: "absolute",
-    right: -7,
-    top: -7,
+    right: -9,
+    top: -9,
     zIndex: 2
   },
-  timerFill: {
+  timerSegment: {
     backgroundColor: "#d7bd57",
-    bottom: 2,
     borderRadius: 999,
+    height: 4,
     position: "absolute",
-    width: 12
+    width: 2
   },
   poof: {
     alignItems: "center",
