@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import * as Application from "expo-application";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { AppNotification, BugComment, BugReport, BugSeverity, NotificationSettings, User } from "./src/types";
@@ -58,6 +59,7 @@ export default function App() {
   const [authError, setAuthError] = useState("");
   const appState = useRef(AppState.currentState);
   const movementCheckInProgress = useRef(false);
+  const versionCheckInProgress = useRef(false);
   const userRef = useRef<User | null>(null);
   const foregroundBugEnabled = Boolean(
     user
@@ -94,9 +96,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const currentVersion = String(Constants.expoConfig?.version || "");
-    if (!currentVersion) return;
-    void checkLatestVersion(currentVersion).then(setVersionNotice).catch(() => undefined);
+    void checkForVersionUpdate();
   }, []);
 
   useEffect(() => {
@@ -115,15 +115,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!versionNotice) return;
-    const timeout = setTimeout(() => setVersionNotice(null), 4800);
-    return () => clearTimeout(timeout);
-  }, [versionNotice]);
-
-  useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
       appState.current = nextState;
-      if (nextState === "active") void checkMovementRadarBonuses();
+      if (nextState === "active") {
+        void checkMovementRadarBonuses();
+        void checkForVersionUpdate();
+      }
     });
     return () => subscription.remove();
   }, []);
@@ -291,6 +288,20 @@ export default function App() {
     }
   }
 
+  async function checkForVersionUpdate() {
+    if (versionCheckInProgress.current) return;
+    const currentVersion = String(Application.nativeApplicationVersion || Constants.expoConfig?.version || "");
+    if (!currentVersion) return;
+    versionCheckInProgress.current = true;
+    try {
+      setVersionNotice(await checkLatestVersion(currentVersion));
+    } catch {
+      // Update checks are optional and should never interrupt app startup.
+    } finally {
+      versionCheckInProgress.current = false;
+    }
+  }
+
   async function updateNotificationSettings(settings: NotificationSettings) {
     if (!user) return;
     setNotificationSettings(settings);
@@ -341,7 +352,7 @@ export default function App() {
         <View style={styles.loadingScreen}>
           <ActivityIndicator color="#15724f" size="large" />
         </View>
-        <VersionToast notice={versionNotice} />
+        <VersionToast notice={versionNotice} onDismiss={() => setVersionNotice(null)} />
       </SafeAreaView>
     );
   }
@@ -350,7 +361,7 @@ export default function App() {
     return (
       <View style={styles.fullScreen}>
         <LoginScreen error={authError} loading={authLoading} onGoogleSubmit={handleGoogleLogin} onSubmit={handleLogin} />
-        <VersionToast notice={versionNotice} />
+        <VersionToast notice={versionNotice} onDismiss={() => setVersionNotice(null)} />
       </View>
     );
   }
@@ -458,21 +469,29 @@ export default function App() {
       <DisplayNameModal user={user} visible={Boolean(user && user.nameSet !== true)} onSave={handleDisplayNameSave} />
       <HelpTourOverlay visible={helpVisible && user.nameSet === true} onFinish={finishHelpTour} onNavigate={navigateHelp} />
       <BugSplatBonusOverlay visible={splatBonusVisible} onSplat={() => void handleBugSplat()} onSkip={() => setSplatBonusVisible(false)} />
-      <VersionToast notice={versionNotice} />
+      <VersionToast notice={versionNotice} onDismiss={() => setVersionNotice(null)} />
     </SafeAreaView>
   );
 }
 
-function VersionToast({ notice }: { notice: VersionNotice | null }) {
+function VersionToast({ notice, onDismiss }: { notice: VersionNotice | null; onDismiss: () => void }) {
   if (!notice) return null;
   const openUpdate = () => {
-    void Linking.openURL(notice.apkUrl ?? notice.releaseUrl).catch(() => undefined);
+    void Linking.openURL(notice.apkUrl ?? notice.releaseUrl).then(onDismiss).catch(() => undefined);
   };
   return (
-    <Pressable accessibilityLabel="Open latest release" style={styles.versionToast} onPress={openUpdate}>
+    <View accessibilityLabel="Open latest release" style={styles.versionToast}>
       <Text style={styles.versionToastTitle}>Nieuwe versie beschikbaar</Text>
       <Text style={styles.versionToastText}>Tik voor versie {notice.latestVersion}.</Text>
-    </Pressable>
+      <View style={styles.versionToastActions}>
+        <Pressable style={styles.versionToastSecondaryButton} onPress={onDismiss}>
+          <Text style={styles.versionToastSecondaryText}>Later</Text>
+        </Pressable>
+        <Pressable style={styles.versionToastPrimaryButton} onPress={openUpdate}>
+          <Text style={styles.versionToastPrimaryText}>Download</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -531,5 +550,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     marginTop: 2
+  },
+  versionToastActions: {
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "flex-end",
+    marginTop: 10
+  },
+  versionToastPrimaryButton: {
+    backgroundColor: "#d7bd57",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7
+  },
+  versionToastPrimaryText: {
+    color: "#102018",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  versionToastSecondaryButton: {
+    borderColor: "#dbe8de",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7
+  },
+  versionToastSecondaryText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "900"
   }
 });

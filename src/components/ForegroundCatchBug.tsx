@@ -87,8 +87,10 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
   const progress = useRef(new Animated.Value(0)).current;
   const hitFeedback = useRef(new Animated.Value(0)).current;
   const poof = useRef(new Animated.Value(0)).current;
+  const timerProgress = useRef(new Animated.Value(0)).current;
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const moveAnimation = useRef<Animated.CompositeAnimation | null>(null);
+  const timerAnimation = useRef<Animated.CompositeAnimation | null>(null);
   const activeRef = useRef<ActiveBug | null>(null);
   const caughtRef = useRef(false);
   const hitsRef = useRef(0);
@@ -116,6 +118,7 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
     return () => {
       if (clearTimer.current) clearTimeout(clearTimer.current);
       moveAnimation.current?.stop();
+      timerAnimation.current?.stop();
     };
   }, []);
 
@@ -124,6 +127,7 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
     progress.setValue(0);
     hitFeedback.setValue(0);
     poof.setValue(0);
+    timerProgress.setValue(0);
     setCaught(false);
     caughtRef.current = false;
     setHits(0);
@@ -139,12 +143,23 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
     moveAnimation.current = animation;
     animation.start();
 
+    const timer = Animated.timing(timerProgress, {
+      duration: activeBug.durationMs,
+      easing: Easing.linear,
+      toValue: 1,
+      useNativeDriver: false
+    });
+    timerAnimation.current = timer;
+    timer.start();
+
     clearTimer.current = setTimeout(clearActiveBug, activeBug.durationMs);
     return () => {
       animation.stop();
+      timer.stop();
       if (moveAnimation.current === animation) moveAnimation.current = null;
+      if (timerAnimation.current === timer) timerAnimation.current = null;
     };
-  }, [activeBug, hitFeedback, progress, poof]);
+  }, [activeBug, hitFeedback, progress, poof, timerProgress]);
 
   useEffect(() => {
     if (!enabled || activeRef.current || forcedBugIds.length === 0) return;
@@ -155,7 +170,7 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
 
   const translateX = useMemo(() => {
     if (!activeBug) return 0;
-    const hitboxWidth = activeBug.size + 130;
+    const hitboxWidth = activeBug.size;
     const minLeft = 10;
     const maxLeft = Math.max(minLeft, width - hitboxWidth - 10);
     const range = maxLeft - minLeft;
@@ -167,7 +182,7 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
 
   const translateY = useMemo(() => {
     if (!activeBug) return 0;
-    const hitboxHeight = activeBug.size + 90;
+    const hitboxHeight = activeBug.size + 30;
     const minTop = Math.max(24, height * 0.1);
     const maxTop = Math.max(minTop, height - hitboxHeight - 96);
     const range = maxTop - minTop;
@@ -241,7 +256,9 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
       clearTimer.current = null;
     }
     moveAnimation.current?.stop();
+    timerAnimation.current?.stop();
     moveAnimation.current = null;
+    timerAnimation.current = null;
     setActiveBug(null);
     setCaught(false);
     caughtRef.current = false;
@@ -267,7 +284,9 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
     caughtRef.current = true;
     setCaught(true);
     moveAnimation.current?.stop();
+    timerAnimation.current?.stop();
     moveAnimation.current = null;
+    timerAnimation.current = null;
     onCaught(currentBug.rewardXp, currentBug.bugId, currentBug.rarity);
     Animated.timing(poof, {
       duration: 220,
@@ -292,6 +311,11 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
   }
 
   if (!enabled || !activeBug) return null;
+  const timerSize = 20;
+  const timerFillHeight = timerProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [timerSize - 4, 0]
+  });
 
   return (
     <View pointerEvents="box-none" style={styles.layer}>
@@ -304,18 +328,25 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
           }
         ]}
       >
-        <Pressable hitSlop={42} onPress={tapBug} style={[styles.hitbox, { minHeight: activeBug.size + 90, minWidth: activeBug.size + 130 }]}>
+        <View pointerEvents="box-none" style={[styles.bugVisual, { minHeight: activeBug.size + 30, width: activeBug.size }]}>
+          {!caught && (
+            <View pointerEvents="none" style={[styles.timerBadge, { height: timerSize, width: timerSize }]}>
+              <Animated.View style={[styles.timerFill, { height: timerFillHeight }]} />
+            </View>
+          )}
           {caught ? (
             <View style={[styles.poof, { height: activeBug.size + 26, width: activeBug.size + 26 }]}>
               <Text style={styles.poofText}>+{activeBug.rewardXp} XP</Text>
             </View>
           ) : (
             <>
-              <Animated.View style={{ transform: bugArtTransform }}>
-                <BugArtImage bugId={activeBug.bugId} size={activeBug.size} />
-              </Animated.View>
+              <Pressable onPress={tapBug} style={[styles.hitbox, { height: activeBug.size, width: activeBug.size }]}>
+                <Animated.View style={{ transform: bugArtTransform }}>
+                  <BugArtImage bugId={activeBug.bugId} size={activeBug.size} />
+                </Animated.View>
+              </Pressable>
               {activeBug.requiredTaps > 1 && (
-                <View style={[styles.hpBar, { width: Math.max(52, activeBug.size * 0.86) }]}>
+                <View pointerEvents="none" style={[styles.hpBar, { width: Math.max(52, activeBug.size * 0.86) }]}>
                   {Array.from({ length: activeBug.requiredTaps }).map((_, index) => (
                     <View key={index} style={[styles.hpSegment, index >= activeBug.requiredTaps - hits && styles.hpSegmentLost]} />
                   ))}
@@ -323,7 +354,7 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
               )}
             </>
           )}
-        </Pressable>
+        </View>
       </Animated.View>
     </View>
   );
@@ -411,12 +442,16 @@ const styles = StyleSheet.create({
   bug: {
     position: "absolute"
   },
+  bugVisual: {
+    alignItems: "center",
+    justifyContent: "flex-start"
+  },
   hitbox: {
     alignItems: "center",
     justifyContent: "center"
   },
   hpBar: {
-    bottom: 20,
+    bottom: 0,
     flexDirection: "row",
     gap: 3,
     height: 8,
@@ -432,6 +467,26 @@ const styles = StyleSheet.create({
   hpSegmentLost: {
     backgroundColor: "rgba(255,255,255,0.3)",
     borderColor: "rgba(82,12,12,0.28)"
+  },
+  timerBadge: {
+    alignItems: "center",
+    backgroundColor: "rgba(16,32,24,0.86)",
+    borderColor: "#ffffff",
+    borderRadius: 999,
+    borderWidth: 2,
+    justifyContent: "flex-end",
+    overflow: "hidden",
+    position: "absolute",
+    right: -7,
+    top: -7,
+    zIndex: 2
+  },
+  timerFill: {
+    backgroundColor: "#d7bd57",
+    bottom: 2,
+    borderRadius: 999,
+    position: "absolute",
+    width: 12
   },
   poof: {
     alignItems: "center",

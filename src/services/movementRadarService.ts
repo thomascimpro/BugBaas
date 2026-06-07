@@ -47,6 +47,7 @@ export type MovementRadarGoal = {
 export type MovementRadarProgress = {
   available: boolean;
   awardedToday: number;
+  claimableRewards: number;
   goals: MovementRadarGoal[];
   maxRewards: number;
   reason?: string;
@@ -140,10 +141,13 @@ export async function getMovementRadarProgress(uid: string): Promise<MovementRad
   const walkedKm = ((stepsSinceBoot - baselineSteps) * estimatedMetersPerStep) / 1000;
   const walkedMeters = Math.max(0, walkedKm * 1000);
   const earned = Math.floor(walkedMeters / fallbackWalkingMetersPerRadarBug);
+  const awardedToday = state?.day === today ? state.awardedUnits : 0;
+  const totalUnits = Math.min(maxMovementRadarBugsPerDay, earned);
 
   return {
     available: true,
-    awardedToday: state?.day === today ? state.awardedUnits : 0,
+    awardedToday,
+    claimableRewards: Math.max(0, totalUnits - awardedToday),
     goals: [
       makeGoal("walking", "Lopen", displayCycleMeters(walkedMeters, fallbackWalkingMetersPerRadarBug, earned), fallbackWalkingMetersPerRadarBug, earned),
       makeGoal("running", "Hardlopen", 0, runningMetersPerRadarBug, 0),
@@ -210,10 +214,19 @@ async function getHealthConnectProgress(uid: string): Promise<MovementRadarProgr
   const walkingEarned = Math.floor(walkingMeters / walkingMetersPerRadarBug);
   const runningEarned = Math.floor(runningMeters / runningMetersPerRadarBug);
   const cyclingEarned = Math.floor(cyclingMeters / cyclingMetersPerRadarBug);
+  const awardedToday = state?.day === today ? state.awardedUnits : 0;
+  const previousWalking = state?.day === today ? state.walkingUnits ?? 0 : 0;
+  const previousRunning = state?.day === today ? state.runningUnits ?? 0 : 0;
+  const previousCycling = state?.day === today ? state.cyclingUnits ?? 0 : 0;
+  const newWalking = Math.max(0, walkingEarned - previousWalking);
+  const newRunning = Math.max(0, runningEarned - previousRunning);
+  const newCycling = Math.max(0, cyclingEarned - previousCycling);
+  const remainingDailySlots = Math.max(0, maxMovementRadarBugsPerDay - awardedToday);
 
   return {
     available: true,
-    awardedToday: state?.day === today ? state.awardedUnits : 0,
+    awardedToday,
+    claimableRewards: Math.min(remainingDailySlots, newWalking + newRunning + newCycling),
     goals: [
       makeGoal("walking", "Lopen", displayCycleMeters(walkingMeters, walkingMetersPerRadarBug, walkingEarned), walkingMetersPerRadarBug, walkingEarned),
       makeGoal("running", "Hardlopen", displayCycleMeters(runningMeters, runningMetersPerRadarBug, runningEarned), runningMetersPerRadarBug, runningEarned),
@@ -284,6 +297,7 @@ function emptyProgress(reason: string): MovementRadarProgress {
   return {
     available: false,
     awardedToday: 0,
+    claimableRewards: 0,
     goals: [
       makeGoal("walking", "Lopen", 0, walkingMetersPerRadarBug, 0),
       makeGoal("running", "Hardlopen", 0, runningMetersPerRadarBug, 0),
