@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.7
+
+- Foreground bug hitbox verkleind naar de zichtbare bug-afbeelding.
+- Foreground bugs tonen nu een kleine despawn-timer.
+- Update-popup gebruikt nu de native APK-versie en blijft staan met Download/Later acties.
+- Home toont de Beweeg radar Claim knop alleen als er echt iets te claimen is.
+
 ## 1.3.6
 
 - Beweeg radar drempels aangepast: lopen 3 km, hardlopen 4 km en fietsen 6 km per radar bug.
