@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.9
+
+- Foreground despawn timer vervangen door een ronde ring die segment voor segment afloopt.
+
 ## 1.3.8
 
 - Update notice wordt alleen gezet bij een strikt nieuwere GitHub release-tag.
