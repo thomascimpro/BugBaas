@@ -36,8 +36,8 @@ type Props = {
   onForcedBugConsumed?: (bugId: BugArtId) => void;
 };
 
-const spawnCheckMs = 60000;
-const spawnChance = 0.28;
+const spawnCheckMs = 10 * 60 * 1000;
+const spawnChance = 1;
 const catchDurationMs = 30000;
 const tapDebounceMs = 140;
 const movementInput = [0, 0.055, 0.1, 0.16, 0.22, 0.3, 0.37, 0.45, 0.53, 0.61, 0.69, 0.76, 0.83, 0.9, 0.96, 1];

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.4
+
+- Random foreground bugs tijdens app-gebruik verschijnen veel minder vaak: maximaal ongeveer 1 spawn-poging per 10 minuten.
+- Forced radar/km foreground bugs blijven onveranderd direct werken.
+
 ## 1.5.3
 
 - Home toont geen Health Connect datatype-statusregels meer zoals `Stappen: laatste ...`.
