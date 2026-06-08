@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0
+
+- Beweeg radar widget checkt nu periodiek native op beschikbare km-rewards en zet die direct klaar op de widget.
+- Home Claim knop blijft zichtbaar, zodat spelers zelf kunnen kiezen tussen claimen via app of via widget.
+- Health Connect background-permissie toegevoegd voor periodieke movement radar checks.
+- Foreground bug tapgedrag teruggezet naar de eerdere ruimere hitbox zodat tappen weer betrouwbaar werkt.
+
 ## 1.3.10
 
 - Update-knop opent nu de GitHub releasepagina in plaats van direct de APK asset, zodat OnePlus/Chrome minder snel blijft hangen na downloaden.

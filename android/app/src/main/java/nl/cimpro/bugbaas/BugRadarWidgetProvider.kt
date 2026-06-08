@@ -12,6 +12,9 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlin.random.Random
 
@@ -23,6 +26,7 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
       updateWidget(context, appWidgetManager, appWidgetId, bug, bugs.size)
     }
     if (bug == null) scheduleNextSignal(context)
+    MovementRadarNative.schedulePeriodicCheck(context)
   }
 
   override fun onReceive(context: Context, intent: Intent) {
@@ -30,6 +34,20 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     when (intent.action) {
       actionSignal -> handleRadarRoll(context)
       actionOpenBug -> handleOpenBug(context)
+      else -> if (MovementRadarNative.isMovementAction(intent.action)) handleMovementRadarCheck(context)
+    }
+  }
+
+  private fun handleMovementRadarCheck(context: Context) {
+    val pendingResult = goAsync()
+    val appContext = context.applicationContext
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        MovementRadarNative.claimAvailable(appContext)
+      } finally {
+        MovementRadarNative.schedulePeriodicCheck(appContext)
+        pendingResult.finish()
+      }
     }
   }
 
@@ -329,6 +347,26 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
       val after = writeActiveRadarBugIds(context, before + validBugIds)
       BugRadarWidgetProvider().updateAllWidgets(context)
       return maxOf(0, after.size - before.size)
+    }
+
+    fun pickRandomRadarBugIds(count: Int): List<String> {
+      return List(maxOf(0, count)) { pickCompanionRadarBug().id }
+    }
+
+    private fun pickCompanionRadarBug(): RadarBug {
+      val rarity = pickCompanionRarity()
+      val candidates = radarBugs.filter { it.rarity == rarity }
+      return candidates.randomOrNull() ?: radarBugs.random()
+    }
+
+    private fun pickCompanionRarity(): String {
+      val roll = Random.nextInt(100)
+      return when {
+        roll < 65 -> "Gewoon"
+        roll < 90 -> "Zeldzaam"
+        roll < 98 -> "Episch"
+        else -> "Legendarisch"
+      }
     }
 
     private fun readActiveRadarBugIds(context: Context): List<String> {
