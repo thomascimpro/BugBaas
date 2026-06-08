@@ -7,6 +7,7 @@ import { listBugs } from "../services/bugService";
 import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
 import { claimMovementRadarBonuses, getMovementRadarProgress, MovementDataTypeStatus, MovementRadarProgress } from "../services/movementRadarService";
 import { BugDexEntry, bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
+import { languages, useI18n } from "../services/i18n";
 import { listUsers } from "../services/userService";
 import { weeklyMissionLabel, weeklyMissionSet } from "../services/weeklyMissionService";
 import { BugDexInventoryItem, BugReport, User } from "../types";
@@ -18,6 +19,7 @@ type Props = {
 };
 
 export function HomeScreen({ user, onNavigate }: Props) {
+  const { language, setLanguage, t, tr } = useI18n();
   const tier = getTierForPoints(user.totalPoints);
   const [users, setUsers] = useState<User[]>([]);
   const [bugs, setBugs] = useState<BugReport[]>([]);
@@ -25,6 +27,7 @@ export function HomeScreen({ user, onNavigate }: Props) {
   const [movementProgress, setMovementProgress] = useState<MovementRadarProgress | null>(null);
   const [movementClaiming, setMovementClaiming] = useState(false);
   const [showAllTiers, setShowAllTiers] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
   const leaders = users.slice(0, 3);
   const userRank = Math.max(1, users.findIndex((item) => item.uid === user.uid) + 1);
   const dexCount = inventory.length;
@@ -34,6 +37,7 @@ export function HomeScreen({ user, onNavigate }: Props) {
   const movementDataTypes = movementProgress?.dataTypes ?? [];
   const hasMovementSourceData = movementDataTypes.some((item) => item.available);
   const showMovementSourceHelp = Boolean(movementProgress && movementDataTypes.length > 0 && !hasMovementSourceData);
+  const selectedLanguage = languages.find((item) => item.value === language) ?? languages[0];
 
   useEffect(() => {
     listUsers().then(setUsers);
@@ -70,48 +74,69 @@ export function HomeScreen({ user, onNavigate }: Props) {
           <View style={styles.heroNameRow}>
             <Text adjustsFontSizeToFit ellipsizeMode="tail" minimumFontScale={0.72} numberOfLines={2} style={[sharedStyles.title, styles.heroTitle]}>{user.displayName}</Text>
             <View style={styles.heroActions}>
+              <Pressable style={styles.languagePill} onPress={() => setLanguageOpen((current) => !current)}>
+                <Text style={styles.languageFlag}>{selectedLanguage.flag}</Text>
+                <Text style={styles.languageChevron}>{languageOpen ? "^" : "v"}</Text>
+              </Pressable>
+              {languageOpen && (
+                <View style={styles.languageMenu}>
+                  {languages.filter((item) => item.value !== language).map((item) => (
+                    <Pressable
+                      key={item.value}
+                      accessibilityLabel={`${t("language.label")} ${item.label}`}
+                      style={styles.languageOption}
+                      onPress={() => {
+                        setLanguage(item.value);
+                        setLanguageOpen(false);
+                      }}
+                    >
+                      <Text style={styles.languageFlag}>{item.flag}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
               <Pressable style={styles.profilePill} onPress={() => onNavigate("profile")}>
-                <Text style={styles.profileText}>Profiel</Text>
+                <Text style={styles.profileText}>{t("home.profile")}</Text>
               </Pressable>
               <Pressable style={styles.settingsPill} onPress={() => onNavigate("settings")}>
-                <Text style={styles.settingsText}>Instellingen</Text>
+                <Text style={styles.settingsText}>{t("home.settings")}</Text>
               </Pressable>
             </View>
           </View>
-          <Text style={styles.scoreText}>{user.title}</Text>
+          <Text style={styles.scoreText}>{tr(user.title)}</Text>
         </View>
         <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={tier.bugSize + 20} />
       </View>
       <View style={styles.statsGrid}>
         <View style={styles.statTile}>
           <Text style={styles.statValue}>{user.bugCount}</Text>
-          <Text style={styles.statLabel}>Bugs</Text>
+          <Text style={styles.statLabel}>{t("home.bugs")}</Text>
         </View>
         <View style={styles.statTile}>
           <Text style={styles.statValue}>#{userRank}</Text>
-          <Text style={styles.statLabel}>Rank</Text>
+          <Text style={styles.statLabel}>{t("home.rank")}</Text>
         </View>
         <View style={styles.statTile}>
           <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={Math.max(38, tier.bugSize * 0.58)} />
-          <Text style={styles.statLabel}>{tier.title}</Text>
+          <Text style={styles.statLabel}>{tr(tier.title)}</Text>
         </View>
       </View>
       {movementProgress && (
         <View style={styles.movementCard}>
           <View style={styles.movementHeader}>
             <View style={styles.movementTitleRow}>
-              <Text style={styles.movementTitle}>Beweeg radar</Text>
+              <Text style={styles.movementTitle}>{t("home.movementRadar")}</Text>
               <Pressable
-                accessibilityLabel="Health Connect uitleg"
+                accessibilityLabel={t("home.healthInfo")}
                 hitSlop={10}
-                onPress={showMovementConnectInfo}
+                onPress={() => showMovementConnectInfo(t)}
                 style={({ pressed }) => [styles.movementInfoButton, pressed && styles.movementInfoButtonPressed]}
               >
                 <Text style={styles.movementInfoText}>i</Text>
               </Pressable>
             </View>
             <View style={styles.movementHeaderActions}>
-              <Text style={styles.movementReward}>{movementProgress.awardedToday}/{movementProgress.maxRewards} bugs</Text>
+              <Text style={styles.movementReward}>{t("home.bugsReward", { awarded: movementProgress.awardedToday, max: movementProgress.maxRewards })}</Text>
               {canClaimMovement && (
                 <Pressable
                   disabled={movementClaiming}
@@ -122,7 +147,7 @@ export function HomeScreen({ user, onNavigate }: Props) {
                     movementClaiming && styles.movementClaimButtonDisabled
                   ]}
                 >
-                  <Text style={styles.movementClaimText}>{movementClaiming ? "..." : "Claim"}</Text>
+                  <Text style={styles.movementClaimText}>{movementClaiming ? "..." : t("home.claim")}</Text>
                 </Pressable>
               )}
             </View>
@@ -146,13 +171,13 @@ export function HomeScreen({ user, onNavigate }: Props) {
           <View style={styles.movementSources}>
             {movementDataTypes.map((item) => (
               <View key={item.id} style={[styles.movementSourcePill, item.available && styles.movementSourcePillActive]}>
-                <Text style={[styles.movementSourceText, item.available && styles.movementSourceTextActive]}>{item.label}: {movementStatusText(item)}</Text>
+                <Text style={[styles.movementSourceText, item.available && styles.movementSourceTextActive]}>{tr(item.label)}: {movementStatusText(item, t)}</Text>
               </View>
             ))}
           </View>
           {showMovementSourceHelp && (
             <Text style={styles.movementHelp}>
-              Koppel Google Fit, Samsung Health, Huawei Health via Health Sync of een andere bron-app met Health Connect.
+              {t("home.connectHelp")}
             </Text>
           )}
         </View>
@@ -175,7 +200,7 @@ export function HomeScreen({ user, onNavigate }: Props) {
         <TierBadge points={user.totalPoints} />
       </View>
       <Pressable style={styles.tierToggle} onPress={() => setShowAllTiers((current) => !current)}>
-        <Text style={styles.tierToggleText}>Alle tiers bekijken</Text>
+        <Text style={styles.tierToggleText}>{t("home.showAllTiers")}</Text>
         <Text style={styles.tierToggleIcon}>{showAllTiers ? "^" : "v"}</Text>
       </Pressable>
       {showAllTiers && (
@@ -212,20 +237,20 @@ export function HomeScreen({ user, onNavigate }: Props) {
       <Pressable style={styles.dexCard} onPress={() => onNavigate("bugdex")}>
         <View style={styles.dexText}>
           <Text style={styles.dexTitle}>BugDex</Text>
-          <Text style={styles.dexMeta}>{dexCount}/{bugDexEntries.length} gevangen</Text>
+          <Text style={styles.dexMeta}>{dexCount}/{bugDexEntries.length} {t("home.caught")}</Text>
         </View>
         <View style={styles.dexBugs}>
           {dexPreviewEntries.length ? dexPreviewEntries.map((entry) => (
             <BugArtImage key={entry.id} bugId={entry.id} size={50} />
           )) : (
-            <Text style={styles.dexEmptyText}>Nog leeg</Text>
+            <Text style={styles.dexEmptyText}>{t("home.emptyDex")}</Text>
           )}
         </View>
       </Pressable>
       <View style={styles.missionCard}>
         <View style={styles.missionHeader}>
           <View>
-            <Text style={styles.missionTitle}>Weekly missies</Text>
+            <Text style={styles.missionTitle}>{t("home.weeklyMissions")}</Text>
             <Text style={styles.missionWeek}>{weeklyMissionLabel()}</Text>
           </View>
           <BugArtImage bugId="sprinkhaan" size={48} />
@@ -237,20 +262,20 @@ export function HomeScreen({ user, onNavigate }: Props) {
             return (
               <View key={mission.id} style={styles.missionItem}>
                 <View style={styles.missionLine}>
-                  <Text style={styles.missionName}>{mission.title}</Text>
+                  <Text style={styles.missionName}>{tr(mission.title)}</Text>
                   <Text style={[styles.missionCount, done && styles.missionDone]}>{mission.progress}/{mission.target}</Text>
                 </View>
                 <View style={styles.missionTrack}>
                   <View style={[styles.missionFill, { width }]} />
                 </View>
-                <Text style={styles.missionReward}>{done ? "Extra vrijgespeeld" : mission.reward}</Text>
+                <Text style={styles.missionReward}>{done ? t("home.unlockedExtra") : tr(mission.reward)}</Text>
               </View>
             );
           })}
         </View>
       </View>
       <View style={styles.quickCard}>
-        <Text style={styles.newsTitle}>Acties</Text>
+        <Text style={styles.newsTitle}>{t("home.actions")}</Text>
         <View style={styles.newsGrid}>
           <View style={styles.updatePill}>
             <BugArtImage bugId="pissebed" size={32} />
@@ -268,7 +293,7 @@ export function HomeScreen({ user, onNavigate }: Props) {
       </View>
       <Pressable style={[sharedStyles.button, styles.actionButton]} onPress={() => onNavigate("bugs")}>
         <BugArtImage bugId="neushoornkever" size={38} />
-        <Text style={sharedStyles.buttonText}>Bugs bekijken</Text>
+        <Text style={sharedStyles.buttonText}>{t("home.viewBugs")}</Text>
       </Pressable>
     </ScrollView>
   );
@@ -279,27 +304,18 @@ function formatKm(km: number): string {
   return km.toFixed(1).replace(".0", "");
 }
 
-function movementStatusText(status: MovementDataTypeStatus): string {
-  if (status.available) return status.lastSeenLabel ? `laatst ${status.lastSeenLabel}` : "beschikbaar";
-  if (status.reason === "health_permission") return "geen toegang";
-  if (status.reason === "health_connect_unavailable") return "niet beschikbaar";
-  if (status.reason === "health_error") return "fout";
-  return "geen data";
+function movementStatusText(status: MovementDataTypeStatus, t: (key: string, params?: Record<string, string | number>) => string): string {
+  if (status.available) return status.lastSeenLabel ? t("health.last", { value: status.lastSeenLabel }) : t("health.available");
+  if (status.reason === "health_permission") return t("health.noAccess");
+  if (status.reason === "health_connect_unavailable") return t("health.unavailable");
+  if (status.reason === "health_error") return t("health.error");
+  return t("health.noData");
 }
 
-function showMovementConnectInfo(): void {
+function showMovementConnectInfo(t: (key: string) => string): void {
   Alert.alert(
-    "Beweeg radar koppelen",
-    [
-      "BugBaas leest alleen Health Connect.",
-      "",
-      "Google Fit: zet in Fit de Health Connect-sync aan.",
-      "Samsung Health: geef Samsung Health toegang tot Health Connect.",
-      "Huawei: gebruik Health Sync om Huawei Health naar Health Connect te schrijven.",
-      "Andere apps: koppel ze als bron-app aan Health Connect.",
-      "",
-      "Geef daarna BugBaas toegang tot Stappen, Afstand en Trainingen."
-    ].join("\n"),
+    t("health.connectTitle"),
+    t("health.connectBody"),
     [{ text: "OK" }]
   );
 }
@@ -343,6 +359,46 @@ const styles = StyleSheet.create({
   heroActions: {
     alignItems: "stretch",
     gap: 6
+  },
+  languagePill: {
+    alignItems: "center",
+    backgroundColor: "#fdfefb",
+    borderColor: "rgba(253,254,251,0.6)",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 4,
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 5
+  },
+  languageMenu: {
+    alignItems: "center",
+    backgroundColor: "#fdfefb",
+    borderColor: "#d7bd57",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 4,
+    justifyContent: "center",
+    padding: 4
+  },
+  languageOption: {
+    alignItems: "center",
+    borderRadius: 8,
+    justifyContent: "center",
+    minHeight: 32,
+    minWidth: 34
+  },
+  languageFlag: {
+    color: "#102018",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  languageChevron: {
+    color: "#102018",
+    fontSize: 11,
+    fontWeight: "900"
   },
   profileText: {
     color: "#102018",

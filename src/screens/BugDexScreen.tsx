@@ -5,6 +5,7 @@ import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugDexUnlockModal } from "../components/BugDexUnlockModal";
 import { TradeAnimationModal } from "../components/TradeAnimationModal";
 import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineBugDexDuplicates, combineDifferentBugDexUpgrade, combineRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory } from "../services/bugDexService";
+import { rarityLabel, useI18n } from "../services/i18n";
 import { notifyTradeRequest } from "../services/notificationService";
 import { bugDexEntries, BugDexEntry, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { createTradeRequest, listTradeRequests, markTradeRequesterSeen, respondToTradeRequest } from "../services/tradeService";
@@ -44,6 +45,7 @@ const emptyDailyUpgradeUsage: DailyUpgradeUsage = {
 };
 
 export function BugDexScreen({ user, onBack }: Props) {
+  const { t, tr } = useI18n();
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [trades, setTrades] = useState<TradeRequest[]>([]);
@@ -131,7 +133,7 @@ export function BugDexScreen({ user, onBack }: Props) {
       setDrop(result);
       await Promise.all([refreshInventory(), refreshDailyUpgradeUsage()]);
     } catch (error) {
-      setUpgradeError(error instanceof Error ? error.message : "Upgrade mislukt.");
+      setUpgradeError(error instanceof Error ? error.message : t("bugdex.upgradeFailed"));
     } finally {
       setCombineBusyId("");
     }
@@ -146,7 +148,7 @@ export function BugDexScreen({ user, onBack }: Props) {
       setUpgradeSelections((current) => ({ ...current, [rarity]: [] }));
       await Promise.all([refreshInventory(), refreshDailyUpgradeUsage()]);
     } catch (error) {
-      setUpgradeError(error instanceof Error ? error.message : "Upgrade mislukt.");
+      setUpgradeError(error instanceof Error ? error.message : t("bugdex.upgradeFailed"));
     } finally {
       setUpgradeBusy("");
     }
@@ -189,7 +191,7 @@ export function BugDexScreen({ user, onBack }: Props) {
       setRecipientInventory([]);
       await refreshTrades();
     } catch (error) {
-      setTradeError(error instanceof Error ? error.message : "Ruilverzoek mislukt.");
+      setTradeError(error instanceof Error ? error.message : t("bugdex.tradeFailed"));
     } finally {
       setTradeBusy("");
     }
@@ -203,7 +205,7 @@ export function BugDexScreen({ user, onBack }: Props) {
       if (accept) setCompletedTrade(result);
       await refreshAll();
     } catch (error) {
-      setTradeError(error instanceof Error ? error.message : "Ruil verwerken mislukt.");
+      setTradeError(error instanceof Error ? error.message : t("bugdex.tradeProcessFailed"));
     } finally {
       setTradeBusy("");
     }
@@ -213,11 +215,11 @@ export function BugDexScreen({ user, onBack }: Props) {
     <>
       <View style={styles.dexToolbar}>
         <View>
-          <Text style={styles.dexToolbarTitle}>Ontdekte bugs</Text>
-          <Text style={styles.dexToolbarMeta}>{showLocked ? "Alle bugs zichtbaar" : "Focus op jouw unlocked bugs"}</Text>
+          <Text style={styles.dexToolbarTitle}>{t("bugdex.discovered")}</Text>
+          <Text style={styles.dexToolbarMeta}>{showLocked ? t("bugdex.allVisible") : t("bugdex.focusUnlocked")}</Text>
         </View>
         <Pressable style={[styles.lockedToggle, showLocked && styles.lockedToggleActive]} onPress={() => setShowLocked((current) => !current)}>
-          <Text style={[styles.lockedToggleText, showLocked && styles.lockedToggleTextActive]}>{showLocked ? "Verberg onbekend" : "Toon onbekend"}</Text>
+          <Text style={[styles.lockedToggleText, showLocked && styles.lockedToggleTextActive]}>{showLocked ? t("bugdex.hideUnknown") : t("bugdex.showUnknown")}</Text>
         </Pressable>
       </View>
 
@@ -237,22 +239,22 @@ export function BugDexScreen({ user, onBack }: Props) {
                   <View style={[styles.numberPill, { backgroundColor: unlocked ? color : "#87958e" }]}>
                     <Text style={styles.numberText}>{String(index + 1).padStart(2, "0")}</Text>
                   </View>
-                  <Text style={[styles.rarity, { color: unlocked ? color : "#87958e" }]}>{unlocked ? entry.rarity : "???"}</Text>
+                  <Text style={[styles.rarity, { color: unlocked ? color : "#87958e" }]}>{unlocked ? rarityLabel(entry.rarity, t) : "???"}</Text>
                 </View>
                 <View style={[styles.bugWrap, !unlocked && styles.lockedBugWrap]}>
                   {unlocked ? <BugArtImage bugId={entry.id} size={70} /> : <Text style={styles.lockedMark}>?</Text>}
                 </View>
                 <View style={styles.nameRow}>
-                  <Text style={[styles.name, !unlocked && styles.lockedName]} numberOfLines={1}>{unlocked ? entry.name : "Onbekend"}</Text>
+                  <Text style={[styles.name, !unlocked && styles.lockedName]} numberOfLines={1}>{unlocked ? entry.name : t("bugdex.unknown")}</Text>
                   {unlocked && inventoryItem.count > 1 && <Text style={styles.countPill}>x{inventoryItem.count}</Text>}
                 </View>
-                <Text style={[styles.title, !unlocked && styles.lockedText]}>{unlocked ? entry.title : "Nog niet ontdekt"}</Text>
+                <Text style={[styles.title, !unlocked && styles.lockedText]}>{unlocked ? entry.title : t("bugdex.notDiscovered")}</Text>
                 <Text style={[styles.note, !unlocked && styles.lockedText]}>
-                  {unlocked ? entry.note : "Gebruik de app om deze bug te vinden."}
+                  {unlocked ? entry.note : t("bugdex.findHint")}
                 </Text>
                 {hasEnoughToCombine && (
                   <Pressable style={[styles.combineButton, !canCombine && styles.combineButtonDisabled]} disabled={!canCombine || combineBusyId === entry.id} onPress={() => combine(entry.id)}>
-                    <Text style={styles.combineText}>{combineBusyId === entry.id ? "..." : routeUsedToday ? "Morgen weer" : `Combine x${requiredCount}`}</Text>
+                    <Text style={styles.combineText}>{combineBusyId === entry.id ? "..." : routeUsedToday ? t("bugdex.tomorrowAgain") : `Combine x${requiredCount}`}</Text>
                   </Pressable>
                 )}
               </View>
@@ -261,8 +263,8 @@ export function BugDexScreen({ user, onBack }: Props) {
         </View>
       ) : (
         <View style={styles.emptyDexCard}>
-          <Text style={styles.emptyDexTitle}>Nog geen bugs gevonden</Text>
-          <Text style={styles.emptyDexText}>Zet onbekende bugs aan om de volledige BugDex alvast te bekijken.</Text>
+          <Text style={styles.emptyDexTitle}>{t("bugdex.noneFound")}</Text>
+          <Text style={styles.emptyDexText}>{t("bugdex.showUnknownHint")}</Text>
         </View>
       )}
     </>
@@ -273,7 +275,7 @@ export function BugDexScreen({ user, onBack }: Props) {
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={[sharedStyles.title, styles.headerTitle]}>BugDex</Text>
-          <Text style={styles.headerMeta}>{unlockedCount}/{totalCount} ontdekt - {progress}%</Text>
+          <Text style={styles.headerMeta}>{unlockedCount}/{totalCount} {t("bugdex.discoveredCount", { count: "", progress }).trim()}</Text>
         </View>
         {headerEntry ? (
           <BugArtImage bugId={headerEntry.id} size={74} />
@@ -292,14 +294,14 @@ export function BugDexScreen({ user, onBack }: Props) {
             </View>
           ))
         ) : (
-          <Text style={styles.emptyDexText}>Nog geen vondsten. Gebruik de app om je eerste BugDex te vinden.</Text>
+          <Text style={styles.emptyDexText}>{t("bugdex.emptyHint")}</Text>
         )}
       </View>
 
       <View style={styles.tierPanel}>
         <View style={styles.tierHeader}>
-          <Text style={styles.tierPanelTitle}>Tiers</Text>
-          <Text style={styles.tierPanelMeta}>{tier.title}</Text>
+          <Text style={styles.tierPanelTitle}>{t("bugdex.tiers")}</Text>
+          <Text style={styles.tierPanelMeta}>{tr(tier.title)}</Text>
         </View>
         <View style={styles.tierGrid}>
           {userTiers.map((item) => {
@@ -318,11 +320,11 @@ export function BugDexScreen({ user, onBack }: Props) {
                     <Text style={[styles.tierStar, { color: item.frameColor }]}>★</Text>
                   </View>
                 </View>
-                <Text style={[styles.tierTitle, { color: item.color }]} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.tierMeta}>{item.minPoints}+ pt</Text>
-                <Text style={styles.tierDescription} numberOfLines={2}>{item.description}</Text>
-                <Text style={[styles.tierReward, { color: item.frameColor }]} numberOfLines={1}>{item.rewardText}</Text>
-                {current && <Text style={styles.tierCurrentPill}>Huidig</Text>}
+                <Text style={[styles.tierTitle, { color: item.color }]} numberOfLines={1}>{tr(item.title)}</Text>
+                <Text style={styles.tierMeta}>{item.minPoints}+ {t("common.pointsShort")}</Text>
+                <Text style={styles.tierDescription} numberOfLines={2}>{tr(item.description)}</Text>
+                <Text style={[styles.tierReward, { color: item.frameColor }]} numberOfLines={1}>{tr(item.rewardText)}</Text>
+                {current && <Text style={styles.tierCurrentPill}>{t("bugdex.current")}</Text>}
               </View>
             );
           })}
@@ -336,15 +338,15 @@ export function BugDexScreen({ user, onBack }: Props) {
       <View style={styles.summaryRow}>
         <View style={styles.summaryTile}>
           <Text style={styles.summaryValue}>{unlockedCount}</Text>
-          <Text style={styles.summaryLabel}>gevangen</Text>
+          <Text style={styles.summaryLabel}>{t("bugdex.caught")}</Text>
         </View>
         <View style={styles.summaryTile}>
           <Text style={styles.summaryValue}>{duplicateCount}</Text>
-          <Text style={styles.summaryLabel}>dubbel</Text>
+          <Text style={styles.summaryLabel}>{t("bugdex.duplicateShort")}</Text>
         </View>
         <View style={styles.summaryTile}>
           <Text style={styles.summaryValue}>{totalCount - unlockedCount}</Text>
-          <Text style={styles.summaryLabel}>te gaan</Text>
+          <Text style={styles.summaryLabel}>{t("bugdex.toGo")}</Text>
         </View>
       </View>
 
@@ -352,40 +354,40 @@ export function BugDexScreen({ user, onBack }: Props) {
 
       <Pressable style={[styles.tradeDropdown, tradeExpanded && styles.tradeDropdownActive]} onPress={() => setTradeExpanded((current) => !current)}>
         <View>
-          <Text style={[styles.tradeDropdownTitle, tradeExpanded && styles.tradeDropdownTitleActive]}>Ruilen en upgrades</Text>
-          <Text style={[styles.tradeDropdownMeta, tradeExpanded && styles.tradeDropdownMetaActive]}>{incomingTrades.length} inkomend - {outgoingTrades.length} open - {duplicateCount} dubbel</Text>
+          <Text style={[styles.tradeDropdownTitle, tradeExpanded && styles.tradeDropdownTitleActive]}>{t("bugdex.tradeAndUpgrades")}</Text>
+          <Text style={[styles.tradeDropdownMeta, tradeExpanded && styles.tradeDropdownMetaActive]}>{t("bugdex.tradeMeta", { incoming: incomingTrades.length, open: outgoingTrades.length, duplicate: duplicateCount })}</Text>
         </View>
-        <Text style={[styles.tradeDropdownIcon, tradeExpanded && styles.tradeDropdownTitleActive]}>{tradeExpanded ? "Sluit" : "Open"}</Text>
+        <Text style={[styles.tradeDropdownIcon, tradeExpanded && styles.tradeDropdownTitleActive]}>{tradeExpanded ? t("common.close") : t("common.open")}</Text>
       </Pressable>
 
       {tradeExpanded && (
         <>
       <View style={styles.tradePanel}>
         <View style={styles.tradeHeader}>
-          <Text style={styles.tradeTitle}>Ruilen</Text>
-          <Text style={styles.tradeMeta}>{incomingTrades.length} inkomend - {outgoingTrades.length} open</Text>
+          <Text style={styles.tradeTitle}>{t("bugdex.trade")}</Text>
+          <Text style={styles.tradeMeta}>{t("bugdex.tradeOpenMeta", { incoming: incomingTrades.length, open: outgoingTrades.length })}</Text>
         </View>
-        <Text style={styles.tradeHint}>Je kunt nu ook je laatste exemplaar ruilen. Kies bewust: die bug verdwijnt dan uit jouw BugDex.</Text>
+        <Text style={styles.tradeHint}>{t("bugdex.tradeHint")}</Text>
         {tradeInventory.length ? (
           <View style={styles.tradeSection}>
-            <Text style={styles.tradeLabel}>Bied een bug aan</Text>
+            <Text style={styles.tradeLabel}>{t("bugdex.offerBug")}</Text>
             <View style={styles.chipRow}>
               {tradeInventory.map((item) => (
                 <Pressable key={item.bugId} style={[styles.tradeBugChip, tradeOfferId === item.bugId && styles.tradeChipActive]} onPress={() => setTradeOfferId(item.bugId)}>
                   <BugArtImage bugId={item.bugId} size={34} />
                   <Text style={[styles.tradeChipText, tradeOfferId === item.bugId && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                  <Text style={[styles.tradeChipMeta, tradeOfferId === item.bugId && styles.tradeChipTextActive]}>{item.count === 1 ? "laatste" : `x${item.count}`}</Text>
+                  <Text style={[styles.tradeChipMeta, tradeOfferId === item.bugId && styles.tradeChipTextActive]}>{item.count === 1 ? t("bugdex.last") : `x${item.count}`}</Text>
                 </Pressable>
               ))}
             </View>
           </View>
         ) : (
-          <Text style={styles.tradeEmpty}>Je hebt nog geen bugs om te ruilen.</Text>
+          <Text style={styles.tradeEmpty}>{t("bugdex.noTradeBugs")}</Text>
         )}
-        {!!tradeOfferId && inventoryById[tradeOfferId]?.count === 1 && <Text style={styles.tradeWarning}>Let op: dit is je laatste {bugName(tradeOfferId)}.</Text>}
+        {!!tradeOfferId && inventoryById[tradeOfferId]?.count === 1 && <Text style={styles.tradeWarning}>{t("bugdex.lastWarning", { name: bugName(tradeOfferId) })}</Text>}
         {!!tradeOfferId && (
           <View style={styles.tradeSection}>
-            <Text style={styles.tradeLabel}>Kies collega</Text>
+            <Text style={styles.tradeLabel}>{t("bugdex.chooseColleague")}</Text>
             <View style={styles.characterGrid}>
               {users.map((item) => (
                 <Pressable key={item.uid} style={[styles.characterCard, tradeRecipientId === item.uid && styles.tradeChipActive]} onPress={() => chooseRecipient(item.uid)}>
@@ -398,54 +400,54 @@ export function BugDexScreen({ user, onBack }: Props) {
         )}
         {!!selectedRecipient && (
           <View style={styles.tradeSection}>
-            <Text style={styles.tradeLabel}>Vraag een bug terug</Text>
+            <Text style={styles.tradeLabel}>{t("bugdex.requestBug")}</Text>
             {recipientTradeInventory.length ? (
               <View style={styles.chipRow}>
                 {recipientTradeInventory.map((item) => (
                   <Pressable key={item.bugId} style={[styles.tradeBugChip, tradeRequestId === item.bugId && styles.tradeChipActive]} onPress={() => setTradeRequestId(item.bugId)}>
                     <BugArtImage bugId={item.bugId} size={34} />
                     <Text style={[styles.tradeChipText, tradeRequestId === item.bugId && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                    <Text style={[styles.tradeChipMeta, tradeRequestId === item.bugId && styles.tradeChipTextActive]}>{item.count === 1 ? "laatste" : `x${item.count}`}</Text>
+                    <Text style={[styles.tradeChipMeta, tradeRequestId === item.bugId && styles.tradeChipTextActive]}>{item.count === 1 ? t("bugdex.last") : `x${item.count}`}</Text>
                   </Pressable>
                 ))}
               </View>
             ) : (
-              <Text style={styles.tradeEmpty}>Deze collega heeft geen bugs om terug te ruilen.</Text>
+              <Text style={styles.tradeEmpty}>{t("bugdex.colleagueNoBugs")}</Text>
             )}
           </View>
         )}
-        {!!tradeRequestId && recipientInventoryById[tradeRequestId]?.count === 1 && <Text style={styles.tradeWarning}>Voor {selectedRecipient?.displayName ?? "deze collega"} is dit het laatste exemplaar.</Text>}
+        {!!tradeRequestId && recipientInventoryById[tradeRequestId]?.count === 1 && <Text style={styles.tradeWarning}>{t("bugdex.colleagueLast", { name: selectedRecipient?.displayName ?? "deze collega" })}</Text>}
         {!!tradeRequestId && (
           <Pressable style={styles.tradeButton} disabled={tradeBusy === "send"} onPress={sendTradeRequest}>
-            <Text style={styles.tradeButtonText}>{tradeBusy === "send" ? "..." : "Ruilverzoek sturen"}</Text>
+            <Text style={styles.tradeButtonText}>{tradeBusy === "send" ? "..." : t("bugdex.sendTrade")}</Text>
           </Pressable>
         )}
         {incomingTrades.map((trade) => (
           <View key={trade.id} style={styles.tradeRequest}>
             <Text style={styles.tradeRequestTitle}>{trade.fromUserName}</Text>
-            <Text style={styles.tradeRequestText}>{bugName(trade.offerBugId)} voor {bugName(trade.requestBugId)}</Text>
+            <Text style={styles.tradeRequestText}>{t("bugdex.tradeFor", { offer: bugName(trade.offerBugId), request: bugName(trade.requestBugId) })}</Text>
             <View style={styles.tradeActions}>
               <Pressable style={styles.acceptButton} disabled={tradeBusy === trade.id} onPress={() => respondTrade(trade, true)}>
-                <Text style={styles.actionText}>Accepteer</Text>
+                <Text style={styles.actionText}>{t("bugdex.accept")}</Text>
               </Pressable>
               <Pressable style={styles.rejectButton} disabled={tradeBusy === trade.id} onPress={() => respondTrade(trade, false)}>
-                <Text style={styles.actionText}>Weiger</Text>
+                <Text style={styles.actionText}>{t("bugdex.reject")}</Text>
               </Pressable>
             </View>
           </View>
         ))}
         {outgoingTrades.map((trade) => (
-          <Text key={trade.id} style={styles.tradePending}>Open: {bugName(trade.offerBugId)} naar {trade.toUserName}</Text>
+          <Text key={trade.id} style={styles.tradePending}>{t("bugdex.openTo", { bug: bugName(trade.offerBugId), name: trade.toUserName })}</Text>
         ))}
         {!!tradeError && <Text style={sharedStyles.error}>{tradeError}</Text>}
       </View>
 
       <View style={styles.upgradePanel}>
         <View style={styles.tradeHeader}>
-          <Text style={styles.tradeTitle}>Upgrades</Text>
-          <Text style={styles.tradeMeta}>{"3 verschillend -> hoger"}</Text>
+          <Text style={styles.tradeTitle}>{t("bugdex.upgrades")}</Text>
+          <Text style={styles.tradeMeta}>{t("bugdex.threeDifferent")}</Text>
         </View>
-        <Text style={styles.tradeHint}>{"Je kunt per route 1 upgrade per dag doen: Gewoon -> Zeldzaam, Zeldzaam -> Episch en Episch -> Legendarisch."}</Text>
+        <Text style={styles.tradeHint}>{t("bugdex.dailyUpgradeHint")}</Text>
         {upgradeOptions.map(({ items, rarity, targetRarity }) => {
           const ready = items.length >= 3;
           const selectedBugIds = upgradeSelections[rarity].filter((bugId) => items.some((item) => item.bugId === bugId));
@@ -454,8 +456,8 @@ export function BugDexScreen({ user, onBack }: Props) {
           return (
             <View key={rarity} style={[styles.upgradeRow, ready && { borderColor: routeUsedToday ? "#c6d3cc" : rarityColors[targetRarity] }, routeUsedToday && styles.upgradeRowUsed]}>
               <View style={styles.upgradeTextBlock}>
-                <Text style={styles.upgradeTitle}>{`${rarity} x3 -> ${targetRarity}`}</Text>
-                <Text style={styles.upgradeMeta}>{routeUsedToday ? "Vandaag gebruikt - morgen weer" : ready ? `${selectedBugIds.length}/3 gekozen` : `${items.length}/3 verschillende beschikbaar`}</Text>
+                <Text style={styles.upgradeTitle}>{`${rarityLabel(rarity, t)} x3 -> ${rarityLabel(targetRarity, t)}`}</Text>
+                <Text style={styles.upgradeMeta}>{routeUsedToday ? t("bugdex.routeUsed") : ready ? t("bugdex.chosen", { count: selectedBugIds.length }) : t("bugdex.availableDifferent", { count: items.length })}</Text>
                 {ready && !routeUsedToday && (
                   <View style={styles.upgradeChoiceGrid}>
                     {items.map((item) => {
@@ -473,7 +475,7 @@ export function BugDexScreen({ user, onBack }: Props) {
                         >
                           <BugArtImage bugId={item.bugId} size={32} />
                           <Text style={[styles.upgradeChoiceText, selected && styles.upgradeChoiceTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                          <Text style={[styles.upgradeChoiceCount, selected && styles.upgradeChoiceTextActive]}>{item.count === 1 ? "laatste" : `x${item.count}`}</Text>
+                          <Text style={[styles.upgradeChoiceCount, selected && styles.upgradeChoiceTextActive]}>{item.count === 1 ? t("bugdex.last") : `x${item.count}`}</Text>
                         </Pressable>
                       );
                     })}
@@ -482,10 +484,10 @@ export function BugDexScreen({ user, onBack }: Props) {
               </View>
               {ready ? (
                 <Pressable style={[styles.upgradeButton, { backgroundColor: canUpgrade ? rarityColors[targetRarity] : "#87958e" }]} disabled={!canUpgrade || upgradeBusy === rarity} onPress={() => upgradeDifferent(rarity, selectedBugIds)}>
-                  <Text style={styles.upgradeButtonText}>{upgradeBusy === rarity ? "..." : routeUsedToday ? "Morgen" : canUpgrade ? "Upgrade" : "Kies 3"}</Text>
+                  <Text style={styles.upgradeButtonText}>{upgradeBusy === rarity ? "..." : routeUsedToday ? t("common.tomorrow") : canUpgrade ? "Upgrade" : t("bugdex.chooseThree")}</Text>
                 </Pressable>
               ) : (
-                <Text style={styles.upgradeLocked}>Nog niet</Text>
+                <Text style={styles.upgradeLocked}>{t("bugdex.notYet")}</Text>
               )}
             </View>
           );
@@ -496,7 +498,7 @@ export function BugDexScreen({ user, onBack }: Props) {
       )}
 
       <Pressable style={sharedStyles.secondaryButton} onPress={onBack}>
-        <Text style={sharedStyles.secondaryButtonText}>Terug</Text>
+        <Text style={sharedStyles.secondaryButtonText}>{t("common.back")}</Text>
       </Pressable>
       <BugDexUnlockModal drop={drop} onClose={() => setDrop(null)} />
       <TradeAnimationModal currentUser={user} trade={completedTrade} onClose={() => setCompletedTrade(null)} />

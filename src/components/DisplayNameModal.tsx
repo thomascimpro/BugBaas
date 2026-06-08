@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useI18n } from "../services/i18n";
 import { User } from "../types";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export function DisplayNameModal({ user, visible, onSave, onCancel }: Props) {
+  const { t } = useI18n();
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -26,7 +28,7 @@ export function DisplayNameModal({ user, visible, onSave, onCancel }: Props) {
     try {
       await onSave(displayName);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Naam opslaan mislukt.");
+      setError(nextError instanceof Error ? nextError.message : t("modal.nameSaveFailed"));
     } finally {
       setBusy(false);
     }
@@ -42,22 +44,22 @@ export function DisplayNameModal({ user, visible, onSave, onCancel }: Props) {
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onCancel ? cancel : (() => undefined)}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          <Text style={styles.title}>Naam in de app</Text>
-          <Text style={styles.subtitle}>Collega's zien je onder deze naam.</Text>
+          <Text style={styles.title}>{t("modal.nameTitle")}</Text>
+          <Text style={styles.subtitle}>{t("modal.nameSubtitle")}</Text>
           <TextInput
             autoCapitalize="words"
             maxLength={32}
-            placeholder={user?.displayName || "Naam"}
+            placeholder={user?.displayName || t("modal.namePlaceholder")}
             style={styles.input}
             value={displayName}
             onChangeText={setDisplayName}
           />
           <Pressable style={styles.button} disabled={busy} onPress={submit}>
-            {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.buttonText}>Opslaan</Text>}
+            {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.buttonText}>{t("common.save")}</Text>}
           </Pressable>
           {onCancel && (
             <Pressable style={styles.cancelButton} disabled={busy} onPress={cancel}>
-              <Text style={styles.cancelButtonText}>Annuleer</Text>
+              <Text style={styles.cancelButtonText}>{t("common.cancel")}</Text>
             </Pressable>
           )}
           {!!error && <Text style={styles.error}>{error}</Text>}

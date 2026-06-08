@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Tex
 import { SeverityBadge } from "../components/SeverityBadge";
 import { StatusBadge } from "../components/StatusBadge";
 import { addBugComment, deleteOwnBug, listBugComments, toggleBugUpvote, updateBugStatus } from "../services/bugService";
+import { statusLabel, useI18n } from "../services/i18n";
 import { getUserById } from "../services/userService";
 import { upvotePointValue } from "../services/userService";
 import { BugComment, BugReport, BugStatus, ReportType, User } from "../types";
@@ -28,6 +29,7 @@ type Props = {
 };
 
 export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdded, onOpenProfile, onDeleted }: Props) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [voteBusy, setVoteBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -46,7 +48,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
 
   useEffect(() => {
     listBugComments(bug.id).then(setComments).catch((nextError) => {
-      setError(nextError instanceof Error ? nextError.message : "Commentaar laden mislukt.");
+      setError(nextError instanceof Error ? nextError.message : t("detail.loadCommentsFailed"));
     });
   }, [bug.id]);
 
@@ -57,7 +59,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
     try {
       onBugChanged(await updateBugStatus(bug, status));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Status wijzigen mislukt.");
+      setError(nextError instanceof Error ? nextError.message : t("detail.statusFailed"));
     } finally {
       setBusy(false);
     }
@@ -69,7 +71,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
     try {
       onBugChanged(await toggleBugUpvote(bug, user));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Upvote mislukt.");
+      setError(nextError instanceof Error ? nextError.message : t("detail.upvoteFailed"));
     } finally {
       setVoteBusy(false);
     }
@@ -84,7 +86,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
       setCommentText("");
       onCommentAdded?.(comment);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Commentaar opslaan mislukt.");
+      setError(nextError instanceof Error ? nextError.message : t("detail.commentFailed"));
     } finally {
       setCommentBusy(false);
     }
@@ -94,14 +96,14 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
     setError("");
     const profile = await getUserById(uid);
     if (profile) onOpenProfile(profile);
-    else setError("Profiel niet gevonden.");
+    else setError(t("detail.profileMissing"));
   }
 
   function confirmDelete() {
     if (user.uid !== bug.reporterId || deleteBusy) return;
-    Alert.alert("Melding verwijderen", "Deze melding wordt verwijderd en de punten worden ingetrokken.", [
-      { text: "Annuleer", style: "cancel" },
-      { text: "Verwijder", style: "destructive", onPress: () => void removeBug() }
+    Alert.alert(t("detail.deleteTitle"), t("detail.deleteBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("common.delete"), style: "destructive", onPress: () => void removeBug() }
     ]);
   }
 
@@ -112,7 +114,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
       await deleteOwnBug(bug, user);
       onDeleted();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Bug verwijderen mislukt.");
+      setError(nextError instanceof Error ? nextError.message : t("detail.deleteFailed"));
     } finally {
       setDeleteBusy(false);
     }
@@ -136,27 +138,27 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
       <View style={styles.upvotePanel}>
         <View style={styles.upvoteStat}>
           <Text style={styles.upvoteValue}>{upvoteCount}</Text>
-          <Text style={styles.upvoteLabel}>Upvotes</Text>
+          <Text style={styles.upvoteLabel}>{t("detail.upvotes")}</Text>
         </View>
         <View style={styles.upvoteInfo}>
-          <Text style={styles.upvoteInfoTitle}>+{upvotePointValue} pt per upvote</Text>
-          <Text style={styles.upvoteInfoText}>Bonus voor de melder: +{upvoteCount * upvotePointValue} pt</Text>
+          <Text style={styles.upvoteInfoTitle}>{t("detail.perUpvote", { points: upvotePointValue })}</Text>
+          <Text style={styles.upvoteInfoText}>{t("detail.reporterBonus", { points: upvoteCount * upvotePointValue })}</Text>
         </View>
         <Pressable style={hasVoted ? styles.votedButton : styles.plusButton} disabled={voteBusy || !canUpvote} onPress={toggleUpvote}>
           {voteBusy ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
-            <Text style={styles.plusButtonText}>{canUpvote ? (hasVoted ? "Gestemd" : "+1") : "Eigen melding"}</Text>
+            <Text style={styles.plusButtonText}>{canUpvote ? (hasVoted ? t("detail.voted") : "+1") : t("detail.ownReport")}</Text>
           )}
         </Pressable>
       </View>
-      <Text style={sharedStyles.label}>Beschrijving</Text>
+      <Text style={sharedStyles.label}>{t("detail.description")}</Text>
       <Text style={sharedStyles.subtitle}>{bug.description}</Text>
-      <Text style={sharedStyles.label}>{isBug ? "Reproduceerstappen" : "Extra uitleg"}</Text>
-      <Text style={sharedStyles.subtitle}>{bug.steps || "Niet ingevuld."}</Text>
+      <Text style={sharedStyles.label}>{isBug ? t("new.reproSteps") : t("new.extraInfo")}</Text>
+      <Text style={sharedStyles.subtitle}>{bug.steps || t("detail.emptySteps")}</Text>
       {bug.screenshotDataUrl && <Image source={{ uri: bug.screenshotDataUrl }} style={{ height: 220, borderRadius: 8, marginBottom: 14 }} />}
       <View style={styles.commentsCard}>
-        <Text style={styles.sectionTitle}>Reacties</Text>
+        <Text style={styles.sectionTitle}>{t("detail.comments")}</Text>
         <View style={styles.reactions}>
           {reactions.map((reaction) => (
             <Pressable key={reaction} style={[styles.reactionButton, selectedReaction === reaction && styles.reactionButtonActive]} onPress={() => setSelectedReaction(reaction)}>
@@ -168,13 +170,13 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
           accessibilityLabel="Comment text"
           multiline
           maxLength={500}
-          placeholder="Commentaar"
+          placeholder={t("detail.commentPlaceholder")}
           style={[sharedStyles.input, styles.commentInput]}
           value={commentText}
           onChangeText={setCommentText}
         />
         <Pressable accessibilityLabel="Post comment" style={sharedStyles.button} disabled={commentBusy} onPress={submitComment}>
-          {commentBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>Reactie plaatsen</Text>}
+          {commentBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("detail.postComment")}</Text>}
         </Pressable>
         {comments.length ? (
           <View style={styles.commentList}>
@@ -191,39 +193,39 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
             ))}
           </View>
         ) : (
-          <Text style={styles.emptyComments}>Nog geen reacties.</Text>
+          <Text style={styles.emptyComments}>{t("detail.noComments")}</Text>
         )}
       </View>
       {canUpdateStatus && (
         <>
-          <Text style={sharedStyles.label}>Status wijzigen</Text>
+          <Text style={sharedStyles.label}>{t("detail.changeStatus")}</Text>
           {busy && <ActivityIndicator />}
           <View style={sharedStyles.row}>
             {statuses.map((status) => (
               <Pressable key={status} style={sharedStyles.secondaryButton} onPress={() => changeStatus(status)}>
-                <Text style={sharedStyles.secondaryButtonText}>{status}</Text>
+                <Text style={sharedStyles.secondaryButtonText}>{statusLabel(status, t)}</Text>
               </Pressable>
             ))}
           </View>
           <Pressable style={sharedStyles.button} onPress={() => changeStatus("Gefixt")}>
-            <Text style={sharedStyles.buttonText}>Markeer als gefixt</Text>
+            <Text style={sharedStyles.buttonText}>{t("detail.markFixed")}</Text>
           </Pressable>
           <Pressable style={sharedStyles.dangerButton} onPress={() => changeStatus("Dubbel")}>
-            <Text style={sharedStyles.buttonText}>Markeer als dubbel</Text>
+            <Text style={sharedStyles.buttonText}>{t("detail.markDuplicate")}</Text>
           </Pressable>
           <Pressable style={styles.deleteButton} disabled={deleteBusy} onPress={confirmDelete}>
-            {deleteBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>Verwijder melding</Text>}
+            {deleteBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("detail.deleteReport")}</Text>}
           </Pressable>
         </>
       )}
       {!canUpdateStatus && user.uid === bug.reporterId && (
         <Pressable style={styles.deleteButton} disabled={deleteBusy} onPress={confirmDelete}>
-          {deleteBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>Verwijder melding</Text>}
+          {deleteBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("detail.deleteReport")}</Text>}
         </Pressable>
       )}
       {!!error && <Text style={sharedStyles.error}>{error}</Text>}
       <Pressable style={sharedStyles.secondaryButton} onPress={onBack}>
-        <Text style={sharedStyles.secondaryButtonText}>Terug</Text>
+        <Text style={sharedStyles.secondaryButtonText}>{t("common.back")}</Text>
       </Pressable>
     </ScrollView>
   );

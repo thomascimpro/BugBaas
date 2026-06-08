@@ -4,16 +4,17 @@ import * as ImageManipulator from "expo-image-manipulator";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { createBug } from "../services/bugService";
+import { severityLabel, useI18n } from "../services/i18n";
 import { BugReport, BugSeverity, ReportType, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 const severities: BugSeverity[] = ["Laag", "Normaal", "Hoog", "Kritiek"];
 const projectOptions = ["TBox", "TConnect", "SkySpark", "Infinite", "VTScada", "Alert", "Anders"];
-const reportTypes: Array<{ value: ReportType; label: string; description: string }> = [
-  { value: "bug", label: "Bug", description: "Iets werkt niet goed" },
-  { value: "tip", label: "Tip", description: "Handige kennis delen" },
-  { value: "workaround", label: "Trick", description: "Omweg die nu helpt" },
-  { value: "idea", label: "Idee", description: "Feedback of verbetering" }
+const reportTypes: Array<{ value: ReportType; label: string; descriptionKey: string }> = [
+  { value: "bug", label: "Bug", descriptionKey: "new.reportBugDesc" },
+  { value: "tip", label: "Tip", descriptionKey: "new.reportTipDesc" },
+  { value: "workaround", label: "Trick", descriptionKey: "new.reportWorkaroundDesc" },
+  { value: "idea", label: "Idee", descriptionKey: "new.reportIdeaDesc" }
 ];
 const maxScreenshotSize = 640;
 const screenshotQuality = 0.35;
@@ -37,6 +38,7 @@ type Props = {
 };
 
 export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
+  const { t } = useI18n();
   const [reportType, setReportType] = useState<ReportType>("bug");
   const [typeOpen, setTypeOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -154,7 +156,7 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
       clearForm();
       onSaved(bug);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Opslaan mislukt.");
+      setError(nextError instanceof Error ? nextError.message : t("new.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -162,25 +164,25 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
 
   return (
     <ScrollView contentContainerStyle={styles.content} style={sharedStyles.screen} showsVerticalScrollIndicator={false}>
-      <Text style={sharedStyles.title}>Nieuwe melding</Text>
+      <Text style={sharedStyles.title}>{t("new.title")}</Text>
       {pendingDraft && (
         <View style={styles.draftCard}>
-          <Text style={styles.draftTitle}>Concept gevonden</Text>
+          <Text style={styles.draftTitle}>{t("new.draftFound")}</Text>
           <View style={styles.draftActions}>
             <Pressable style={[sharedStyles.button, styles.draftButton]} onPress={() => applyDraft(pendingDraft)}>
-              <Text style={sharedStyles.buttonText}>Verder</Text>
+              <Text style={sharedStyles.buttonText}>{t("new.continue")}</Text>
             </Pressable>
             <Pressable style={[sharedStyles.secondaryButton, styles.draftButton]} onPress={discardDraft}>
-              <Text style={sharedStyles.secondaryButtonText}>Nieuw</Text>
+              <Text style={sharedStyles.secondaryButtonText}>{t("common.new")}</Text>
             </Pressable>
           </View>
         </View>
       )}
-      <Text style={sharedStyles.label}>Type</Text>
+      <Text style={sharedStyles.label}>{t("new.type")}</Text>
       <Pressable style={styles.selectButton} onPress={() => setTypeOpen((current) => !current)}>
         <View>
           <Text style={styles.selectText}>{selectedReportType.label}</Text>
-          <Text style={styles.selectDescription}>{selectedReportType.description}</Text>
+          <Text style={styles.selectDescription}>{t(selectedReportType.descriptionKey)}</Text>
         </View>
         <Text style={styles.selectChevron}>{typeOpen ? "^" : "v"}</Text>
       </Pressable>
@@ -196,16 +198,16 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
               }}
             >
               <Text style={[styles.selectOptionText, reportType === item.value && styles.selectOptionTextActive]}>{item.label}</Text>
-              <Text style={[styles.selectOptionMeta, reportType === item.value && styles.selectOptionTextActive]}>{item.description}</Text>
+              <Text style={[styles.selectOptionMeta, reportType === item.value && styles.selectOptionTextActive]}>{t(item.descriptionKey)}</Text>
             </Pressable>
           ))}
         </View>
       )}
-      <Text style={sharedStyles.label}>Titel</Text>
+      <Text style={sharedStyles.label}>{t("new.reportTitle")}</Text>
       <TextInput style={sharedStyles.input} value={title} onChangeText={setTitle} />
-      <Text style={sharedStyles.label}>Systeem/project</Text>
+      <Text style={sharedStyles.label}>{t("new.system")}</Text>
       <Pressable style={styles.selectButton} onPress={() => setProjectOpen((current) => !current)}>
-        <Text style={[styles.selectText, !project && styles.selectPlaceholder]}>{project || "Kies systeem/product"}</Text>
+        <Text style={[styles.selectText, !project && styles.selectPlaceholder]}>{project || t("new.chooseSystem")}</Text>
         <Text style={styles.selectChevron}>{projectOpen ? "^" : "v"}</Text>
       </Pressable>
       {projectOpen && (
@@ -226,19 +228,19 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
       )}
       {isBug && (
         <>
-          <Text style={sharedStyles.label}>Urgentie</Text>
+          <Text style={sharedStyles.label}>{t("new.urgency")}</Text>
           <View style={sharedStyles.row}>
             {severities.map((item) => (
               <Pressable key={item} style={severity === item ? sharedStyles.button : sharedStyles.secondaryButton} onPress={() => setSeverity(item)}>
-                <Text style={severity === item ? sharedStyles.buttonText : sharedStyles.secondaryButtonText}>{item}</Text>
+                <Text style={severity === item ? sharedStyles.buttonText : sharedStyles.secondaryButtonText}>{severityLabel(item, t)}</Text>
               </Pressable>
             ))}
           </View>
         </>
       )}
-      <Text style={sharedStyles.label}>Beschrijving</Text>
+      <Text style={sharedStyles.label}>{t("new.description")}</Text>
       <TextInput multiline style={[sharedStyles.input, { minHeight: 90 }]} value={description} onChangeText={setDescription} />
-      <Text style={sharedStyles.label}>{isBug ? "Stappen om te reproduceren" : "Extra uitleg"}</Text>
+      <Text style={sharedStyles.label}>{isBug ? t("new.reproSteps") : t("new.extraInfo")}</Text>
       <TextInput multiline style={[sharedStyles.input, { minHeight: 90 }]} value={steps} onChangeText={setSteps} />
       {screenshotPreviewUri && (
         <View style={styles.previewWrap}>
@@ -249,10 +251,10 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
         </View>
       )}
       <Pressable accessibilityLabel="Choose screenshot" style={sharedStyles.secondaryButton} onPress={pickImage}>
-        <Text style={sharedStyles.secondaryButtonText}>Screenshot kiezen</Text>
+        <Text style={sharedStyles.secondaryButtonText}>{t("new.chooseScreenshot")}</Text>
       </Pressable>
       <Pressable accessibilityLabel="Save bug" style={sharedStyles.button} disabled={busy} onPress={save}>
-        {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>Opslaan</Text>}
+        {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("common.save")}</Text>}
       </Pressable>
       {!!error && <Text style={sharedStyles.error}>{error}</Text>}
     </ScrollView>

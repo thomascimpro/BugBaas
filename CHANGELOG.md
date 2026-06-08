@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.0
+
+- Taalondersteuning toegevoegd voor Nederlands, Engels en Frans.
+- Home heeft nu een compacte vlag-dropdown om taal te wisselen.
+- Hoofdschermen, navigatie, meldingen, popups, BugDex flows, profiel en Health Connect uitleg gebruiken nu vertaalde UI-tekst.
+- BugDex behoudt stabiele bugnamen en collectie-inhoud, zodat IDs en bestaande data niet breken.
+
 ## 1.4.6
 
 - Character creation uitgebreid naar 12 bug-catcher presets met backpack en bugnet.

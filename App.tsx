@@ -24,6 +24,7 @@ import { InAppNotificationToast } from "./src/components/InAppNotificationToast"
 import { HelpTourOverlay } from "./src/components/HelpTourOverlay";
 import { allBugArtIds, BugArtId } from "./src/services/bugArt";
 import { CharacterId } from "./src/services/characterService";
+import { LanguageProvider, useI18n } from "./src/services/i18n";
 import { listBugs } from "./src/services/bugService";
 import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, grantBugDexReward, rollBugDexDrop, rollSpecificBugDexDrop } from "./src/services/bugDexService";
 import { claimMovementRadarBonuses } from "./src/services/movementRadarService";
@@ -44,6 +45,14 @@ import {
 export type RouteName = "home" | "bugs" | "new" | "detail" | "leaderboard" | "profile" | "userProfile" | "bugdex" | "settings";
 
 export default function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
+  );
+}
+
+function AppContent() {
   const [route, setRoute] = useState<RouteName>("home");
   const [user, setUser] = useState<User | null>(null);
   const [selectedBug, setSelectedBug] = useState<BugReport | null>(null);
@@ -482,20 +491,21 @@ export default function App() {
 }
 
 function VersionToast({ notice, onDismiss }: { notice: VersionNotice | null; onDismiss: () => void }) {
+  const { t } = useI18n();
   if (!notice) return null;
   const openUpdate = () => {
     void Linking.openURL(notice.releaseUrl).then(onDismiss).catch(() => undefined);
   };
   return (
     <View accessibilityLabel="Open latest release" style={styles.versionToast}>
-      <Text style={styles.versionToastTitle}>Nieuwe versie beschikbaar</Text>
-      <Text style={styles.versionToastText}>Tik voor versie {notice.latestVersion}.</Text>
+      <Text style={styles.versionToastTitle}>{t("version.available")}</Text>
+      <Text style={styles.versionToastText}>{t("version.tap", { version: notice.latestVersion })}</Text>
       <View style={styles.versionToastActions}>
         <Pressable style={styles.versionToastSecondaryButton} onPress={onDismiss}>
-          <Text style={styles.versionToastSecondaryText}>Later</Text>
+          <Text style={styles.versionToastSecondaryText}>{t("version.later")}</Text>
         </Pressable>
         <Pressable style={styles.versionToastPrimaryButton} onPress={openUpdate}>
-          <Text style={styles.versionToastPrimaryText}>Open release</Text>
+          <Text style={styles.versionToastPrimaryText}>{t("version.open")}</Text>
         </Pressable>
       </View>
     </View>

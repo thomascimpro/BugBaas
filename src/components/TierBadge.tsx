@@ -1,5 +1,6 @@
 import React from "react";
 import { DimensionValue, StyleSheet, Text, View } from "react-native";
+import { useI18n } from "../services/i18n";
 import { getTierForPoints, pointsUntilNextTier, userTiers } from "../services/pointsService";
 import { BugArtImage } from "./BugArtImage";
 
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export function TierBadge({ points, compact = false, rank }: Props) {
+  const { t, tr } = useI18n();
   const tier = rank === 0 ? getTierForPoints(Number.MAX_SAFE_INTEGER) : getTierForPoints(points);
   const next = pointsUntilNextTier(points);
   const nextTier = userTiers.find((item) => item.minPoints > points);
@@ -29,14 +31,14 @@ export function TierBadge({ points, compact = false, rank }: Props) {
         <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={compact ? Math.max(42, tier.bugSize * 0.68) : Math.max(64, tier.bugSize * 0.86)} />
       </View>
       <View style={styles.body}>
-        <Text style={[styles.name, { color: tier.color }]}>{rank === 0 ? "Opperbugmeister" : tier.title}</Text>
-        <Text style={styles.meta}>{points} pt</Text>
+        <Text style={[styles.name, { color: tier.color }]}>{rank === 0 ? t("tier.super") : tr(tier.title)}</Text>
+        <Text style={styles.meta}>{points} {t("common.pointsShort")}</Text>
         {!compact && (
           <>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { backgroundColor: tier.frameColor, width: progressWidth }]} />
             </View>
-            <Text style={styles.next}>{next ? `${next} tot volgende tier` : "Max tier"}</Text>
+            <Text style={styles.next}>{next ? t("tier.next", { points: next }) : t("tier.max")}</Text>
           </>
         )}
       </View>

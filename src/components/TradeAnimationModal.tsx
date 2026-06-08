@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { entryByBugId } from "../services/bugDexService";
+import { useI18n } from "../services/i18n";
 import { TradeRequest, User } from "../types";
 import { BugArtImage } from "./BugArtImage";
 
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export function TradeAnimationModal({ currentUser, trade, onClose }: Props) {
+  const { t } = useI18n();
   const cardScale = useRef(new Animated.Value(0.94)).current;
   const swap = useRef(new Animated.Value(0)).current;
   const flash = useRef(new Animated.Value(0)).current;
@@ -72,8 +74,8 @@ export function TradeAnimationModal({ currentUser, trade, onClose }: Props) {
     <Modal transparent animationType="fade" visible={Boolean(trade)} statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Animated.View style={[styles.card, { transform: [{ scale: cardScale }] }]}>
-          <Text style={styles.kicker}>Ruil voltooid</Text>
-          <Text style={styles.subtitle}>Je hebt geruild met {partnerName}</Text>
+          <Text style={styles.kicker}>{t("trade.completed")}</Text>
+          <Text style={styles.subtitle}>{t("trade.with", { name: partnerName })}</Text>
 
           <View style={styles.stage}>
             <Animated.View style={[styles.beam, { opacity: beamOpacity }]} />
@@ -93,13 +95,13 @@ export function TradeAnimationModal({ currentUser, trade, onClose }: Props) {
             <View style={styles.resultArt}>
               <BugArtImage bugId={receivedBugId} size={116} />
             </View>
-            <Text style={styles.resultLabel}>Nieuw ontvangen</Text>
+            <Text style={styles.resultLabel}>{t("trade.received")}</Text>
             <Text style={styles.resultName}>{receivedEntry?.name ?? "Bug"}</Text>
-            <Text style={styles.resultMeta}>Je gaf {sentEntry?.name ?? "Bug"} terug</Text>
+            <Text style={styles.resultMeta}>{t("trade.gave", { name: sentEntry?.name ?? "Bug" })}</Text>
           </Animated.View>
 
           <Pressable style={styles.button} onPress={onClose}>
-            <Text style={styles.buttonText}>Klaar</Text>
+            <Text style={styles.buttonText}>{t("common.done")}</Text>
           </Pressable>
         </Animated.View>
       </View>

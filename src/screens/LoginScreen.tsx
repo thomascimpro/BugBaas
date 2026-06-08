@@ -5,6 +5,7 @@ import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-si
 import { AppBackground } from "../components/AppBackground";
 import { BugArtImage } from "../components/BugArtImage";
 import { WalkingBugsLayer } from "../components/WalkingBugsLayer";
+import { useI18n } from "../services/i18n";
 import { sharedStyles } from "./sharedStyles";
 
 const splashBadge = require("../../assets/generated/bugbaas-splash-badge-hd.png");
@@ -17,6 +18,7 @@ type Props = {
 };
 
 export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props) {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [createAccount, setCreateAccount] = useState(false);
@@ -62,7 +64,7 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
 
   async function submitGoogle() {
     if (!googleClientId) {
-      setGoogleError("Google-login is nog niet geconfigureerd.");
+      setGoogleError(t("login.googleNotConfigured"));
       return;
     }
     setGoogleBusy(true);
@@ -77,7 +79,7 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
 
       const idToken = result.data.idToken;
       if (!idToken) {
-        setGoogleError("Google-login gaf geen geldig token terug.");
+        setGoogleError(t("login.googleNoToken"));
         setGoogleBusy(false);
         return;
       }
@@ -92,7 +94,7 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
         setGoogleBusy(false);
         return;
       }
-      setGoogleError(error instanceof Error ? error.message : "Google-login mislukt.");
+      setGoogleError(error instanceof Error ? error.message : t("login.googleFailed"));
     } finally {
       setGoogleBusy(false);
     }
@@ -120,19 +122,19 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
           ) : (
             <View style={styles.googleContent}>
               <GoogleLogo />
-              <Text style={styles.googlePrimaryText}>Doorgaan met Google</Text>
+              <Text style={styles.googlePrimaryText}>{t("login.google")}</Text>
             </View>
           )}
         </Pressable>
         <Pressable style={styles.emailToggle} disabled={isBusy} onPress={() => setEmailVisible((current) => !current)}>
-          <Text style={styles.emailToggleText}>{emailVisible ? "E-mail verbergen" : "Met e-mail inloggen"}</Text>
+          <Text style={styles.emailToggleText}>{emailVisible ? t("login.hideEmail") : t("login.emailLogin")}</Text>
         </Pressable>
         {emailVisible && (
           <>
-            <TextInput autoCapitalize="none" keyboardType="email-address" placeholder="E-mail" style={sharedStyles.input} value={email} onChangeText={setEmail} />
-            <TextInput placeholder="Wachtwoord" secureTextEntry style={sharedStyles.input} value={password} onChangeText={setPassword} />
+            <TextInput autoCapitalize="none" keyboardType="email-address" placeholder={t("login.email")} style={sharedStyles.input} value={email} onChangeText={setEmail} />
+            <TextInput placeholder={t("login.password")} secureTextEntry style={sharedStyles.input} value={password} onChangeText={setPassword} />
             <Pressable style={sharedStyles.button} disabled={isBusy} onPress={() => submit(false)}>
-              {busy || loading ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>E-mail login</Text>}
+              {busy || loading ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("login.emailButton")}</Text>}
             </Pressable>
             <Pressable
               style={createAccount ? sharedStyles.button : sharedStyles.secondaryButton}
@@ -146,12 +148,12 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
               }}
             >
               <Text style={createAccount ? sharedStyles.buttonText : sharedStyles.secondaryButtonText}>
-                {createAccount ? "Account aanmaken" : "Nieuw e-mailaccount"}
+                {createAccount ? t("login.createAccount") : t("login.newEmailAccount")}
               </Text>
             </Pressable>
             {createAccount && (
               <Pressable style={styles.switchButton} disabled={isBusy} onPress={() => setCreateAccount(false)}>
-                <Text style={styles.switchText}>Ik heb al een e-mailaccount</Text>
+                <Text style={styles.switchText}>{t("login.haveAccount")}</Text>
               </Pressable>
             )}
           </>
