@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { RouteName } from "../../App";
 import { BugArtId } from "../services/bugArt";
+import { useI18n } from "../services/i18n";
 import { BugArtImage } from "./BugArtImage";
 
 type NavRoute = "home" | "bugs" | "new" | "bugdex" | "leaderboard";
@@ -11,15 +12,16 @@ type Props = {
   onNavigate: (route: NavRoute) => void;
 };
 
-const items: Array<{ route: NavRoute; label: string; bugId: BugArtId }> = [
-  { route: "home", label: "Home", bugId: "zilvervisje" },
-  { route: "bugs", label: "Bugs", bugId: "pissebed" },
-  { route: "new", label: "Meld", bugId: "mier" },
-  { route: "bugdex", label: "BugDex", bugId: "lieveheersbeestje" },
-  { route: "leaderboard", label: "Rank", bugId: "goliathkever" }
+const items: Array<{ route: NavRoute; labelKey: string; bugId: BugArtId }> = [
+  { route: "home", labelKey: "nav.home", bugId: "zilvervisje" },
+  { route: "bugs", labelKey: "nav.bugs", bugId: "pissebed" },
+  { route: "new", labelKey: "nav.new", bugId: "mier" },
+  { route: "bugdex", labelKey: "nav.bugdex", bugId: "lieveheersbeestje" },
+  { route: "leaderboard", labelKey: "nav.rank", bugId: "goliathkever" }
 ];
 
 export function BottomNav({ activeRoute, onNavigate }: Props) {
+  const { t } = useI18n();
   return (
     <View style={styles.wrap}>
       {items.map((item) => {
@@ -28,7 +30,7 @@ export function BottomNav({ activeRoute, onNavigate }: Props) {
         return (
           <Pressable key={item.route} style={[styles.item, primary && styles.primaryItem, active && styles.activeItem, primary && active && styles.activePrimary]} onPress={() => onNavigate(item.route)}>
             <BugArtImage bugId={item.bugId} size={primary ? 40 : active ? 28 : 24} />
-            <Text style={[styles.label, primary && styles.primaryLabel, active && styles.activeLabel, primary && active && styles.activePrimaryLabel]}>{item.label}</Text>
+            <Text style={[styles.label, primary && styles.primaryLabel, active && styles.activeLabel, primary && active && styles.activePrimaryLabel]}>{t(item.labelKey)}</Text>
           </Pressable>
         );
       })}

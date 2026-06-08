@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { BugStatus } from "../types";
+import { statusLabel, useI18n } from "../services/i18n";
 
 const colors: Record<BugStatus, string> = {
   Nieuw: "#e9f3ff",
@@ -12,9 +13,10 @@ const colors: Record<BugStatus, string> = {
 };
 
 export function StatusBadge({ status }: { status: BugStatus }) {
+  const { t } = useI18n();
   return (
     <View style={[styles.badge, { backgroundColor: colors[status] }]}>
-      <Text style={styles.text}>{status}</Text>
+      <Text style={styles.text}>{statusLabel(status, t)}</Text>
     </View>
   );
 }

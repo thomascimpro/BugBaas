@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import type { RouteName } from "../../App";
+import { useI18n } from "../services/i18n";
 
 type TourRoute = "home" | "bugs" | "new" | "bugdex" | "leaderboard" | "settings";
 
 type Step = {
   route: TourRoute;
-  title: string;
-  body: string;
+  titleKey: string;
+  bodyKey: string;
   target: "tab" | "settings";
 };
 
@@ -18,17 +19,18 @@ type Props = {
 };
 
 const steps: Step[] = [
-  { route: "home", title: "Home", body: "Nieuws, snelle acties en je laatste voortgang.", target: "tab" },
-  { route: "bugs", title: "Bugs", body: "Bekijk meldingen van iedereen en open details.", target: "tab" },
-  { route: "new", title: "Meld", body: "Maak een nieuwe bug met uitleg en eventueel een screenshot.", target: "tab" },
-  { route: "bugdex", title: "BugDex", body: "Bekijk je gevonden bugs, dubbelen en combineer upgrades.", target: "tab" },
-  { route: "leaderboard", title: "Rank", body: "Zie actieve collega's, badges en profielen.", target: "tab" },
-  { route: "settings", title: "Instellingen", body: "Zet meldingen aan of uit en start deze help opnieuw.", target: "settings" }
+  { route: "home", titleKey: "tour.home", bodyKey: "tour.homeBody", target: "tab" },
+  { route: "bugs", titleKey: "tour.bugs", bodyKey: "tour.bugsBody", target: "tab" },
+  { route: "new", titleKey: "tour.new", bodyKey: "tour.newBody", target: "tab" },
+  { route: "bugdex", titleKey: "tour.bugdex", bodyKey: "tour.bugdexBody", target: "tab" },
+  { route: "leaderboard", titleKey: "tour.rank", bodyKey: "tour.rankBody", target: "tab" },
+  { route: "settings", titleKey: "tour.settings", bodyKey: "tour.settingsBody", target: "settings" }
 ];
 
 const tabRoutes: Array<Extract<RouteName, "home" | "bugs" | "new" | "bugdex" | "leaderboard">> = ["home", "bugs", "new", "bugdex", "leaderboard"];
 
 export function HelpTourOverlay({ visible, onFinish, onNavigate }: Props) {
+  const { t } = useI18n();
   const [index, setIndex] = useState(0);
   const { width, height } = useWindowDimensions();
   const step = steps[index];
@@ -71,14 +73,14 @@ export function HelpTourOverlay({ visible, onFinish, onNavigate }: Props) {
         <View style={[styles.highlight, highlight]} />
         <View style={[styles.card, step.target === "settings" ? styles.cardTop : styles.cardBottom]}>
           <Text style={styles.counter}>{index + 1}/{steps.length}</Text>
-          <Text style={styles.title}>{step.title}</Text>
-          <Text style={styles.body}>{step.body}</Text>
+          <Text style={styles.title}>{t(step.titleKey)}</Text>
+          <Text style={styles.body}>{t(step.bodyKey)}</Text>
           <View style={styles.actions}>
             <Pressable style={styles.skipButton} onPress={onFinish}>
-              <Text style={styles.skipText}>Overslaan</Text>
+              <Text style={styles.skipText}>{t("common.skip")}</Text>
             </Pressable>
             <Pressable style={styles.nextButton} onPress={next}>
-              <Text style={styles.nextText}>{isLast ? "Klaar" : "Volgende"}</Text>
+              <Text style={styles.nextText}>{isLast ? t("common.done") : t("common.next")}</Text>
             </Pressable>
           </View>
         </View>

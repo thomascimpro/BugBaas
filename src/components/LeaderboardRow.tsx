@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { getTierForPoints } from "../services/pointsService";
 import { bugDexEntries } from "../services/pointsService";
+import { useI18n } from "../services/i18n";
 import { User } from "../types";
 import { BugArtImage } from "./BugArtImage";
 import { MedalIcon } from "./MedalIcon";
@@ -13,11 +14,12 @@ const topThreeStyles = [
 ];
 
 export function LeaderboardRow({ index, user, onPress }: { index: number; user: User; onPress: () => void }) {
+  const { t, tr } = useI18n();
   const isLeader = index === 0;
   const tier = isLeader ? getTierForPoints(Number.MAX_SAFE_INTEGER) : getTierForPoints(user.totalPoints);
   const medal = topThreeStyles[index];
-  const title = isLeader ? "Opperbugmeister" : tier.title;
-  const status = statusForUser(user, index);
+  const title = isLeader ? t("tier.super") : tr(tier.title);
+  const status = statusForUser(user, index, t);
   const visibleBadges = user.badges.slice(0, 2);
   const extraBadges = user.badges.length - visibleBadges.length;
 
@@ -34,7 +36,7 @@ export function LeaderboardRow({ index, user, onPress }: { index: number; user: 
           <Text style={[styles.status, medal && { backgroundColor: medal.pill, color: medal.pillText }]}>{status}</Text>
         </View>
         <Text style={[styles.meta, { color: tier.color }]}>{title}</Text>
-        <Text style={styles.subMeta}>{user.bugCount} bugs - BugDex {user.bugDexCount ?? 0}/{bugDexEntries.length}</Text>
+        <Text style={styles.subMeta}>{t("leader.bugsDex", { bugs: user.bugCount, caught: user.bugDexCount ?? 0, total: bugDexEntries.length })}</Text>
         <View style={styles.badgeRow}>
           {visibleBadges.length ? (
             <>
@@ -44,24 +46,24 @@ export function LeaderboardRow({ index, user, onPress }: { index: number; user: 
               {extraBadges > 0 && <Text style={styles.badgeChip}>+{extraBadges}</Text>}
             </>
           ) : (
-            <Text style={styles.badgeChip}>0 badges</Text>
+            <Text style={styles.badgeChip}>{t("leader.noBadges")}</Text>
           )}
         </View>
       </View>
       <View style={[styles.scorePill, medal && { backgroundColor: medal.pill }]}>
         <Text style={[styles.points, medal && { color: medal.pillText }]}>{user.totalPoints}</Text>
-        <Text style={[styles.pointsLabel, medal && { color: medal.pillText }]}>pt</Text>
+        <Text style={[styles.pointsLabel, medal && { color: medal.pillText }]}>{t("common.pointsShort")}</Text>
       </View>
     </Pressable>
   );
 }
 
-function statusForUser(user: User, index: number): string {
-  if (index === 0) return "Leader";
-  if (user.totalPoints >= 150) return "Actief";
-  if (user.bugCount >= 5) return "Jager";
-  if (user.bugCount >= 1) return "Nieuw";
-  return "Start";
+function statusForUser(user: User, index: number, t: (key: string) => string): string {
+  if (index === 0) return t("leader.statusLeader");
+  if (user.totalPoints >= 150) return t("leader.statusActive");
+  if (user.bugCount >= 5) return t("leader.statusHunter");
+  if (user.bugCount >= 1) return t("leader.statusNew");
+  return t("leader.statusStart");
 }
 
 const styles = StyleSheet.create({

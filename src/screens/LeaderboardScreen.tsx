@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "
 import { BugArtImage } from "../components/BugArtImage";
 import { LeaderboardRow } from "../components/LeaderboardRow";
 import { MedalIcon } from "../components/MedalIcon";
+import { useI18n } from "../services/i18n";
 import { listUsers } from "../services/userService";
 import { User } from "../types";
 import { sharedStyles } from "./sharedStyles";
@@ -19,6 +20,7 @@ const podiumStyles = [
 ];
 
 export function LeaderboardScreen({ onBack: _onBack, onSelectUser }: Props) {
+  const { t } = useI18n();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,8 +32,8 @@ export function LeaderboardScreen({ onBack: _onBack, onSelectUser }: Props) {
     <View style={sharedStyles.screen}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={[sharedStyles.title, styles.headerTitle]}>Ranglijst</Text>
-          <Text style={styles.headerSubtitle}>Top bugjagers van CimPro</Text>
+          <Text style={[sharedStyles.title, styles.headerTitle]}>{t("leaderboard.title")}</Text>
+          <Text style={styles.headerSubtitle}>{t("leaderboard.subtitle")}</Text>
         </View>
         <View style={styles.headerBugWrap}>
           <BugArtImage bugId="atlaskever" size={76} />
@@ -42,7 +44,7 @@ export function LeaderboardScreen({ onBack: _onBack, onSelectUser }: Props) {
           data={users}
           keyExtractor={(user) => user.uid}
           ListHeaderComponent={users.length ? <Podium users={users.slice(0, 3)} onSelectUser={onSelectUser} /> : null}
-          ListEmptyComponent={<Text style={sharedStyles.subtitle}>Nog geen deelnemers.</Text>}
+          ListEmptyComponent={<Text style={sharedStyles.subtitle}>{t("leaderboard.empty")}</Text>}
           renderItem={({ item, index }) => <LeaderboardRow user={item} index={index} onPress={() => onSelectUser(item)} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}

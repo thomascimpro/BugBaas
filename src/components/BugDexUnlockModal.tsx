@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Image, ImageSourcePropType, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { BugDexDropResult } from "../services/bugDexService";
+import { useI18n } from "../services/i18n";
 import { bugDexFacts, BugDexRarity } from "../services/pointsService";
 import { playBugSound } from "../services/soundService";
 import { BugArtImage } from "./BugArtImage";
@@ -47,6 +48,7 @@ const premiumRarityStyles: Record<"Episch" | "Legendarisch", {
 };
 
 export function BugDexUnlockModal({ drop, onClose }: Props) {
+  const { t } = useI18n();
   const scale = useRef(new Animated.Value(0.82)).current;
   const glow = useRef(new Animated.Value(0)).current;
 
@@ -79,17 +81,18 @@ export function BugDexUnlockModal({ drop, onClose }: Props) {
   const premiumStyle = !isPointsReward && (drop.entry.rarity === "Episch" || drop.entry.rarity === "Legendarisch")
     ? premiumRarityStyles[drop.entry.rarity]
     : null;
-  const bugFact = isPointsReward ? "Daily login" : bugDexFacts[drop.entry.id] ?? drop.entry.note;
-  const title = isDailyReward ? "Daily bonus" : drop.source === "combine" ? "Combine gelukt" : drop.isNew ? "Bug unlocked" : "Dubbele bug";
+  const premiumLabel = premiumStyle && !isPointsReward ? (drop.entry.rarity === "Episch" ? t("bugdex.epicFind") : t("bugdex.legendary")) : "";
+  const bugFact = isPointsReward ? t("bugdex.dailyLogin") : bugDexFacts[drop.entry.id] ?? drop.entry.note;
+  const title = isDailyReward ? t("bugdex.daily") : drop.source === "combine" ? t("bugdex.combineDone") : drop.isNew ? t("bugdex.unlocked") : t("bugdex.duplicate");
   const subtitle = isPointsReward
-    ? `+${drop.points} punten`
+    ? `+${drop.points} ${t("profile.points").toLowerCase()}`
     : drop.source === "combine" && drop.isNew
-      ? "Nieuwe vondst gemaakt"
+      ? t("bugdex.newMade")
       : drop.isNew
-        ? "Nieuw in je BugDex"
-        : "Extra exemplaar";
+        ? t("bugdex.newInDex")
+        : t("bugdex.extraCopy");
   const streakText = isDailyReward && drop.streakDay
-    ? `Dag ${drop.streakDay} streak - nog ${drop.daysUntilBetterReward ?? 0} dagen voor betere reward`
+    ? t("bugdex.streak", { day: drop.streakDay, days: drop.daysUntilBetterReward ?? 0 })
     : "";
   const glowScale = glow.interpolate({ inputRange: [0, 1], outputRange: [1, premiumStyle ? 1.24 : 1.12] });
   const ringScale = glow.interpolate({ inputRange: [0, 1], outputRange: [0.9, premiumStyle ? 1.38 : 1.16] });
@@ -109,7 +112,7 @@ export function BugDexUnlockModal({ drop, onClose }: Props) {
           {premiumStyle && <View style={[styles.premiumTopBar, { backgroundColor: premiumStyle.accent }]} />}
           {premiumStyle && (
             <View style={[styles.rarityBadge, { backgroundColor: premiumStyle.border }]}>
-              <Text style={styles.rarityBadgeText}>{premiumStyle.label}</Text>
+              <Text style={styles.rarityBadgeText}>{premiumLabel}</Text>
             </View>
           )}
           <Text style={[styles.kicker, premiumStyle && { color: premiumStyle.text }]}>{title}</Text>
@@ -125,11 +128,11 @@ export function BugDexUnlockModal({ drop, onClose }: Props) {
             <Animated.View style={[styles.glow, { backgroundColor: premiumStyle?.glow ?? rarityColor, opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
             {isPointsReward ? <Text style={styles.pointsReward}>+{drop.points}</Text> : <BugArtImage bugId={drop.entry.id} size={138} />}
           </View>
-          <Text style={[styles.name, premiumStyle && { color: premiumStyle.text }]}>{isPointsReward ? "Punten gevonden" : drop.entry.name}</Text>
+          <Text style={[styles.name, premiumStyle && { color: premiumStyle.text }]}>{isPointsReward ? t("bugdex.pointsFound") : drop.entry.name}</Text>
           <Text style={[styles.meta, premiumStyle && { color: premiumStyle.text }]}>{bugFact}</Text>
           {!!streakText && <Text style={styles.streak}>{streakText}</Text>}
           <Pressable style={[styles.button, premiumStyle && { backgroundColor: premiumStyle.border }]} onPress={onClose}>
-            <Text style={styles.buttonText}>Mooi</Text>
+            <Text style={styles.buttonText}>{t("bugdex.nice")}</Text>
           </Pressable>
         </Animated.View>
       </View>

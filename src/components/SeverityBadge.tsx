@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { BugSeverity } from "../types";
+import { severityLabel, useI18n } from "../services/i18n";
 
 const colors: Record<BugSeverity, string> = {
   Laag: "#edf7ed",
@@ -10,9 +11,10 @@ const colors: Record<BugSeverity, string> = {
 };
 
 export function SeverityBadge({ severity }: { severity: BugSeverity }) {
+  const { t } = useI18n();
   return (
     <View style={[styles.badge, { backgroundColor: colors[severity] }]}>
-      <Text style={styles.text}>{severity}</Text>
+      <Text style={styles.text}>{severityLabel(severity, t)}</Text>
     </View>
   );
 }

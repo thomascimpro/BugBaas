@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BugReport, ReportType } from "../types";
 import { BugArtId } from "../services/bugArt";
+import { useI18n } from "../services/i18n";
 import { BugArtImage } from "./BugArtImage";
 import { SeverityBadge } from "./SeverityBadge";
 import { StatusBadge } from "./StatusBadge";
@@ -29,6 +30,7 @@ function bugArtForReport(bug: BugReport) {
 }
 
 export function BugCard({ bug, onPress }: { bug: BugReport; onPress: () => void }) {
+  const { t } = useI18n();
   const upvotes = bug.upvoteCount ?? 0;
   const reportType = bug.reportType ?? "bug";
   const meta = reportTypeMeta[reportType];
@@ -41,7 +43,7 @@ export function BugCard({ bug, onPress }: { bug: BugReport; onPress: () => void 
       <View style={styles.body}>
         <View style={styles.topLine}>
           <Text style={styles.project} numberOfLines={1}>{bug.project}</Text>
-          <Text style={styles.date}>{new Date(bug.createdAt).toLocaleDateString("nl-NL")}</Text>
+          <Text style={styles.date}>{new Date(bug.createdAt).toLocaleDateString(t("date.locale"))}</Text>
         </View>
         <Text style={styles.title} numberOfLines={2}>{bug.title}</Text>
         <Text style={styles.meta} numberOfLines={1}>{bug.reporterName}</Text>
@@ -58,9 +60,9 @@ export function BugCard({ bug, onPress }: { bug: BugReport; onPress: () => void 
         </View>
         <View style={styles.footer}>
           <Text style={styles.upvotes}>+{upvotes}</Text>
-          <Text style={styles.bonus}>upvotes</Text>
+          <Text style={styles.bonus}>{t("detail.upvotes").toLowerCase()}</Text>
           <View style={styles.detailButton}>
-            <Text style={styles.detailButtonText}>Details</Text>
+            <Text style={styles.detailButtonText}>{t("common.details")}</Text>
           </View>
         </View>
       </View>

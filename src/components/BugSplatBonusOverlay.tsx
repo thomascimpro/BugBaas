@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from "react";
 import { Animated, Easing, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { allBugArtIds, BugArtId } from "../services/bugArt";
+import { useI18n } from "../services/i18n";
 import { BugArtImage } from "./BugArtImage";
 
 type BonusBug = {
@@ -21,6 +22,7 @@ type Props = {
 const autoCloseMs = 8000;
 
 export function BugSplatBonusOverlay({ visible, onSkip }: Props) {
+  const { t } = useI18n();
   const { height, width } = useWindowDimensions();
   const tracks = useMemo(
     () =>
@@ -79,8 +81,8 @@ export function BugSplatBonusOverlay({ visible, onSkip }: Props) {
     <Modal transparent animationType="fade" visible={visible} statusBarTranslucent onRequestClose={onSkip}>
       <Pressable style={styles.backdrop} onPress={onSkip}>
         <View style={styles.header}>
-          <Text style={styles.title}>Bugmelding opgeslagen</Text>
-          <Text style={styles.meta}>BugDex reward onderweg</Text>
+          <Text style={styles.title}>{t("splat.saved")}</Text>
+          <Text style={styles.meta}>{t("splat.reward")}</Text>
         </View>
         {tracks.map((track, index) => {
           const translateX = track.progress.interpolate({
@@ -122,7 +124,7 @@ export function BugSplatBonusOverlay({ visible, onSkip }: Props) {
           );
         })}
         <View style={styles.skipButton}>
-          <Text style={styles.skipText}>Tik om door te gaan</Text>
+          <Text style={styles.skipText}>{t("splat.tap")}</Text>
         </View>
       </Pressable>
     </Modal>

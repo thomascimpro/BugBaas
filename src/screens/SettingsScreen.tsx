@@ -1,14 +1,15 @@
 import React from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useI18n } from "../services/i18n";
 import { NotificationSettings, NotificationType } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
-const options: { type: NotificationType; title: string; body: string }[] = [
-  { type: "trade", title: "Ruilverzoeken", body: "Als iemand met je BugDex wil ruilen." },
-  { type: "new_bug", title: "Nieuwe bugs", body: "Als een collega een bug meldt." },
-  { type: "comment", title: "Reacties", body: "Als iemand reageert op jouw bug." },
-  { type: "bug_update", title: "Bug updates", body: "Als status of voortgang verandert." },
-  { type: "bugdex", title: "BugDex rewards", body: "Als je een nieuwe BugDex vondst krijgt." }
+const options: { type: NotificationType; titleKey: string; bodyKey: string }[] = [
+  { type: "trade", titleKey: "settings.tradeTitle", bodyKey: "settings.tradeBody" },
+  { type: "new_bug", titleKey: "settings.newBugTitle", bodyKey: "settings.newBugBody" },
+  { type: "comment", titleKey: "settings.commentTitle", bodyKey: "settings.commentBody" },
+  { type: "bug_update", titleKey: "settings.bugUpdateTitle", bodyKey: "settings.bugUpdateBody" },
+  { type: "bugdex", titleKey: "settings.bugdexTitle", bodyKey: "settings.bugdexBody" }
 ];
 
 type Props = {
@@ -19,22 +20,23 @@ type Props = {
 };
 
 export function SettingsScreen({ settings, onBack, onChange, onShowHelp }: Props) {
+  const { t } = useI18n();
   function toggle(type: NotificationType) {
     onChange({ ...settings, [type]: !settings[type] });
   }
 
   return (
     <ScrollView contentContainerStyle={styles.content} style={sharedStyles.screen}>
-      <Text style={sharedStyles.title}>Instellingen</Text>
-      <Text style={sharedStyles.subtitle}>Meldingen</Text>
+      <Text style={sharedStyles.title}>{t("settings.title")}</Text>
+      <Text style={sharedStyles.subtitle}>{t("settings.notifications")}</Text>
       <View style={styles.list}>
         {options.map((option) => {
           const enabled = settings[option.type];
           return (
             <Pressable key={option.type} style={styles.row} onPress={() => toggle(option.type)}>
               <View style={styles.copy}>
-                <Text style={styles.rowTitle}>{option.title}</Text>
-                <Text style={styles.rowBody}>{option.body}</Text>
+                <Text style={styles.rowTitle}>{t(option.titleKey)}</Text>
+                <Text style={styles.rowBody}>{t(option.bodyKey)}</Text>
               </View>
               <View style={[styles.toggle, enabled && styles.toggleOn]}>
                 <View style={[styles.knob, enabled && styles.knobOn]} />
@@ -44,10 +46,10 @@ export function SettingsScreen({ settings, onBack, onChange, onShowHelp }: Props
         })}
       </View>
       <Pressable style={styles.helpButton} onPress={onShowHelp}>
-        <Text style={styles.helpButtonText}>Help bekijken</Text>
+        <Text style={styles.helpButtonText}>{t("settings.help")}</Text>
       </Pressable>
       <Pressable style={sharedStyles.secondaryButton} onPress={onBack}>
-        <Text style={sharedStyles.secondaryButtonText}>Terug</Text>
+        <Text style={sharedStyles.secondaryButtonText}>{t("common.back")}</Text>
       </Pressable>
     </ScrollView>
   );

@@ -3,16 +3,17 @@ import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, T
 import { BugArtImage } from "../components/BugArtImage";
 import { BugCard } from "../components/BugCard";
 import { listBugs } from "../services/bugService";
+import { statusLabel, useI18n } from "../services/i18n";
 import { BugReport, BugStatus, ReportType } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 const statuses: BugStatus[] = ["Nieuw", "Bevestigd", "In behandeling", "Gefixt", "Afgekeurd", "Dubbel"];
-const reportFilters: Array<{ value: ReportType | "all"; label: string }> = [
-  { value: "all", label: "Alles" },
-  { value: "bug", label: "Bugs" },
-  { value: "tip", label: "Tips" },
-  { value: "workaround", label: "Tricks" },
-  { value: "idea", label: "Idee" }
+const reportFilters: Array<{ value: ReportType | "all"; labelKey: string }> = [
+  { value: "all", labelKey: "filter.all" },
+  { value: "bug", labelKey: "filter.bugs" },
+  { value: "tip", labelKey: "filter.tips" },
+  { value: "workaround", labelKey: "filter.tricks" },
+  { value: "idea", labelKey: "filter.idea" }
 ];
 const projectFilters = ["TBox", "TConnect", "SkySpark", "Infinite", "VTScada", "Alert", "Anders"];
 const reportTypeLabels: Record<ReportType, string> = {
@@ -29,6 +30,7 @@ type Props = {
 };
 
 export function BugListScreen({ onBack, onNew, onSelect }: Props) {
+  const { t } = useI18n();
   const [filter, setFilter] = useState<BugStatus | undefined>();
   const [typeFilter, setTypeFilter] = useState<ReportType | "all">("all");
   const [projectFilter, setProjectFilter] = useState<string | undefined>();
@@ -70,22 +72,22 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
     <View style={[sharedStyles.screen, styles.screen]}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={sharedStyles.title}>Bugs & tips</Text>
-          <Text style={styles.subtitle}>{visibleReports.length} meldingen</Text>
+          <Text style={sharedStyles.title}>{t("buglist.title")}</Text>
+          <Text style={styles.subtitle}>{t("buglist.count", { count: visibleReports.length })}</Text>
         </View>
         <Pressable style={styles.newButton} onPress={onNew}>
           <BugArtImage bugId="lieveheersbeestje" size={32} />
-          <Text style={styles.newButtonText}>Nieuw</Text>
+          <Text style={styles.newButtonText}>{t("common.new")}</Text>
         </Pressable>
       </View>
 
       <View style={styles.searchRow}>
         <TextInput
-          accessibilityLabel="Zoek meldingen"
+          accessibilityLabel={t("buglist.search")}
           autoCapitalize="none"
           autoCorrect={false}
           clearButtonMode="while-editing"
-          placeholder="Zoek op titel, product, melder of tekst"
+          placeholder={t("buglist.searchPlaceholder")}
           placeholderTextColor="#77847f"
           style={styles.searchInput}
           value={searchQuery}
@@ -93,7 +95,7 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
         />
         {hasActiveFilters && (
           <Pressable style={styles.resetButton} onPress={resetFilters}>
-            <Text style={styles.resetButtonText}>Reset</Text>
+            <Text style={styles.resetButtonText}>{t("common.reset")}</Text>
           </Pressable>
         )}
       </View>
@@ -103,14 +105,14 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
           const active = typeFilter === item.value;
           return (
             <Pressable key={item.value} style={[styles.filterPill, active && styles.filterPillActive]} onPress={() => changeTypeFilter(item.value)}>
-              <Text style={[styles.filterText, active && styles.filterTextActive]}>{item.label}</Text>
+              <Text style={[styles.filterText, active && styles.filterTextActive]}>{t(item.labelKey)}</Text>
             </Pressable>
           );
         })}
       </ScrollView>
 
       <Pressable style={styles.projectButton} onPress={() => setProjectOpen((current) => !current)}>
-        <Text style={[styles.projectButtonText, !projectFilter && styles.projectButtonPlaceholder]}>Product: {projectFilter ?? "Alles"}</Text>
+        <Text style={[styles.projectButtonText, !projectFilter && styles.projectButtonPlaceholder]}>{t("buglist.product", { value: projectFilter ?? t("common.all") })}</Text>
         <Text style={styles.projectChevron}>{projectOpen ? "^" : "v"}</Text>
       </Pressable>
       {projectOpen && (
@@ -122,7 +124,7 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
               setProjectOpen(false);
             }}
           >
-            <Text style={[styles.projectOptionText, !projectFilter && styles.projectOptionTextActive]}>Alles</Text>
+            <Text style={[styles.projectOptionText, !projectFilter && styles.projectOptionTextActive]}>{t("common.all")}</Text>
           </Pressable>
           {projectFilters.map((project) => {
             const active = projectFilter === project;
@@ -145,13 +147,13 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
       {(typeFilter === "all" || typeFilter === "bug") && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filters}>
           <Pressable style={[styles.statusPill, !filter && styles.statusPillActive]} onPress={() => setFilter(undefined)}>
-            <Text style={[styles.statusText, !filter && styles.statusTextActive]}>Alle statussen</Text>
+            <Text style={[styles.statusText, !filter && styles.statusTextActive]}>{t("buglist.allStatuses")}</Text>
           </Pressable>
           {statuses.map((status) => {
             const active = filter === status;
             return (
               <Pressable key={status} style={[styles.statusPill, active && styles.statusPillActive]} onPress={() => setFilter(status)}>
-                <Text style={[styles.statusText, active && styles.statusTextActive]}>{status}</Text>
+                <Text style={[styles.statusText, active && styles.statusTextActive]}>{statusLabel(status, t)}</Text>
               </Pressable>
             );
           })}
@@ -165,8 +167,8 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
           ListEmptyComponent={
             <View style={styles.empty}>
               <BugArtImage bugId="zilvervisje" size={74} opacity={0.72} />
-              <Text style={styles.emptyTitle}>Geen meldingen</Text>
-              <Text style={styles.emptyText}>Geen resultaat. Pas je zoektekst of filters aan.</Text>
+              <Text style={styles.emptyTitle}>{t("buglist.emptyTitle")}</Text>
+              <Text style={styles.emptyText}>{t("buglist.emptyText")}</Text>
             </View>
           }
           renderItem={({ item }) => <BugCard bug={item} onPress={() => onSelect(item)} />}
@@ -176,7 +178,7 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
         />
       )}
       <Pressable style={styles.backButton} onPress={onBack}>
-        <Text style={styles.backButtonText}>Terug</Text>
+        <Text style={styles.backButtonText}>{t("common.back")}</Text>
       </Pressable>
     </View>
   );
