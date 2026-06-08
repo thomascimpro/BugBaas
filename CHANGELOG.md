@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.2
+
+- Ruil-resultaat opent pas na acceptatie en wordt na sluiten niet opnieuw getoond.
+- Ruil- en upgradepanelen sluiten na verzenden of accepteren van een ruil.
+- Ruilscherm en ruilanimatie tonen rarity duidelijker met kleur en label.
+- `Laatste` chip-labels verwijderd uit ruil- en upgradechips; dubbele aantallen blijven zichtbaar.
+
 ## 1.5.1
 
 - Resterende zichtbare labels bij bug melden, bugdetails, BugDex upgrades en report badges vertaald.

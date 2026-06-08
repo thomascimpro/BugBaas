@@ -52,6 +52,7 @@ export function BugDexScreen({ user, onBack }: Props) {
   const [recipientInventory, setRecipientInventory] = useState<BugDexInventoryItem[]>([]);
   const [drop, setDrop] = useState<BugDexDropResult | null>(null);
   const [completedTrade, setCompletedTrade] = useState<TradeRequest | null>(null);
+  const [closedCompletedTradeIds, setClosedCompletedTradeIds] = useState<string[]>([]);
   const [combineBusyId, setCombineBusyId] = useState("");
   const [tradeOfferId, setTradeOfferId] = useState("");
   const [tradeRecipientId, setTradeRecipientId] = useState("");
@@ -94,11 +95,15 @@ export function BugDexScreen({ user, onBack }: Props) {
   }, [user.uid]);
 
   useEffect(() => {
-    const acceptedOwnTrade = trades.find((trade) => trade.fromUserId === user.uid && trade.status === "Geaccepteerd" && !trade.requesterSeenAt);
+    const acceptedOwnTrade = trades.find((trade) =>
+      trade.fromUserId === user.uid &&
+      trade.status === "Geaccepteerd" &&
+      !trade.requesterSeenAt &&
+      !closedCompletedTradeIds.includes(trade.id)
+    );
     if (!acceptedOwnTrade || completedTrade) return;
     setCompletedTrade(acceptedOwnTrade);
-    void markTradeRequesterSeen(user, acceptedOwnTrade).then(refreshTrades).catch(() => undefined);
-  }, [completedTrade, trades, user]);
+  }, [closedCompletedTradeIds, completedTrade, trades, user.uid]);
 
   useEffect(() => {
     const availableIds = new Set(inventory.filter((item) => item.count > 0).map((item) => item.bugId));
@@ -167,6 +172,14 @@ export function BugDexScreen({ user, onBack }: Props) {
     return entryByBugId(bugId)?.name ?? "Bug";
   }
 
+  function bugRarity(bugId: string) {
+    return entryByBugId(bugId)?.rarity ?? "Gewoon";
+  }
+
+  function bugTradeLabel(bugId: string) {
+    return `${bugName(bugId)} (${rarityLabel(bugRarity(bugId), t)})`;
+  }
+
   function upgradeRouteUsedToday(sourceRarity: UpgradeRarity) {
     return dailyUpgradeUsage[`${sourceRarity}-${nextRarityLabel[sourceRarity]}` as keyof DailyUpgradeUsage];
   }
@@ -199,6 +212,7 @@ export function BugDexScreen({ user, onBack }: Props) {
       setTradeRecipientId("");
       setTradeRequestId("");
       setRecipientInventory([]);
+      setTradeExpanded(false);
       await refreshTrades();
     } catch (error) {
       setTradeError(error instanceof Error ? error.message : t("bugdex.tradeFailed"));
@@ -212,12 +226,26 @@ export function BugDexScreen({ user, onBack }: Props) {
     setTradeError("");
     try {
       const result = await respondToTradeRequest(user, trade, accept);
-      if (accept) setCompletedTrade(result);
+      if (accept) {
+        setCompletedTrade(result);
+        setTradeExpanded(false);
+      }
       await refreshAll();
     } catch (error) {
       setTradeError(error instanceof Error ? error.message : t("bugdex.tradeProcessFailed"));
     } finally {
       setTradeBusy("");
+    }
+  }
+
+  function closeTradeResult() {
+    const trade = completedTrade;
+    if (!trade) return;
+    setClosedCompletedTradeIds((current) => current.includes(trade.id) ? current : [...current, trade.id]);
+    setCompletedTrade(null);
+    setTradeExpanded(false);
+    if (trade.fromUserId === user.uid && trade.status === "Geaccepteerd" && !trade.requesterSeenAt) {
+      void markTradeRequesterSeen(user, trade).then(refreshTrades).catch(() => undefined);
     }
   }
 
@@ -386,7 +414,8 @@ export function BugDexScreen({ user, onBack }: Props) {
                 <Pressable key={item.bugId} style={[styles.tradeBugChip, tradeOfferId === item.bugId && styles.tradeChipActive]} onPress={() => setTradeOfferId(item.bugId)}>
                   <BugArtImage bugId={item.bugId} size={34} />
                   <Text style={[styles.tradeChipText, tradeOfferId === item.bugId && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                  <Text style={[styles.tradeChipMeta, tradeOfferId === item.bugId && styles.tradeChipTextActive]}>{item.count === 1 ? t("bugdex.last") : `x${item.count}`}</Text>
+                  <Text style={[styles.tradeRarityPill, { backgroundColor: rarityColors[bugRarity(item.bugId)] }]}>{rarityLabel(bugRarity(item.bugId), t)}</Text>
+                  {item.count > 1 && <Text style={[styles.tradeChipMeta, tradeOfferId === item.bugId && styles.tradeChipTextActive]}>x{item.count}</Text>}
                 </Pressable>
               ))}
             </View>
@@ -417,7 +446,8 @@ export function BugDexScreen({ user, onBack }: Props) {
                   <Pressable key={item.bugId} style={[styles.tradeBugChip, tradeRequestId === item.bugId && styles.tradeChipActive]} onPress={() => setTradeRequestId(item.bugId)}>
                     <BugArtImage bugId={item.bugId} size={34} />
                     <Text style={[styles.tradeChipText, tradeRequestId === item.bugId && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                    <Text style={[styles.tradeChipMeta, tradeRequestId === item.bugId && styles.tradeChipTextActive]}>{item.count === 1 ? t("bugdex.last") : `x${item.count}`}</Text>
+                    <Text style={[styles.tradeRarityPill, { backgroundColor: rarityColors[bugRarity(item.bugId)] }]}>{rarityLabel(bugRarity(item.bugId), t)}</Text>
+                    {item.count > 1 && <Text style={[styles.tradeChipMeta, tradeRequestId === item.bugId && styles.tradeChipTextActive]}>x{item.count}</Text>}
                   </Pressable>
                 ))}
               </View>
@@ -435,7 +465,7 @@ export function BugDexScreen({ user, onBack }: Props) {
         {incomingTrades.map((trade) => (
           <View key={trade.id} style={styles.tradeRequest}>
             <Text style={styles.tradeRequestTitle}>{trade.fromUserName}</Text>
-            <Text style={styles.tradeRequestText}>{t("bugdex.tradeFor", { offer: bugName(trade.offerBugId), request: bugName(trade.requestBugId) })}</Text>
+            <Text style={styles.tradeRequestText}>{t("bugdex.tradeFor", { offer: bugTradeLabel(trade.offerBugId), request: bugTradeLabel(trade.requestBugId) })}</Text>
             <View style={styles.tradeActions}>
               <Pressable style={styles.acceptButton} disabled={tradeBusy === trade.id} onPress={() => respondTrade(trade, true)}>
                 <Text style={styles.actionText}>{t("bugdex.accept")}</Text>
@@ -447,7 +477,7 @@ export function BugDexScreen({ user, onBack }: Props) {
           </View>
         ))}
         {outgoingTrades.map((trade) => (
-          <Text key={trade.id} style={styles.tradePending}>{t("bugdex.openTo", { bug: bugName(trade.offerBugId), name: trade.toUserName })}</Text>
+          <Text key={trade.id} style={styles.tradePending}>{t("bugdex.openTo", { bug: bugTradeLabel(trade.offerBugId), name: trade.toUserName })}</Text>
         ))}
         {!!tradeError && <Text style={sharedStyles.error}>{serviceErrorText(tradeError)}</Text>}
       </View>
@@ -485,7 +515,7 @@ export function BugDexScreen({ user, onBack }: Props) {
                         >
                           <BugArtImage bugId={item.bugId} size={32} />
                           <Text style={[styles.upgradeChoiceText, selected && styles.upgradeChoiceTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                          <Text style={[styles.upgradeChoiceCount, selected && styles.upgradeChoiceTextActive]}>{item.count === 1 ? t("bugdex.last") : `x${item.count}`}</Text>
+                          {item.count > 1 && <Text style={[styles.upgradeChoiceCount, selected && styles.upgradeChoiceTextActive]}>x{item.count}</Text>}
                         </Pressable>
                       );
                     })}
@@ -511,7 +541,7 @@ export function BugDexScreen({ user, onBack }: Props) {
         <Text style={sharedStyles.secondaryButtonText}>{t("common.back")}</Text>
       </Pressable>
       <BugDexUnlockModal drop={drop} onClose={() => setDrop(null)} />
-      <TradeAnimationModal currentUser={user} trade={completedTrade} onClose={() => setCompletedTrade(null)} />
+      <TradeAnimationModal currentUser={user} trade={completedTrade} onClose={closeTradeResult} />
     </ScrollView>
   );
 }
@@ -863,6 +893,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     marginTop: 2
+  },
+  tradeRarityPill: {
+    borderRadius: 999,
+    color: "#ffffff",
+    fontSize: 8,
+    fontWeight: "900",
+    marginTop: 3,
+    maxWidth: "100%",
+    overflow: "hidden",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    textAlign: "center"
   },
   tradeButton: {
     alignItems: "center",
