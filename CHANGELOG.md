@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.2
+
+- Beweeg radar gebruikt Health Connect robuuster voor Google Fit, Samsung Health, Huawei via Health Sync en andere bron-apps.
+- Stappen worden via Health Connect aggregate gelezen om dubbeltelling tussen bronnen te beperken.
+- Afstand telt alleen nog binnen geldige walking/running/cycling trainingen.
+- Home toont Health Connect datatype-status en een info-knop met koppelhulp.
+- Herbruikbare app-basisdocumentatie toegevoegd voor toekomstige apps.
+
 ## 1.4.1
 
 - Home Claim knop voor Beweeg radar verschijnt alleen wanneer er echt km-rewards te claimen zijn.

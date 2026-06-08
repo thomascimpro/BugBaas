@@ -10,12 +10,15 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
+import kotlin.math.max
 
 data class MovementGoalSnapshot(
   val earned: Int,
@@ -25,10 +28,20 @@ data class MovementGoalSnapshot(
   val targetKm: Double
 )
 
+data class MovementDataTypeSnapshot(
+  val available: Boolean,
+  val id: String,
+  val label: String,
+  val lastSeenAt: Double? = null,
+  val lastSeenLabel: String? = null,
+  val reason: String? = null
+)
+
 data class MovementProgressSnapshot(
   val available: Boolean,
   val awardedToday: Int,
   val claimableRewards: Int,
+  val dataTypes: List<MovementDataTypeSnapshot>,
   val goals: List<MovementGoalSnapshot>,
   val maxRewards: Int,
   val reason: String? = null
@@ -72,7 +85,7 @@ object MovementRadarNative {
   }
 
   suspend fun claimAvailable(context: Context): MovementClaimSnapshot {
-    val snapshot = readExerciseSnapshot(context)
+    val snapshot = readHealthConnectSnapshot(context)
     if (!snapshot.available) return MovementClaimSnapshot(0, emptyList(), 0.0, snapshot.reason)
 
     val today = localDayId()
@@ -94,8 +107,8 @@ object MovementRadarNative {
   }
 
   suspend fun progress(context: Context): MovementProgressSnapshot {
-    val snapshot = readExerciseSnapshot(context)
-    if (!snapshot.available) return emptyProgress(snapshot.reason ?: "health_error")
+    val snapshot = readHealthConnectSnapshot(context)
+    if (!snapshot.available) return emptyProgress(snapshot.reason ?: "health_error", snapshot.dataTypes)
 
     val today = localDayId()
     val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -106,6 +119,7 @@ object MovementRadarNative {
       available = true,
       awardedToday = awardedToday,
       claimableRewards = claimable,
+      dataTypes = snapshot.dataTypes,
       goals = listOf(
         makeGoal("walking", "Lopen", snapshot.walkingMeters, walkingMetersPerRadarBug),
         makeGoal("running", "Hardlopen", snapshot.runningMeters, runningMetersPerRadarBug),
@@ -117,62 +131,178 @@ object MovementRadarNative {
 
   fun isMovementAction(action: String?): Boolean = action == actionMovementCheck
 
-  private suspend fun readExerciseSnapshot(context: Context): ExerciseSnapshot {
+  private suspend fun readHealthConnectSnapshot(context: Context): ExerciseSnapshot {
     val status = HealthConnectClient.getSdkStatus(context)
-    if (status != HealthConnectClient.SDK_AVAILABLE) return ExerciseSnapshot(false, reason = "health_connect_unavailable")
+    if (status != HealthConnectClient.SDK_AVAILABLE) {
+      return ExerciseSnapshot(false, dataTypes = unavailableDataTypes("health_connect_unavailable"), reason = "health_connect_unavailable")
+    }
 
     return try {
       val client = HealthConnectClient.getOrCreate(context)
-      val permissions = healthPermissions()
       val granted = client.permissionController.getGrantedPermissions()
-      if (!granted.containsAll(permissions)) return ExerciseSnapshot(false, reason = "health_permission")
+      val canReadSteps = granted.contains(HealthPermission.getReadPermission(StepsRecord::class))
+      val canReadDistance = granted.contains(HealthPermission.getReadPermission(DistanceRecord::class))
+      val canReadExercise = granted.contains(HealthPermission.getReadPermission(ExerciseSessionRecord::class))
+      val dataTypes = buildDataTypeStatuses(client, canReadSteps, canReadDistance, canReadExercise)
+      if (!canReadSteps && !canReadDistance && !canReadExercise) {
+        return ExerciseSnapshot(false, dataTypes = dataTypes, reason = "health_permission")
+      }
 
       val zone = ZoneId.systemDefault()
       val start = LocalDate.now(zone).atStartOfDay(zone).toInstant()
       val end = Instant.now()
-      val sessions = client.readRecords(
-        ReadRecordsRequest(
-          recordType = ExerciseSessionRecord::class,
-          timeRangeFilter = TimeRangeFilter.between(start, end)
-        )
-      ).records
+      val sessions = if (canReadExercise) readMovementSessions(client, start, end) else emptyList()
 
       var walkingMeters = 0.0
       var runningMeters = 0.0
       var cyclingMeters = 0.0
-      for (session in sessions) {
-        val bucket = exerciseBucket(session.exerciseType) ?: continue
-        val distance = distanceMetersForSession(client, session.startTime, session.endTime)
-        when (bucket) {
-          "walking" -> walkingMeters += distance
-          "running" -> runningMeters += distance
-          "cycling" -> cyclingMeters += distance
+      for (session in nonOverlappingSessions(sessions)) {
+        val distanceMeters = if (canReadDistance) aggregateDistanceMeters(client, session.start, session.end) else 0.0
+        val walkingStepMeters = if (canReadSteps && session.bucket == "walking") {
+          aggregateSteps(client, session.start, session.end) * estimatedMetersPerStep
+        } else {
+          0.0
+        }
+        when (session.bucket) {
+          "walking" -> walkingMeters += max(distanceMeters, walkingStepMeters)
+          "running" -> runningMeters += distanceMeters
+          "cycling" -> cyclingMeters += distanceMeters
         }
       }
-      walkingMeters = maxOf(walkingMeters, stepMetersForRange(client, start, end))
-      ExerciseSnapshot(true, walkingMeters, runningMeters, cyclingMeters)
+
+      if (canReadSteps) {
+        val gaps = gapsOutsideSessions(start, end, sessions)
+        val gapSteps = gaps.sumOf { aggregateSteps(client, it.start, it.end) }
+        walkingMeters += gapSteps * estimatedMetersPerStep
+      }
+
+      ExerciseSnapshot(true, walkingMeters, runningMeters, cyclingMeters, dataTypes)
     } catch (_: Exception) {
-      ExerciseSnapshot(false, reason = "health_error")
+      ExerciseSnapshot(false, dataTypes = unavailableDataTypes("health_error"), reason = "health_error")
     }
   }
 
-  private suspend fun distanceMetersForSession(client: HealthConnectClient, start: Instant, end: Instant): Double {
+  private suspend fun readMovementSessions(client: HealthConnectClient, start: Instant, end: Instant): List<MovementSession> {
+    return client.readRecords(
+      ReadRecordsRequest(
+        recordType = ExerciseSessionRecord::class,
+        timeRangeFilter = TimeRangeFilter.between(start, end)
+      )
+    ).records
+      .mapNotNull { session ->
+        val bucket = exerciseBucket(session.exerciseType) ?: return@mapNotNull null
+        val clippedStart = maxInstant(start, session.startTime)
+        val clippedEnd = minInstant(end, session.endTime)
+        if (!clippedEnd.isAfter(clippedStart)) null else MovementSession(bucket, clippedStart, clippedEnd)
+      }
+      .sortedBy { it.start }
+  }
+
+  private suspend fun aggregateSteps(client: HealthConnectClient, start: Instant, end: Instant): Long {
+    if (!end.isAfter(start)) return 0
+    val response = client.aggregate(
+      AggregateRequest(
+        metrics = setOf(StepsRecord.COUNT_TOTAL),
+        timeRangeFilter = TimeRangeFilter.between(start, end)
+      )
+    )
+    return response[StepsRecord.COUNT_TOTAL] ?: 0L
+  }
+
+  private suspend fun aggregateDistanceMeters(client: HealthConnectClient, start: Instant, end: Instant): Double {
+    if (!end.isAfter(start)) return 0.0
+    val response = client.aggregate(
+      AggregateRequest(
+        metrics = setOf(DistanceRecord.DISTANCE_TOTAL),
+        timeRangeFilter = TimeRangeFilter.between(start, end)
+      )
+    )
+    return response[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+  }
+
+  private suspend fun buildDataTypeStatuses(
+    client: HealthConnectClient,
+    canReadSteps: Boolean,
+    canReadDistance: Boolean,
+    canReadExercise: Boolean
+  ): List<MovementDataTypeSnapshot> {
+    val zone = ZoneId.systemDefault()
+    val end = Instant.now()
+    val start = LocalDate.now(zone).minusDays(30).atStartOfDay(zone).toInstant()
+    return listOf(
+      dataTypeStatus("steps", "Stappen", canReadSteps, latestStepsAt(client, start, end)),
+      dataTypeStatus("distance", "Afstand", canReadDistance, latestDistanceAt(client, start, end)),
+      dataTypeStatus("exercise", "Trainingen", canReadExercise, latestExerciseAt(client, start, end))
+    )
+  }
+
+  private fun dataTypeStatus(id: String, label: String, hasPermission: Boolean, latest: Instant?): MovementDataTypeSnapshot {
+    if (!hasPermission) return MovementDataTypeSnapshot(false, id, label, reason = "health_permission")
+    if (latest == null) return MovementDataTypeSnapshot(false, id, label, reason = "no_data")
+    return MovementDataTypeSnapshot(
+      available = true,
+      id = id,
+      label = label,
+      lastSeenAt = latest.toEpochMilli().toDouble(),
+      lastSeenLabel = formatLastSeen(latest)
+    )
+  }
+
+  private suspend fun latestStepsAt(client: HealthConnectClient, start: Instant, end: Instant): Instant? {
+    return client.readRecords(
+      ReadRecordsRequest(
+        recordType = StepsRecord::class,
+        timeRangeFilter = TimeRangeFilter.between(start, end),
+        ascendingOrder = false,
+        pageSize = 1
+      )
+    ).records.firstOrNull()?.endTime
+  }
+
+  private suspend fun latestDistanceAt(client: HealthConnectClient, start: Instant, end: Instant): Instant? {
     return client.readRecords(
       ReadRecordsRequest(
         recordType = DistanceRecord::class,
-        timeRangeFilter = TimeRangeFilter.between(start, end)
+        timeRangeFilter = TimeRangeFilter.between(start, end),
+        ascendingOrder = false,
+        pageSize = 1
       )
-    ).records.sumOf { it.distance.inMeters }
+    ).records.firstOrNull()?.endTime
   }
 
-  private suspend fun stepMetersForRange(client: HealthConnectClient, start: Instant, end: Instant): Double {
-    val steps = client.readRecords(
+  private suspend fun latestExerciseAt(client: HealthConnectClient, start: Instant, end: Instant): Instant? {
+    return client.readRecords(
       ReadRecordsRequest(
-        recordType = StepsRecord::class,
-        timeRangeFilter = TimeRangeFilter.between(start, end)
+        recordType = ExerciseSessionRecord::class,
+        timeRangeFilter = TimeRangeFilter.between(start, end),
+        ascendingOrder = false,
+        pageSize = 1
       )
-    ).records.sumOf { it.count }
-    return steps * estimatedMetersPerStep
+    ).records.firstOrNull()?.endTime
+  }
+
+  private fun nonOverlappingSessions(sessions: List<MovementSession>): List<MovementSession> {
+    val result = mutableListOf<MovementSession>()
+    var cursor: Instant? = null
+    for (session in sessions.sortedBy { it.start }) {
+      val start = cursor?.let { maxInstant(it, session.start) } ?: session.start
+      if (session.end.isAfter(start)) {
+        result.add(MovementSession(session.bucket, start, session.end))
+        cursor = session.end
+      }
+    }
+    return result
+  }
+
+  private fun gapsOutsideSessions(start: Instant, end: Instant, sessions: List<MovementSession>): List<TimeWindow> {
+    val gaps = mutableListOf<TimeWindow>()
+    var cursor = start
+    for (session in nonOverlappingSessions(sessions)) {
+      if (session.start.isAfter(cursor)) gaps.add(TimeWindow(cursor, session.start))
+      if (session.end.isAfter(cursor)) cursor = session.end
+    }
+    if (end.isAfter(cursor)) gaps.add(TimeWindow(cursor, end))
+    return gaps
   }
 
   private fun earnedUnits(snapshot: ExerciseSnapshot): Int {
@@ -194,11 +324,12 @@ object MovementRadarNative {
     )
   }
 
-  private fun emptyProgress(reason: String): MovementProgressSnapshot {
+  private fun emptyProgress(reason: String, dataTypes: List<MovementDataTypeSnapshot> = unavailableDataTypes(reason)): MovementProgressSnapshot {
     return MovementProgressSnapshot(
       available = false,
       awardedToday = 0,
       claimableRewards = 0,
+      dataTypes = dataTypes,
       goals = listOf(
         makeGoal("walking", "Lopen", 0.0, walkingMetersPerRadarBug),
         makeGoal("running", "Hardlopen", 0.0, runningMetersPerRadarBug),
@@ -206,6 +337,14 @@ object MovementRadarNative {
       ),
       maxRewards = maxMovementRadarBugsPerDay,
       reason = reason
+    )
+  }
+
+  private fun unavailableDataTypes(reason: String): List<MovementDataTypeSnapshot> {
+    return listOf(
+      MovementDataTypeSnapshot(false, "steps", "Stappen", reason = reason),
+      MovementDataTypeSnapshot(false, "distance", "Afstand", reason = reason),
+      MovementDataTypeSnapshot(false, "exercise", "Trainingen", reason = reason)
     )
   }
 
@@ -230,19 +369,46 @@ object MovementRadarNative {
     )
   }
 
+  private fun formatLastSeen(instant: Instant): String {
+    val zone = ZoneId.systemDefault()
+    val date = instant.atZone(zone).toLocalDate()
+    val today = LocalDate.now(zone)
+    return when (date) {
+      today -> "vandaag"
+      today.minusDays(1) -> "gisteren"
+      else -> date.format(DateTimeFormatter.ofPattern("dd-MM"))
+    }
+  }
+
   private fun localDayId(): String {
     val calendar = Calendar.getInstance()
     return "${calendar.get(Calendar.YEAR)}-${calendar.get(Calendar.DAY_OF_YEAR)}"
   }
+
+  private fun maxInstant(first: Instant, second: Instant): Instant = if (first.isAfter(second)) first else second
+
+  private fun minInstant(first: Instant, second: Instant): Instant = if (first.isBefore(second)) first else second
 
   private data class ExerciseSnapshot(
     val available: Boolean,
     val walkingMeters: Double = 0.0,
     val runningMeters: Double = 0.0,
     val cyclingMeters: Double = 0.0,
+    val dataTypes: List<MovementDataTypeSnapshot> = emptyList(),
     val reason: String? = null
   ) {
     val estimatedKm: Double
       get() = (walkingMeters + runningMeters + cyclingMeters) / 1000.0
   }
+
+  private data class MovementSession(
+    val bucket: String,
+    val start: Instant,
+    val end: Instant
+  )
+
+  private data class TimeWindow(
+    val start: Instant,
+    val end: Instant
+  )
 }

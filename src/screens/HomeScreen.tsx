@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { DimensionValue, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, DimensionValue, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { RouteName } from "../../App";
 import { BugArtImage } from "../components/BugArtImage";
 import { TierBadge } from "../components/TierBadge";
 import { listBugs } from "../services/bugService";
 import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
-import { claimMovementRadarBonuses, getMovementRadarProgress, MovementRadarProgress } from "../services/movementRadarService";
+import { claimMovementRadarBonuses, getMovementRadarProgress, MovementDataTypeStatus, MovementRadarProgress } from "../services/movementRadarService";
 import { BugDexEntry, bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
 import { listUsers } from "../services/userService";
 import { weeklyMissionLabel, weeklyMissionSet } from "../services/weeklyMissionService";
@@ -31,6 +31,9 @@ export function HomeScreen({ user, onNavigate }: Props) {
   const dexPreviewEntries = inventory.slice(0, 3).map((item) => entryByBugId(item.bugId)).filter((entry): entry is BugDexEntry => Boolean(entry));
   const missions = weeklyMissionSet(user, bugs);
   const canClaimMovement = Boolean(movementProgress && movementProgress.claimableRewards > 0);
+  const movementDataTypes = movementProgress?.dataTypes ?? [];
+  const hasMovementSourceData = movementDataTypes.some((item) => item.available);
+  const showMovementSourceHelp = Boolean(movementProgress && movementDataTypes.length > 0 && !hasMovementSourceData);
 
   useEffect(() => {
     listUsers().then(setUsers);
@@ -96,7 +99,17 @@ export function HomeScreen({ user, onNavigate }: Props) {
       {movementProgress && (
         <View style={styles.movementCard}>
           <View style={styles.movementHeader}>
-            <Text style={styles.movementTitle}>Beweeg radar</Text>
+            <View style={styles.movementTitleRow}>
+              <Text style={styles.movementTitle}>Beweeg radar</Text>
+              <Pressable
+                accessibilityLabel="Health Connect uitleg"
+                hitSlop={10}
+                onPress={showMovementConnectInfo}
+                style={({ pressed }) => [styles.movementInfoButton, pressed && styles.movementInfoButtonPressed]}
+              >
+                <Text style={styles.movementInfoText}>i</Text>
+              </Pressable>
+            </View>
             <View style={styles.movementHeaderActions}>
               <Text style={styles.movementReward}>{movementProgress.awardedToday}/{movementProgress.maxRewards} bugs</Text>
               {canClaimMovement && (
@@ -130,6 +143,18 @@ export function HomeScreen({ user, onNavigate }: Props) {
               );
             })}
           </View>
+          <View style={styles.movementSources}>
+            {movementDataTypes.map((item) => (
+              <View key={item.id} style={[styles.movementSourcePill, item.available && styles.movementSourcePillActive]}>
+                <Text style={[styles.movementSourceText, item.available && styles.movementSourceTextActive]}>{item.label}: {movementStatusText(item)}</Text>
+              </View>
+            ))}
+          </View>
+          {showMovementSourceHelp && (
+            <Text style={styles.movementHelp}>
+              Koppel Google Fit, Samsung Health, Huawei Health via Health Sync of een andere bron-app met Health Connect.
+            </Text>
+          )}
         </View>
       )}
       <View style={[styles.stage, styles.stageHidden]}>
@@ -254,6 +279,31 @@ function formatKm(km: number): string {
   return km.toFixed(1).replace(".0", "");
 }
 
+function movementStatusText(status: MovementDataTypeStatus): string {
+  if (status.available) return status.lastSeenLabel ? `laatst ${status.lastSeenLabel}` : "beschikbaar";
+  if (status.reason === "health_permission") return "geen toegang";
+  if (status.reason === "health_connect_unavailable") return "niet beschikbaar";
+  if (status.reason === "health_error") return "fout";
+  return "geen data";
+}
+
+function showMovementConnectInfo(): void {
+  Alert.alert(
+    "Beweeg radar koppelen",
+    [
+      "BugBaas leest alleen Health Connect.",
+      "",
+      "Google Fit: zet in Fit de Health Connect-sync aan.",
+      "Samsung Health: geef Samsung Health toegang tot Health Connect.",
+      "Huawei: gebruik Health Sync om Huawei Health naar Health Connect te schrijven.",
+      "Andere apps: koppel ze als bron-app aan Health Connect.",
+      "",
+      "Geef daarna BugBaas toegang tot Stappen, Afstand en Trainingen."
+    ].join("\n"),
+    [{ text: "OK" }]
+  );
+}
+
 const styles = StyleSheet.create({
   content: {
     paddingBottom: 160
@@ -363,6 +413,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900"
   },
+  movementTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 7
+  },
+  movementInfoButton: {
+    alignItems: "center",
+    backgroundColor: "#e8f1eb",
+    borderColor: "#b8cbbd",
+    borderRadius: 10,
+    borderWidth: 1,
+    height: 20,
+    justifyContent: "center",
+    width: 20
+  },
+  movementInfoButtonPressed: {
+    opacity: 0.7
+  },
+  movementInfoText: {
+    color: "#15724f",
+    fontSize: 12,
+    fontWeight: "900"
+  },
   movementReward: {
     color: "#15724f",
     fontSize: 12,
@@ -420,6 +493,39 @@ const styles = StyleSheet.create({
   movementFill: {
     backgroundColor: "#15724f",
     height: "100%"
+  },
+  movementSources: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 10
+  },
+  movementSourcePill: {
+    backgroundColor: "#eef4ef",
+    borderColor: "#d6e3da",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 5
+  },
+  movementSourcePillActive: {
+    backgroundColor: "#e3f5e9",
+    borderColor: "#97caa8"
+  },
+  movementSourceText: {
+    color: "#6c7a72",
+    fontSize: 10,
+    fontWeight: "900"
+  },
+  movementSourceTextActive: {
+    color: "#15724f"
+  },
+  movementHelp: {
+    color: "#52665d",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 15,
+    marginTop: 8
   },
   stage: {
     alignItems: "center",
