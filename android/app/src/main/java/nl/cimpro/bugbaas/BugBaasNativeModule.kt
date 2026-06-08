@@ -209,6 +209,18 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
         goals.pushMap(item)
       }
       result.putArray("goals", goals)
+      val dataTypes = Arguments.createArray()
+      for (dataType in progress.dataTypes) {
+        val item = Arguments.createMap()
+        item.putBoolean("available", dataType.available)
+        item.putString("id", dataType.id)
+        item.putString("label", dataType.label)
+        dataType.lastSeenAt?.let { item.putDouble("lastSeenAt", it) }
+        dataType.lastSeenLabel?.let { item.putString("lastSeenLabel", it) }
+        dataType.reason?.let { item.putString("reason", it) }
+        dataTypes.pushMap(item)
+      }
+      result.putArray("dataTypes", dataTypes)
       promise.resolve(result)
     }
   }
