@@ -171,7 +171,7 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
 
   const translateX = useMemo(() => {
     if (!activeBug) return 0;
-    const hitboxWidth = activeBug.size;
+    const hitboxWidth = activeBug.size + 130;
     const minLeft = 10;
     const maxLeft = Math.max(minLeft, width - hitboxWidth - 10);
     const range = maxLeft - minLeft;
@@ -183,7 +183,7 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
 
   const translateY = useMemo(() => {
     if (!activeBug) return 0;
-    const hitboxHeight = activeBug.size + 30;
+    const hitboxHeight = activeBug.size + 90;
     const minTop = Math.max(24, height * 0.1);
     const maxTop = Math.max(minTop, height - hitboxHeight - 96);
     const range = maxTop - minTop;
@@ -325,7 +325,7 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
           }
         ]}
       >
-        <View pointerEvents="box-none" style={[styles.bugVisual, { minHeight: activeBug.size + 30, width: activeBug.size }]}>
+        <Pressable hitSlop={42} onPress={tapBug} style={[styles.hitbox, { minHeight: activeBug.size + 90, minWidth: activeBug.size + 130 }]}>
           {!caught && (
             <View pointerEvents="none" style={[styles.timerBadge, { height: timerSize, width: timerSize }]}>
               {timerSegments.map((segment) => {
@@ -359,11 +359,9 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
             </View>
           ) : (
             <>
-              <Pressable onPress={tapBug} style={[styles.hitbox, { height: activeBug.size, width: activeBug.size }]}>
-                <Animated.View style={{ transform: bugArtTransform }}>
-                  <BugArtImage bugId={activeBug.bugId} size={activeBug.size} />
-                </Animated.View>
-              </Pressable>
+              <Animated.View style={{ transform: bugArtTransform }}>
+                <BugArtImage bugId={activeBug.bugId} size={activeBug.size} />
+              </Animated.View>
               {activeBug.requiredTaps > 1 && (
                 <View pointerEvents="none" style={[styles.hpBar, { width: Math.max(52, activeBug.size * 0.86) }]}>
                   {Array.from({ length: activeBug.requiredTaps }).map((_, index) => (
@@ -373,7 +371,7 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
               )}
             </>
           )}
-        </View>
+        </Pressable>
       </Animated.View>
     </View>
   );
@@ -461,16 +459,12 @@ const styles = StyleSheet.create({
   bug: {
     position: "absolute"
   },
-  bugVisual: {
-    alignItems: "center",
-    justifyContent: "flex-start"
-  },
   hitbox: {
     alignItems: "center",
     justifyContent: "center"
   },
   hpBar: {
-    bottom: 0,
+    bottom: 20,
     flexDirection: "row",
     gap: 3,
     height: 8,
@@ -493,8 +487,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     justifyContent: "center",
     position: "absolute",
-    right: -9,
-    top: -9,
+    right: 56,
+    top: 36,
     zIndex: 2
   },
   timerSegment: {

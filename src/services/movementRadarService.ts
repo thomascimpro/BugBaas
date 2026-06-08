@@ -54,8 +54,10 @@ export type MovementRadarProgress = {
 };
 
 const nativeModule = NativeModules.BugBaasNative as {
+  claimMovementRadarBonuses?: () => Promise<MovementRadarResult>;
   enqueueRadarBugs?: (bugIds: string[]) => Promise<number>;
   getExerciseDistanceSnapshot?: () => Promise<ExerciseDistanceSnapshot>;
+  getMovementRadarProgress?: () => Promise<MovementRadarProgress>;
   getStepCounterSnapshot?: () => Promise<StepSnapshot>;
   requestHealthPermissions?: () => Promise<boolean>;
 } | undefined;
@@ -71,6 +73,16 @@ const maxMovementRadarBugsPerDay = 5;
 export async function claimMovementRadarBonuses(uid: string): Promise<MovementRadarResult> {
   if (Platform.OS !== "android") return emptyResult("platform");
   if (!nativeModule?.getStepCounterSnapshot || !nativeModule.enqueueRadarBugs) return emptyResult("native");
+
+  if (nativeModule.claimMovementRadarBonuses) {
+    const nativeResult = await nativeModule.claimMovementRadarBonuses();
+    if (nativeResult.reason === "health_permission" && await requestHealthConnectPermissionsOnce(uid)) {
+      return emptyResult("health_permission_requested");
+    }
+    if (nativeResult.reason !== "health_connect_unavailable" && nativeResult.reason !== "health_permission" && nativeResult.reason !== "health_error") {
+      return nativeResult;
+    }
+  }
 
   const healthResult = await claimHealthConnectBonuses(uid);
   if (healthResult.reason === "health_permission" && await requestHealthConnectPermissionsOnce(uid)) {
@@ -123,6 +135,11 @@ export async function claimMovementRadarBonuses(uid: string): Promise<MovementRa
 export async function getMovementRadarProgress(uid: string): Promise<MovementRadarProgress> {
   if (Platform.OS !== "android") return emptyProgress("platform");
   if (!nativeModule?.getStepCounterSnapshot) return emptyProgress("native");
+
+  if (nativeModule.getMovementRadarProgress) {
+    const nativeProgress = await nativeModule.getMovementRadarProgress();
+    if (nativeProgress.available || nativeProgress.reason === "health_permission") return nativeProgress;
+  }
 
   const healthProgress = await getHealthConnectProgress(uid);
   if (healthProgress.available || healthProgress.reason === "health_permission") return healthProgress;

@@ -188,6 +188,47 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
     promise.resolve(added)
   }
 
+  @ReactMethod
+  fun getMovementRadarProgress(promise: Promise) {
+    scope.launch {
+      val progress = MovementRadarNative.progress(reactContext)
+      val result = Arguments.createMap()
+      result.putBoolean("available", progress.available)
+      result.putInt("awardedToday", progress.awardedToday)
+      result.putInt("claimableRewards", progress.claimableRewards)
+      result.putInt("maxRewards", progress.maxRewards)
+      progress.reason?.let { result.putString("reason", it) }
+      val goals = Arguments.createArray()
+      for (goal in progress.goals) {
+        val item = Arguments.createMap()
+        item.putInt("earned", goal.earned)
+        item.putString("id", goal.id)
+        item.putDouble("km", goal.km)
+        item.putString("label", goal.label)
+        item.putDouble("targetKm", goal.targetKm)
+        goals.pushMap(item)
+      }
+      result.putArray("goals", goals)
+      promise.resolve(result)
+    }
+  }
+
+  @ReactMethod
+  fun claimMovementRadarBonuses(promise: Promise) {
+    scope.launch {
+      val claim = MovementRadarNative.claimAvailable(reactContext)
+      val result = Arguments.createMap()
+      result.putInt("awarded", claim.awarded)
+      result.putDouble("estimatedKm", claim.estimatedKm)
+      claim.reason?.let { result.putString("reason", it) }
+      val bugIds = Arguments.createArray()
+      for (bugId in claim.bugIds) bugIds.pushString(bugId)
+      result.putArray("bugIds", bugIds)
+      MovementRadarNative.schedulePeriodicCheck(reactContext)
+      promise.resolve(result)
+    }
+  }
+
   private suspend fun distanceMetersForSession(client: HealthConnectClient, start: Instant, end: Instant): Double {
     return client.readRecords(
       ReadRecordsRequest(
@@ -223,6 +264,7 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
     return setOf(
       HealthPermission.getReadPermission(DistanceRecord::class),
       HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+      HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
       HealthPermission.getReadPermission(StepsRecord::class)
     )
   }
