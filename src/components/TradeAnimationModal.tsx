@@ -1,9 +1,17 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { entryByBugId } from "../services/bugDexService";
-import { useI18n } from "../services/i18n";
+import { rarityLabel, useI18n } from "../services/i18n";
+import { BugDexRarity } from "../services/pointsService";
 import { TradeRequest, User } from "../types";
 import { BugArtImage } from "./BugArtImage";
+
+const rarityColors: Record<BugDexRarity, string> = {
+  Gewoon: "#6f7f5f",
+  Zeldzaam: "#15724f",
+  Episch: "#356d7c",
+  Legendarisch: "#b83227"
+};
 
 type Props = {
   currentUser: User;
@@ -62,6 +70,8 @@ export function TradeAnimationModal({ currentUser, trade, onClose }: Props) {
   const partnerName = isReceiver ? trade.fromUserName : trade.toUserName;
   const receivedEntry = entryByBugId(receivedBugId);
   const sentEntry = entryByBugId(sentBugId);
+  const receivedRarity = receivedEntry?.rarity ?? "Gewoon";
+  const sentRarity = sentEntry?.rarity ?? "Gewoon";
   const leftX = swap.interpolate({ inputRange: [0, 0.2, 0.76, 1], outputRange: [0, 0, 104, 104] });
   const rightX = swap.interpolate({ inputRange: [0, 0.2, 0.76, 1], outputRange: [0, 0, -104, -104] });
   const leftY = swap.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -34, 0] });
@@ -85,9 +95,11 @@ export function TradeAnimationModal({ currentUser, trade, onClose }: Props) {
 
             <Animated.View style={[styles.tradePod, styles.leftPod, { transform: [{ translateX: leftX }, { translateY: leftY }] }]}>
               <BugArtImage bugId={sentBugId} size={78} />
+              <Text style={[styles.podRarity, { backgroundColor: rarityColors[sentRarity] }]}>{rarityLabel(sentRarity, t)}</Text>
             </Animated.View>
             <Animated.View style={[styles.tradePod, styles.rightPod, { transform: [{ translateX: rightX }, { translateY: rightY }] }]}>
               <BugArtImage bugId={receivedBugId} size={78} />
+              <Text style={[styles.podRarity, { backgroundColor: rarityColors[receivedRarity] }]}>{rarityLabel(receivedRarity, t)}</Text>
             </Animated.View>
           </View>
 
@@ -97,7 +109,9 @@ export function TradeAnimationModal({ currentUser, trade, onClose }: Props) {
             </View>
             <Text style={styles.resultLabel}>{t("trade.received")}</Text>
             <Text style={styles.resultName}>{receivedEntry?.name ?? "Bug"}</Text>
+            <Text style={[styles.resultRarity, { backgroundColor: rarityColors[receivedRarity] }]}>{rarityLabel(receivedRarity, t)}</Text>
             <Text style={styles.resultMeta}>{t("trade.gave", { name: sentEntry?.name ?? "Bug" })}</Text>
+            <Text style={[styles.sentRarity, { color: rarityColors[sentRarity] }]}>{rarityLabel(sentRarity, t)}</Text>
           </Animated.View>
 
           <Pressable style={styles.button} onPress={onClose}>
@@ -183,10 +197,22 @@ const styles = StyleSheet.create({
     borderColor: "#c6d3cc",
     borderRadius: 8,
     borderWidth: 1,
-    height: 100,
+    height: 112,
     justifyContent: "center",
     position: "absolute",
     width: 100
+  },
+  podRarity: {
+    borderRadius: 999,
+    color: "#ffffff",
+    fontSize: 8,
+    fontWeight: "900",
+    marginTop: -4,
+    maxWidth: 88,
+    overflow: "hidden",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    textAlign: "center"
   },
   leftPod: {
     left: 18
@@ -232,6 +258,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     marginTop: 4,
+    textAlign: "center"
+  },
+  resultRarity: {
+    borderRadius: 999,
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 6,
+    overflow: "hidden",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    textAlign: "center"
+  },
+  sentRarity: {
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 3,
     textAlign: "center"
   },
   button: {
