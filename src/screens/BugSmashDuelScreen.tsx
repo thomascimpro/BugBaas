@@ -6,6 +6,7 @@ import { BugDexDropResult, grantBugDexReward, listBugDexInventory } from "../ser
 import { activeBugSquadBonusList, BugSquadBonusCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
 import { bugSmashDuelBalanceForUser, BugSmashDuelBalance } from "../services/bugSquadGameBalance";
 import {
+  bugSmashDuelBugCount,
   bugSmashDuelDurationMs,
   bugSmashDuelStartDelayMs,
   cancelBugSmashDuel,
@@ -18,7 +19,7 @@ import {
 } from "../services/bugSmashDuelService";
 import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
 import { presenceLabel } from "../services/presenceService";
-import { BugDexRarity } from "../services/pointsService";
+import { BugDexRarity, bugDexEntries } from "../services/pointsService";
 import { entryByBugId } from "../services/bugDexService";
 import { playBugSound } from "../services/soundService";
 import { listUsers, updateUserBugSquad } from "../services/userService";
@@ -80,6 +81,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [duels, setDuels] = useState<BugSmashDuel[]>([]);
   const [activeDuelId, setActiveDuelId] = useState(initialDuelId);
   const [activeDuel, setActiveDuel] = useState<BugSmashDuel | null>(null);
+  const [trainingDuel, setTrainingDuel] = useState<BugSmashDuel | null>(null);
   const [activeSquadIds, setActiveSquadIds] = useState<string[]>(sanitizeActiveBugSquad(user.activeBugSquad));
   const [selectedOpponentId, setSelectedOpponentId] = useState(initialOpponent?.uid ?? "");
   const [busy, setBusy] = useState(false);
@@ -117,6 +119,20 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     if (rarityDiff !== 0) return rarityDiff;
     return bugName(a.bugId, t).localeCompare(bugName(b.bugId, t));
   });
+
+  function resetRunState() {
+    submittedRef.current = false;
+    scoreRef.current = 0;
+    caughtBugIdsRef.current = [];
+    comboRef.current = 0;
+    hitCountsRef.current = {};
+    hitFeedbackValues.clear();
+    lastCatchAtRef.current = 0;
+    lastHitSoundAtRef.current = 0;
+    setScore(0);
+    setCaughtBugIds([]);
+    setHitCounts({});
+  }
 
   useEffect(() => {
     let active = true;
@@ -160,18 +176,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   useEffect(() => subscribeBugSmashDuel(activeDuelId, setActiveDuel), [activeDuelId]);
 
   useEffect(() => {
-    submittedRef.current = false;
-    scoreRef.current = 0;
-    caughtBugIdsRef.current = [];
-    comboRef.current = 0;
-    hitCountsRef.current = {};
-    hitFeedbackValues.clear();
-    lastCatchAtRef.current = 0;
-    lastHitSoundAtRef.current = 0;
-    setScore(0);
-    setCaughtBugIds([]);
-    setHitCounts({});
-  }, [activeDuel?.id]);
+    resetRunState();
+  }, [activeDuel?.id, trainingDuel?.id]);
 
   useEffect(() => {
     scoreRef.current = score;
@@ -192,23 +198,25 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     : activeDuel;
 
   useEffect(() => {
-    if (!activeDuel || activeDuel.status !== "accepted" || requesterNeedsManualStart) return () => undefined;
+    const runningDuel = trainingDuel ?? activeDuel;
+    if (!runningDuel || runningDuel.status !== "accepted" || (!trainingDuel && requesterNeedsManualStart)) return () => undefined;
     const interval = setInterval(() => {
       const timestamp = Date.now();
       setNow(timestamp);
-      const effectiveStartAt = activeRequesterStartAt || activeDuel.startAt;
+      const effectiveStartAt = trainingDuel ? runningDuel.startAt : activeRequesterStartAt || runningDuel.startAt;
       const startAt = effectiveStartAt ? Date.parse(effectiveStartAt) : timestamp;
-      const endAt = startAt + activeDuel.durationMs;
+      const endAt = startAt + runningDuel.durationMs;
       if (timestamp >= endAt && !submittedRef.current) {
         submittedRef.current = true;
+        if (trainingDuel) return;
         const bonusScore = duelBonusScore(scoreRef.current, assist);
-        void submitBugSmashDuelScore(user, activeDuel.id, scoreRef.current + bonusScore, caughtBugIdsRef.current, bonusScore)
+        void submitBugSmashDuelScore(user, runningDuel.id, scoreRef.current + bonusScore, caughtBugIdsRef.current, bonusScore)
           .then((duel) => setActiveDuel(duel))
           .catch(() => setError(t("duel.submitFailed")));
       }
     }, duelGameTickMs);
     return () => clearInterval(interval);
-  }, [activeDuel?.id, activeDuel?.status, activeDuel?.startAt, activeDuel?.durationMs, activeRequesterStartAt, requesterNeedsManualStart, assist, t, user]);
+  }, [activeDuel?.id, activeDuel?.status, activeDuel?.startAt, activeDuel?.durationMs, trainingDuel?.id, trainingDuel?.startAt, trainingDuel?.durationMs, activeRequesterStartAt, requesterNeedsManualStart, assist, t, user]);
 
   async function refreshDuels() {
     setDuels(await listBugSmashDuels(user));
@@ -232,6 +240,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   async function startChallenge() {
     const opponent = opponents.find((item) => item.uid === selectedOpponentId);
     if (!opponent || busy) return;
+    setTrainingDuel(null);
     setBusy(true);
     setError("");
     setChallengeNotice(t("duel.sendingChallenge"));
@@ -323,10 +332,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   }
 
   function hitBug(bugId: string) {
-    if (!activeDuel || !isRunning(activeDuel, now)) return;
+    const runningDuel = trainingDuel ?? activeDuel;
+    if (!runningDuel || !isRunning(runningDuel, now)) return;
     const entry = entryByBugId(bugId);
     if (!entry || caughtBugIdsRef.current.includes(bugId)) return;
-    const targetIndex = activeDuel.bugIds.indexOf(bugId);
+    const targetIndex = runningDuel.bugIds.indexOf(bugId);
     const requiredTaps = requiredTapsForTarget(entry.rarity, assist, targetIndex);
     const currentHits = hitCountsRef.current;
     const nextHits = (currentHits[bugId] ?? 0) + 1;
@@ -353,20 +363,45 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   function startAcceptedDuel() {
     if (!activeDuel) return;
-    submittedRef.current = false;
-    scoreRef.current = 0;
-    caughtBugIdsRef.current = [];
-    comboRef.current = 0;
-    hitCountsRef.current = {};
-    hitFeedbackValues.clear();
-    setScore(0);
-    setCaughtBugIds([]);
-    setHitCounts({});
+    resetRunState();
     setNow(Date.now());
     setRequesterStartAtByDuelId((current) => ({
       ...current,
       [activeDuel.id]: new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString()
     }));
+  }
+
+  function startTraining() {
+    const seed = Date.now() + Math.floor(Math.random() * 100000);
+    const timestamp = new Date().toISOString();
+    resetRunState();
+    setActiveDuelId("");
+    setActiveDuel(null);
+    setError("");
+    setChallengeNotice("");
+    setNow(Date.now());
+    setTrainingDuel({
+      id: `training-${Date.now()}`,
+      fromUserId: user.uid,
+      fromUserName: user.displayName,
+      toUserId: "training",
+      toUserName: t("duel.trainingOpponent"),
+      status: "accepted",
+      seed,
+      bugIds: trainingBugIds(seed),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      startAt: new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString(),
+      durationMs: bugSmashDuelDurationMs,
+      scores: {},
+      rewardClaimedBy: []
+    });
+  }
+
+  function stopTraining() {
+    setTrainingDuel(null);
+    resetRunState();
+    setNow(Date.now());
   }
 
   function hitFeedbackFor(bugId: string) {
@@ -380,24 +415,26 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const activeScore = activeDuel?.scores?.[user.uid];
   const opponentId = activeDuel ? activeDuel.fromUserId === user.uid ? activeDuel.toUserId : activeDuel.fromUserId : "";
   const opponentScore = opponentId ? activeDuel?.scores?.[opponentId] : undefined;
-  const countdown = playableDuel?.status === "accepted" && playableDuel.startAt ? Math.max(0, Math.ceil((Date.parse(playableDuel.startAt) - now) / 1000)) : 0;
-  const remainingSeconds = playableDuel?.status === "accepted" && playableDuel.startAt ? Math.max(0, Math.ceil((Date.parse(playableDuel.startAt) + playableDuel.durationMs - now) / 1000)) : 0;
+  const gameDuel = trainingDuel ?? playableDuel;
+  const countdown = gameDuel?.status === "accepted" && gameDuel.startAt ? Math.max(0, Math.ceil((Date.parse(gameDuel.startAt) - now) / 1000)) : 0;
+  const remainingSeconds = gameDuel?.status === "accepted" && gameDuel.startAt ? Math.max(0, Math.ceil((Date.parse(gameDuel.startAt) + gameDuel.durationMs - now) / 1000)) : 0;
   const activeDuelScore = activeScore?.score ?? (submittedRef.current ? score + duelBonusScore(score, assist) : score);
   const incomingPendingDuel = activeDuel?.status === "pending" && activeDuel.toUserId === user.uid;
-  const fullscreenGame = playableDuel?.status === "accepted" && !requesterNeedsManualStart;
+  const fullscreenGame = Boolean(trainingDuel) || playableDuel?.status === "accepted" && !requesterNeedsManualStart;
+  const gameScore = trainingDuel && submittedRef.current ? score + duelBonusScore(score, assist) : trainingDuel ? score : activeDuelScore;
 
-  if (fullscreenGame && playableDuel) {
+  if (fullscreenGame && gameDuel) {
     return (
       <View style={styles.fullscreenGame}>
         <View style={styles.gameHud}>
           <View style={styles.gameHudPlayer}>
-            <Text style={styles.gameOpponent} numberOfLines={1}>{opponentLabel(playableDuel, user)}</Text>
-            <Text style={styles.gameScore}>{t("duel.yourScore", { score: activeDuelScore })}</Text>
+            <Text style={styles.gameOpponent} numberOfLines={1}>{trainingDuel ? t("duel.trainingTitle") : opponentLabel(gameDuel, user)}</Text>
+            <Text style={styles.gameScore}>{t("duel.yourScore", { score: gameScore })}</Text>
           </View>
           <Text style={styles.gameTimer}>{remainingSeconds}s</Text>
           <View style={styles.gameHudPlayer}>
-            <Text style={styles.gameOpponent} numberOfLines={1}>{opponentScore ? t("duel.theirScore", { score: opponentScore.score }) : t("duel.waitingScore")}</Text>
-            <Pressable style={styles.gameExitButton} onPress={onBack}>
+            <Text style={styles.gameOpponent} numberOfLines={1}>{trainingDuel ? t("duel.trainingNoRewardsShort") : opponentScore ? t("duel.theirScore", { score: opponentScore.score }) : t("duel.waitingScore")}</Text>
+            <Pressable style={styles.gameExitButton} onPress={trainingDuel ? stopTraining : onBack}>
               <Text style={styles.gameExitText}>x</Text>
             </Pressable>
           </View>
@@ -405,14 +442,26 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         <View style={styles.fullscreenArena}>
           {countdown > 0 ? (
             <Text style={styles.countdown}>{countdown}</Text>
-          ) : isRunning(playableDuel, now) ? (
-            renderTargets(playableDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, hitBug)
+          ) : isRunning(gameDuel, now) ? (
+            renderTargets(gameDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, hitBug)
+          ) : trainingDuel && submittedRef.current ? (
+            <View style={styles.trainingResult}>
+              <Text style={styles.trainingResultTitle}>{t("duel.trainingDone")}</Text>
+              <Text style={styles.trainingResultScore}>{t("duel.yourScore", { score: gameScore })}</Text>
+              <Text style={styles.trainingResultBody}>{t("duel.trainingNoRewards")}</Text>
+              <Pressable style={sharedStyles.button} onPress={startTraining}>
+                <Text style={sharedStyles.buttonText}>{t("duel.trainingRetry")}</Text>
+              </Pressable>
+              <Pressable style={sharedStyles.secondaryButton} onPress={stopTraining}>
+                <Text style={sharedStyles.secondaryButtonText}>{t("common.done")}</Text>
+              </Pressable>
+            </View>
           ) : (
             <ActivityIndicator color="#d7bd57" size="large" />
           )}
         </View>
         <View style={styles.gameFooter}>
-          <Text style={styles.gameFooterText}>Kies je targets. Hoge rarity kost meer taps, maar scoort veel meer.</Text>
+          <Text style={styles.gameFooterText}>{trainingDuel ? t("duel.trainingFooter") : "Kies je targets. Hoge rarity kost meer taps, maar scoort veel meer."}</Text>
         </View>
       </View>
     );
@@ -450,6 +499,15 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           <Pressable disabled={!selectedOpponentId || busy} style={[sharedStyles.button, (!selectedOpponentId || busy) && styles.disabled]} onPress={startChallenge}>
             <Text style={sharedStyles.buttonText}>{busy ? "..." : t("duel.challenge")}</Text>
           </Pressable>
+          <View style={styles.trainingPanel}>
+            <View style={styles.trainingCopy}>
+              <Text style={styles.trainingTitle}>{t("duel.trainingTitle")}</Text>
+              <Text style={styles.trainingBody}>{t("duel.trainingBody")}</Text>
+            </View>
+            <Pressable style={styles.trainingButton} onPress={startTraining}>
+              <Text style={styles.trainingButtonText}>{t("duel.trainingAction")}</Text>
+            </Pressable>
+          </View>
           {challengeNotice ? <Text style={styles.noticeText}>{challengeNotice}</Text> : null}
         </View>
       )}
@@ -761,6 +819,18 @@ function stableChance(seed: string, chance: number) {
   if (chance <= 0) return false;
   const value = seed.split("").reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) >>> 0, 0);
   return (value % 1000) / 1000 < chance;
+}
+
+function trainingBugIds(seed: number) {
+  return bugDexEntries
+    .map((entry, index) => ({ id: entry.id, sort: stableHash(`${seed}:${entry.id}:${index}`) }))
+    .sort((a, b) => a.sort - b.sort)
+    .slice(0, bugSmashDuelBugCount)
+    .map((item) => item.id);
+}
+
+function stableHash(seed: string) {
+  return seed.split("").reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) >>> 0, 0);
 }
 
 function isRunning(duel: BugSmashDuel, timestamp: number) {
@@ -1198,6 +1268,69 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900",
     textAlign: "center"
+  },
+  trainingBody: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17
+  },
+  trainingButton: {
+    alignItems: "center",
+    backgroundColor: "#102018",
+    borderRadius: 8,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 9
+  },
+  trainingButtonText: {
+    color: "#d7bd57",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  trainingCopy: {
+    flex: 1,
+    minWidth: 0
+  },
+  trainingPanel: {
+    alignItems: "center",
+    backgroundColor: "#fff8e8",
+    borderColor: "#d7bd57",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+    padding: 10
+  },
+  trainingResult: {
+    alignItems: "center",
+    gap: 10,
+    padding: 18
+  },
+  trainingResultBody: {
+    color: "#dce9df",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17,
+    textAlign: "center"
+  },
+  trainingResultScore: {
+    color: "#d7bd57",
+    fontSize: 22,
+    fontWeight: "900"
+  },
+  trainingResultTitle: {
+    color: "#ffffff",
+    fontSize: 24,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  trainingTitle: {
+    color: "#102018",
+    fontSize: 14,
+    fontWeight: "900",
+    marginBottom: 3
   },
   rarityPill: {
     borderRadius: 999,
