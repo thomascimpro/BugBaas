@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.7
+
+- Bug Smash Duel is lichter gemaakt voor Android: achtergrondbugs, foreground catch en in-app overlays draaien niet meer mee tijdens de duel-route.
+- Actieve duels gebruiken nu een fullscreen arena met minder gelijktijdige targets en minder renderdruk.
+- Duel-taps zijn beter gebalanceerd: hogere rarity kost meer taps, levert meer punten op en gewone hit-geluiden worden gethrottled voor soepelere gameplay.
+
 ## 2.1.6
 
 - Duel-uitdagingen geven nu een echte telefoonmelding aan de uitgedaagde speler zodra diens app pushmeldingen heeft geregistreerd.

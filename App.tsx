@@ -759,10 +759,12 @@ function AppContent() {
     );
   }
 
+  const duelRouteActive = route === "duel";
+
   return (
     <SafeAreaView style={styles.shell}>
       <AppBackground />
-      <WalkingBugsLayer onSplat={() => void handleBugSplat()} />
+      {!duelRouteActive && <WalkingBugsLayer onSplat={() => void handleBugSplat()} />}
       <View style={styles.content}>
         {route === "home" && (
           <HomeScreen
@@ -881,12 +883,12 @@ function AppContent() {
           <SettingsScreen settings={notificationSettings} onBack={() => setRoute("home")} onChange={updateNotificationSettings} onShowHelp={showHelpTour} />
         )}
       </View>
-      <BottomNav activeRoute={route} onNavigate={navigateMain} />
-      <InAppNotificationToast notification={notification} onClose={closeNotification} onOpen={openNotification} />
+      {!duelRouteActive && <BottomNav activeRoute={route} onNavigate={navigateMain} />}
+      {!duelRouteActive && <InAppNotificationToast notification={notification} onClose={closeNotification} onOpen={openNotification} />}
       <ForegroundCatchBug
         catchAssist={squadBonuses().catch_assist}
         catchTimeBonus={squadBonuses().catch_time}
-        enabled={foregroundBugEnabled}
+        enabled={!duelRouteActive && foregroundBugEnabled}
         forcedBugIds={pendingRadarBugIds}
         onCaught={(xp, bugId, rarity) => void handleForegroundBugCaught(xp, bugId, rarity)}
         onForcedBugConsumed={() => setPendingRadarBugIds((queue) => queue.slice(1))}
