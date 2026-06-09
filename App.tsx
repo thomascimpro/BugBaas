@@ -863,6 +863,7 @@ function AppContent() {
             onBack={() => setRoute("home")}
             onDuelAccepted={(requesterId, duelId) => notifyBugSmashDuelAccepted(requesterId, user, duelId)}
             onDuelRequest={(recipientId, duelId) => notifyBugSmashDuelRequest(recipientId, user, duelId)}
+            onUserUpdated={setUser}
             onRewardDrop={(drop) => {
               if (drop.updatedUser) setUser(drop.updatedUser);
               showBugDexDrop(drop);
