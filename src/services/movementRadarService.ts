@@ -45,10 +45,10 @@ const nativeModule = NativeModules.BugBaasNative as {
   requestHealthPermissions?: () => Promise<boolean>;
 } | undefined;
 
-const walkingMetersPerRadarBug = 2500;
-const runningMetersPerRadarBug = 4000;
-const cyclingMetersPerRadarBug = 6000;
-const maxMovementRadarBugsPerDay = 5;
+const walkingMetersPerRadarBug = 1500;
+const runningMetersPerRadarBug = 3000;
+const cyclingMetersPerRadarBug = 5000;
+const maxMovementRadarBugsPerDay = 10;
 
 export async function claimMovementRadarBonuses(uid: string, movementBoost = 0): Promise<MovementRadarResult> {
   if (Platform.OS !== "android") return emptyResult("platform");

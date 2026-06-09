@@ -140,6 +140,8 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   });
   const activeSquadBonuses = activeBugSquadBonusList(activeSquadIds);
   const recipientTradeInventory = recipientInventory.filter((item) => item.count > 0);
+  const ownedTradeBugIds = new Set(tradeInventory.map((item) => item.bugId));
+  const recipientOwnedTradeBugIds = new Set(recipientTradeInventory.map((item) => item.bugId));
   const upgradeOptions = upgradeRarities.map((rarity) => {
     const items = inventory
       .filter((item) => item.count > 0 && entryByBugId(item.bugId)?.rarity === rarity)
@@ -691,6 +693,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                   <BugArtImage bugId={item.bugId} size={34} />
                   <Text style={[styles.tradeChipText, tradeOfferId === item.bugId && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
                   <Text style={[styles.tradeRarityPill, { backgroundColor: rarityColors[bugRarity(item.bugId)] }]}>{rarityLabel(bugRarity(item.bugId), t)}</Text>
+                  {!!selectedRecipient && !recipientOwnedTradeBugIds.has(item.bugId) && (
+                    <Text style={[styles.tradeNeedPill, tradeOfferId === item.bugId && styles.tradeNeedPillActive]}>{t("bugdex.colleagueNeedsThis")}</Text>
+                  )}
                   <Text style={[styles.bugBuffMeta, tradeOfferId === item.bugId && styles.tradeChipTextActive]} numberOfLines={2}>{bugBuffText(item.bugId)}</Text>
                   {item.count > 1 && <Text style={[styles.tradeChipMeta, tradeOfferId === item.bugId && styles.tradeChipTextActive]}>x{item.count}</Text>}
                 </Pressable>
@@ -723,6 +728,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                     <BugArtImage bugId={item.bugId} size={34} />
                     <Text style={[styles.tradeChipText, tradeRequestId === item.bugId && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
                     <Text style={[styles.tradeRarityPill, { backgroundColor: rarityColors[bugRarity(item.bugId)] }]}>{rarityLabel(bugRarity(item.bugId), t)}</Text>
+                    {!ownedTradeBugIds.has(item.bugId) && (
+                      <Text style={[styles.tradeNeedPill, tradeRequestId === item.bugId && styles.tradeNeedPillActive]}>{t("bugdex.youNeedThis")}</Text>
+                    )}
                     <Text style={[styles.bugBuffMeta, tradeRequestId === item.bugId && styles.tradeChipTextActive]} numberOfLines={2}>{bugBuffText(item.bugId)}</Text>
                     {item.count > 1 && <Text style={[styles.tradeChipMeta, tradeRequestId === item.bugId && styles.tradeChipTextActive]}>x{item.count}</Text>}
                   </Pressable>
@@ -1512,6 +1520,24 @@ const styles = StyleSheet.create({
     marginTop: 3,
     textAlign: "center",
     width: "100%"
+  },
+  tradeNeedPill: {
+    backgroundColor: "#fff4c7",
+    borderColor: "#d7bd57",
+    borderRadius: 999,
+    borderWidth: 1,
+    color: "#5c480a",
+    fontSize: 9,
+    fontWeight: "900",
+    marginTop: 4,
+    overflow: "hidden",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    textAlign: "center"
+  },
+  tradeNeedPillActive: {
+    backgroundColor: "#d7bd57",
+    color: "#102018"
   },
   tradeRarityPill: {
     borderRadius: 999,

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.6
+
+- Beweegrewards zijn actiever: lopen geeft nu per 1,5 km een radar reward, hardlopen per 3 km en fietsen per 5 km.
+- Het daglimiet voor beweegrewards is verhoogd naar 10 per dag en de teller reset weer naar 0/10 op een nieuwe dag.
+- Rest-kilometers lopen door naar de volgende dag voor reward-progress, zonder totale km of badges dubbel te tellen.
+- Ruilselectie toont nu welke bugs nieuw voor jou zijn en welke aangeboden bugs de collega nog mist.
+- Expo Go login crasht niet meer op de native Google Sign-In module; e-mail login blijft testbaar in Expo Go.
+- Release notes hebben een nieuwe HD BugBaas visual voor radar, ruilen en beweegdoelen.
+
 ## 2.0.5
 
 - Home gebruikt grotere HD-knoppen voor profiel en instellingen, met character/app-badge visuals in plaats van simpele iconen.
