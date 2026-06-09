@@ -84,7 +84,7 @@ object MovementRadarNative {
     }
   }
 
-  suspend fun claimAvailable(context: Context, movementBoost: Double = 0.0): MovementClaimSnapshot {
+  suspend fun claimAvailable(context: Context, movementBoost: Double = 0.0, queueForWidget: Boolean = true): MovementClaimSnapshot {
     val snapshot = readHealthConnectSnapshot(context)
     if (!snapshot.available) return MovementClaimSnapshot(0, emptyList(), 0.0, snapshot.reason)
 
@@ -97,14 +97,14 @@ object MovementRadarNative {
     if (claimable <= 0) return MovementClaimSnapshot(0, emptyList(), snapshot.estimatedKm)
 
     val bugIds = BugRadarWidgetProvider.pickRandomRadarBugIds(claimable)
-    val added = BugRadarWidgetProvider.enqueueRadarBugs(context, bugIds)
-    if (added > 0) {
+    val awarded = if (queueForWidget) BugRadarWidgetProvider.enqueueRadarBugs(context, bugIds) else bugIds.size
+    if (awarded > 0) {
       prefs.edit()
         .putString(prefDay, today)
-        .putInt(prefAwardedUnits, minOf(maxMovementRadarBugsPerDay, awardedToday + added))
+        .putInt(prefAwardedUnits, minOf(maxMovementRadarBugsPerDay, awardedToday + awarded))
         .apply()
     }
-    return MovementClaimSnapshot(added, bugIds.take(added), snapshot.estimatedKm)
+    return MovementClaimSnapshot(awarded, bugIds.take(awarded), snapshot.estimatedKm)
   }
 
   suspend fun progress(context: Context, movementBoost: Double = 0.0): MovementProgressSnapshot {

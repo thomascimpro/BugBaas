@@ -222,6 +222,20 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
   }
 
   @ReactMethod
+  fun getQueuedRadarBugIds(promise: Promise) {
+    val bugIds = Arguments.createArray()
+    for (bugId in BugRadarWidgetProvider.activeRadarBugIds(reactContext)) bugIds.pushString(bugId)
+    promise.resolve(bugIds)
+  }
+
+  @ReactMethod
+  fun claimQueuedRadarBugs(promise: Promise) {
+    val bugIds = Arguments.createArray()
+    for (bugId in BugRadarWidgetProvider.claimActiveRadarBugs(reactContext)) bugIds.pushString(bugId)
+    promise.resolve(bugIds)
+  }
+
+  @ReactMethod
   fun getMovementRadarProgress(movementBoost: Double, promise: Promise) {
     scope.launch {
       val progress = MovementRadarNative.progress(reactContext, movementBoost)
@@ -262,6 +276,22 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
   fun claimMovementRadarBonuses(movementBoost: Double, promise: Promise) {
     scope.launch {
       val claim = MovementRadarNative.claimAvailable(reactContext, movementBoost)
+      val result = Arguments.createMap()
+      result.putInt("awarded", claim.awarded)
+      result.putDouble("estimatedKm", claim.estimatedKm)
+      claim.reason?.let { result.putString("reason", it) }
+      val bugIds = Arguments.createArray()
+      for (bugId in claim.bugIds) bugIds.pushString(bugId)
+      result.putArray("bugIds", bugIds)
+      MovementRadarNative.schedulePeriodicCheck(reactContext)
+      promise.resolve(result)
+    }
+  }
+
+  @ReactMethod
+  fun claimMovementRadarBonusesForApp(movementBoost: Double, promise: Promise) {
+    scope.launch {
+      val claim = MovementRadarNative.claimAvailable(reactContext, movementBoost, queueForWidget = false)
       val result = Arguments.createMap()
       result.putInt("awarded", claim.awarded)
       result.putDouble("estimatedKm", claim.estimatedKm)
