@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.16
+
+- Bug Squad helpers doen nu duidelijker echte hit-damage in Bug Smash Duel, zodat je na hun aanvallen minder hoeft te tikken.
+- Helper damage schaalt balanced met helper-rarity en target-rarity; sterke helpers kunnen lage targets soms direct afmaken.
+- Helper charge-bars starten niet meer vol en Legendary/Mythisch helpers laden sneller dan normale helpers.
+
 ## 2.1.15
 
 - Bug Squad helpers in Bug Smash Duel hebben nu drie verschillende game-achtige attack animaties: orbs, slash en pulse-wave.
