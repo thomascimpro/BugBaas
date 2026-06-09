@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { entryByBugId } from "../services/bugDexService";
 import { BugDexRarity, bugDexEntries, getTierForPoints } from "../services/pointsService";
 import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
+import { presenceLabel } from "../services/presenceService";
 import { User } from "../types";
 import { BugArtImage } from "./BugArtImage";
 import { MedalIcon } from "./MedalIcon";
@@ -33,7 +34,7 @@ export function LeaderboardRow({ index, lastCatch, user, onPress }: { index: num
   const tier = isLeader ? getTierForPoints(Number.MAX_SAFE_INTEGER) : getTierForPoints(user.totalPoints);
   const medal = topThreeStyles[index];
   const title = isLeader ? t("tier.super") : tr(tier.title);
-  const status = statusForUser(user, index, t);
+  const status = presenceLabel(user, t);
   const lastCatchEntry = lastCatch ? entryByBugId(lastCatch.bugId) : null;
   const lastCatchColor = lastCatch ? rarityColors[lastCatch.rarity] : "#c6d3cc";
 
@@ -73,14 +74,6 @@ export function LeaderboardRow({ index, lastCatch, user, onPress }: { index: num
       </View>
     </Pressable>
   );
-}
-
-function statusForUser(user: User, index: number, t: (key: string) => string): string {
-  if (index === 0) return t("leader.statusLeader");
-  if (user.totalPoints >= 150) return t("leader.statusActive");
-  if (user.bugCount >= 5) return t("leader.statusHunter");
-  if (user.bugCount >= 1) return t("leader.statusNew");
-  return t("leader.statusStart");
 }
 
 function formatLastCaughtAt(value: string, t: (key: string, params?: Record<string, string | number>) => string): string {

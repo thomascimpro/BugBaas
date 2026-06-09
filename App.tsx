@@ -5,7 +5,7 @@ import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Image, ImageSourcePropType, Linking, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppNotification, BugComment, BugReport, BugSeverity, NotificationSettings, User } from "./src/types";
-import { activateBugLamp, applyUserPoints, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, syncMovementKilometers, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
+import { activateBugLamp, applyUserPoints, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, syncMovementKilometers, touchUserActivity, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
 import { activeBugSquadBonuses } from "./src/services/bugSquadService";
 import { movementBoostWithBugLamp } from "./src/services/bugLampService";
 import { LoginScreen } from "./src/screens/LoginScreen";
@@ -213,6 +213,15 @@ function AppContent() {
     && !versionNotice
   );
 
+  function recordUserActivity(currentUser: User, force = false) {
+    void touchUserActivity(currentUser, force)
+      .then((lastActiveAt) => {
+        if (!lastActiveAt) return;
+        setUser((existing) => existing?.uid === currentUser.uid ? { ...existing, lastActiveAt } : existing);
+      })
+      .catch(() => undefined);
+  }
+
   useEffect(() => {
     userRef.current = user;
   }, [user]);
@@ -335,12 +344,23 @@ function AppContent() {
     const subscription = AppState.addEventListener("change", (nextState) => {
       appState.current = nextState;
       if (nextState === "active") {
+        const currentUser = userRef.current;
+        if (currentUser) recordUserActivity(currentUser);
         void checkMovementRadarBonuses();
         void checkForVersionUpdate();
       }
     });
     return () => subscription.remove();
   }, []);
+
+  useEffect(() => {
+    if (!user) return () => undefined;
+    recordUserActivity(user, true);
+    const interval = setInterval(() => {
+      if (appState.current === "active") recordUserActivity(user);
+    }, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user?.uid || user.nameSet !== true) return;

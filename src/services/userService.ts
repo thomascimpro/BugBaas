@@ -22,9 +22,11 @@ export const upvoteGivenPointValue = 1;
 export const commentPointValue = 2;
 export const splatRewardEvery = 100;
 export const splatRewardPoints = 10;
+const presenceWriteMinIntervalMs = 60 * 1000;
 
 let demoUser: User | null = null;
 const demoUsers = new Map<string, User>();
+const lastPresenceWriteAtByUid = new Map<string, number>();
 
 function normalizeUser(user: User): User {
   const safeId = safeCharacterId(user.characterId);
@@ -108,6 +110,7 @@ function makeUser(uid: string, email: string, displayName?: string | null, nameS
     bugLampCount: 0,
     nameSet,
     active: true,
+    lastActiveAt: new Date().toISOString(),
     helpSeen: false,
     splatCount: 0,
     totalPoints: 0,
@@ -171,23 +174,49 @@ export async function loginWithGoogle(idToken: string, accessToken?: string): Pr
 export async function ensureUserDocument(firebaseUser: FirebaseUser, preferredDisplayName?: string): Promise<User> {
   const ref = doc(db, "users", firebaseUser.uid);
   const snapshot = await getDoc(ref);
+  const lastActiveAt = new Date().toISOString();
   if (snapshot.exists()) {
     const user = snapshot.data() as User;
     const name = cleanDisplayName(preferredDisplayName);
     if (user.active === false) {
-      await updateDoc(ref, { active: true });
+      await updateDoc(ref, { active: true, lastActiveAt });
       user.active = true;
     }
     if (name && user.displayName !== name) {
-      const updated = { ...user, active: true, displayName: name, nameSet: true };
+      const updated = { ...user, active: true, displayName: name, lastActiveAt, nameSet: true };
       await setDoc(ref, updated);
       return normalizeUser(updated);
     }
-    return normalizeUser({ ...user, active: true });
+    await touchUserActivity(firebaseUser.uid, true).catch(() => undefined);
+    return normalizeUser({ ...user, active: true, lastActiveAt });
   }
   const user = makeUser(firebaseUser.uid, firebaseUser.email ?? "onbekend@cimpro.local", preferredDisplayName ?? firebaseUser.displayName, false);
   await setDoc(ref, user);
   return user;
+}
+
+export async function touchUserActivity(userOrUid: Pick<User, "uid"> | string, force = false): Promise<string | null> {
+  const uid = typeof userOrUid === "string" ? userOrUid : userOrUid.uid;
+  if (!uid) return null;
+
+  const now = Date.now();
+  const lastWriteAt = lastPresenceWriteAtByUid.get(uid) ?? 0;
+  if (!force && now - lastWriteAt < presenceWriteMinIntervalMs) return null;
+  lastPresenceWriteAtByUid.set(uid, now);
+
+  const lastActiveAt = new Date(now).toISOString();
+  if (!isFirebaseConfigured) {
+    const current = Array.from(demoUsers.values()).find((item) => item.uid === uid);
+    if (current) {
+      const updated = { ...current, lastActiveAt };
+      demoUsers.set(updated.email, updated);
+      if (demoUser?.uid === uid) demoUser = updated;
+    }
+    return lastActiveAt;
+  }
+
+  await updateDoc(doc(db, "users", uid), { lastActiveAt });
+  return lastActiveAt;
 }
 
 export async function syncEngagementPoints(user: User): Promise<User> {

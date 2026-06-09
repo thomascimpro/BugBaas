@@ -17,6 +17,7 @@ import {
   subscribeBugSmashDuel
 } from "../services/bugSmashDuelService";
 import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
+import { presenceLabel } from "../services/presenceService";
 import { BugDexRarity } from "../services/pointsService";
 import { entryByBugId } from "../services/bugDexService";
 import { playBugSound } from "../services/soundService";
@@ -134,6 +135,19 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       active = false;
     };
   }, [user.uid, activeDuelId]);
+
+  useEffect(() => {
+    let active = true;
+    const interval = setInterval(() => {
+      void listUsers().then((nextUsers) => {
+        if (active) setUsers(nextUsers);
+      }).catch(() => undefined);
+    }, 30 * 1000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [user.uid]);
 
   useEffect(() => {
     if (initialDuelId) setActiveDuelId(initialDuelId);
@@ -428,6 +442,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 <Pressable key={opponent.uid} style={[styles.opponentButton, selected && styles.opponentButtonSelected]} onPress={() => setSelectedOpponentId(opponent.uid)}>
                   <Text style={[styles.opponentName, selected && styles.opponentNameSelected]} numberOfLines={1}>{opponent.displayName}</Text>
                   <Text style={styles.opponentMeta}>{opponent.totalPoints} {t("common.pointsShort")}</Text>
+                  <Text style={[styles.opponentPresence, selected && styles.opponentPresenceSelected]} numberOfLines={1}>{presenceLabel(opponent, t)}</Text>
                 </Pressable>
               );
             })}
@@ -1091,6 +1106,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     marginTop: 2
+  },
+  opponentPresence: {
+    color: "#15724f",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 4
+  },
+  opponentPresenceSelected: {
+    color: "#d7bd57"
   },
   opponentName: {
     color: "#102018",
