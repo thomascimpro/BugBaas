@@ -401,8 +401,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   function runHelperTowers(duel: BugSmashDuel, timestamp: number) {
     if (!activeSquadBonuses.length || !isRunning(duel, timestamp)) return;
-    const visibleTargets = collectVisibleTargets(duel, timestamp, caughtBugIdsRef.current, assist);
-    if (!visibleTargets.length) return;
+    const renderedTargets = collectRenderedTargets(duel, timestamp, caughtBugIdsRef.current, assist);
+    if (!renderedTargets.length) return;
 
     activeSquadBonuses.forEach((bonus, helperIndex) => {
       const spec = helperSpecForBonus(bonus);
@@ -412,13 +412,15 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         return;
       }
       if (timestamp < readyAt) return;
-      const target = selectHelperTarget(visibleTargets, bonus, hitCountsRef.current, timestamp);
+      const helperTargets = renderedTargets.filter((item) => item.motion.progress <= helperMaxTargetProgress(bonus));
+      if (!helperTargets.length) return;
+      const target = selectHelperTarget(helperTargets, bonus, hitCountsRef.current, timestamp);
       if (!target) return;
 
       helperCooldownAtRef.current[bonus.bugId] = timestamp + spec.cooldownMs + helperIndex * 260;
       const targetHits = helperHitsForTarget(bonus, target, hitCountsRef.current, assist);
       const splashTargets = spec.splashTargets > 0
-        ? visibleTargets
+        ? helperTargets
           .filter((item) => item.bugId !== target.bugId && distanceBetweenTargets(item, target) <= spec.splashRadius)
           .slice(0, spec.splashTargets)
         : [];
@@ -834,12 +836,12 @@ function renderHelperTowers(bonuses: ReturnType<typeof activeBugSquadBonusList>,
     <View pointerEvents="none" style={styles.helperTowerDock}>
       {bonuses.map((bonus, index) => {
         const spec = helperSpecForBonus(bonus);
-        const readyAt = cooldowns[bonus.bugId] ?? 0;
-        const cooldownLeft = Math.max(0, readyAt - timestamp);
-        const charge = 1 - Math.min(1, cooldownLeft / spec.cooldownMs);
+        const readyAt = cooldowns[bonus.bugId];
+        const cooldownLeft = readyAt === undefined ? spec.cooldownMs : Math.max(0, readyAt - timestamp);
+        const charge = readyAt === undefined ? helperInitialCharge(index) : 1 - Math.min(1, cooldownLeft / spec.cooldownMs);
         return (
           <View key={`${bonus.bugId}:${index}`} style={[styles.helperTower, { borderColor: spec.color }]}>
-            <HelperTowerPulse color={spec.color} ready={cooldownLeft <= 0} />
+            <HelperTowerPulse color={spec.color} ready={readyAt !== undefined && cooldownLeft <= 0} />
             <BugArtImage bugId={bonus.bugId} size={38} />
             <View style={styles.helperChargeTrack}>
               <View style={[styles.helperChargeFill, { backgroundColor: spec.color, width: `${Math.round(charge * 100)}%` }]} />
@@ -865,9 +867,7 @@ function renderTargets(
   hitFeedbackValues: Map<string, Animated.Value>,
   onHit: (bugId: string) => void
 ) {
-  return collectVisibleTargets(duel, timestamp, caughtBugIds, assist)
-    .sort((a, b) => targetPriority(b.entry.rarity, b.motion.progress) - targetPriority(a.entry.rarity, a.motion.progress))
-    .slice(0, maxVisibleDuelTargets)
+  return collectRenderedTargets(duel, timestamp, caughtBugIds, assist)
     .map(({ bugId, entry, index, motion }) => {
     const requiredTaps = requiredTapsForTarget(entry.rarity, assist, index);
     const hits = hitCounts[bugId] ?? 0;
@@ -910,6 +910,12 @@ function collectVisibleTargets(duel: BugSmashDuel, timestamp: number, caughtBugI
     if (!motion.visible) return [];
     return [{ bugId, entry, index, motion }];
   });
+}
+
+function collectRenderedTargets(duel: BugSmashDuel, timestamp: number, caughtBugIds: string[], assist: BugSmashDuelBalance): VisibleDuelTarget[] {
+  return collectVisibleTargets(duel, timestamp, caughtBugIds, assist)
+    .sort((a, b) => targetPriority(b.entry.rarity, b.motion.progress) - targetPriority(a.entry.rarity, a.motion.progress))
+    .slice(0, maxVisibleDuelTargets);
 }
 
 function selectHelperTarget(targets: VisibleDuelTarget[], bonus: ReturnType<typeof activeBugSquadBonusList>[number], hitCounts: Record<string, number>, timestamp: number) {
@@ -976,6 +982,14 @@ function helperCooldownMsForRarity(rarity: BugDexRarity) {
 
 function helperInitialCooldownMs(cooldownMs: number, helperIndex: number) {
   return Math.round(cooldownMs * Math.max(0.34, 0.62 - helperIndex * 0.12));
+}
+
+function helperInitialCharge(helperIndex: number) {
+  return Math.min(0.56, Math.max(0.32, 0.38 + helperIndex * 0.08));
+}
+
+function helperMaxTargetProgress(bonus: ReturnType<typeof activeBugSquadBonusList>[number]) {
+  return helperKindForCategory(bonus.category) === "shield" ? 0.94 : 0.88;
 }
 
 function helperRarityRank(rarity: BugDexRarity) {
