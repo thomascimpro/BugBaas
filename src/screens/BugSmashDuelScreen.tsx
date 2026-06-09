@@ -73,6 +73,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [error, setError] = useState("");
   const [challengeNotice, setChallengeNotice] = useState("");
   const [squadModalVisible, setSquadModalVisible] = useState(false);
+  const [squadLoading, setSquadLoading] = useState(false);
   const [squadBusyId, setSquadBusyId] = useState("");
   const [now, setNow] = useState(Date.now());
   const [score, setScore] = useState(0);
@@ -175,6 +176,21 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   async function refreshDuels() {
     setDuels(await listBugSmashDuels(user));
+  }
+
+  async function openSquadModal() {
+    setSquadModalVisible(true);
+    setSquadLoading(true);
+    setError("");
+    try {
+      const nextInventory = await listBugDexInventory(user);
+      setInventory(nextInventory);
+      setActiveSquadIds(sanitizeActiveBugSquad(activeSquadIds, nextInventory));
+    } catch {
+      setError(t("duel.squadUpdateFailed"));
+    } finally {
+      setSquadLoading(false);
+    }
   }
 
   async function startChallenge() {
@@ -297,6 +313,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const countdown = activeDuel?.status === "accepted" && activeDuel.startAt ? Math.max(0, Math.ceil((Date.parse(activeDuel.startAt) - now) / 1000)) : 0;
   const remainingSeconds = activeDuel?.status === "accepted" && activeDuel.startAt ? Math.max(0, Math.ceil((Date.parse(activeDuel.startAt) + activeDuel.durationMs - now) / 1000)) : 0;
   const activeDuelScore = activeScore?.score ?? (submittedRef.current ? score + duelBonusScore(score, assist) : score);
+  const incomingPendingDuel = activeDuel?.status === "pending" && activeDuel.toUserId === user.uid;
 
   return (
     <ScrollView contentContainerStyle={styles.content} style={sharedStyles.screen} showsVerticalScrollIndicator={false}>
@@ -337,14 +354,16 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         <View style={styles.card}>
           <View style={styles.duelTitleRow}>
             <View>
-              <Text style={styles.cardTitle}>{opponentLabel(activeDuel, user)}</Text>
-              <Text style={styles.statusText}>{statusLabel(activeDuel, t)}</Text>
+              <Text style={styles.cardTitle}>{incomingPendingDuel ? t("duel.incomingTitle", { name: activeDuel.fromUserName }) : opponentLabel(activeDuel, user)}</Text>
+              <Text style={styles.statusText}>{incomingPendingDuel ? t("duel.incomingStatus") : statusLabel(activeDuel, t)}</Text>
             </View>
-            <Text style={styles.timerText}>{activeDuel.status === "accepted" ? remainingSeconds : 30}s</Text>
+            {activeDuel.status === "accepted" ? <Text style={styles.timerText}>{remainingSeconds}s</Text> : <Text style={styles.pendingBadge}>{t("duel.pendingBadge")}</Text>}
           </View>
 
           {activeDuel.status === "pending" && activeDuel.toUserId === user.uid && (
-            <View style={styles.actionsRow}>
+            <View style={styles.incomingPanel}>
+              <Text style={styles.incomingBody}>{t("duel.incomingBody", { name: activeDuel.fromUserName })}</Text>
+              <Text style={styles.incomingHint}>{t("duel.incomingHint")}</Text>
               <Pressable disabled={busy} style={sharedStyles.button} onPress={() => respond(true)}>
                 <Text style={sharedStyles.buttonText}>{t("duel.accept")}</Text>
               </Pressable>
@@ -399,11 +418,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       <View style={styles.card}>
         <View style={styles.bonusHeader}>
           <Text style={styles.cardTitle}>{t("duel.bonusTitle")}</Text>
-          <Pressable style={styles.smallButton} onPress={() => setSquadModalVisible(true)}>
+          <Pressable style={styles.smallButton} onPress={openSquadModal}>
             <Text style={styles.smallButtonText}>{t("duel.changeSquad")}</Text>
           </Pressable>
         </View>
-        {renderSquadJars(activeSquadIds, activeSquadBonuses, t)}
+        {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal)}
         <Text style={styles.bonusLine}>{t("duel.tapAssist", { value: Math.round((assist.hitboxMultiplier - 1.05) * 100) })}</Text>
         <Text style={styles.bonusLine}>{t("duel.speedAssist", { value: Math.round((assist.speedMultiplier - 1) * 100) })}</Text>
         <Text style={styles.bonusLine}>{t("duel.scoreAssist", { value: duelBonusScore(12, assist) })}</Text>
@@ -412,32 +431,53 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       <Modal transparent animationType="fade" visible={squadModalVisible} onRequestClose={() => setSquadModalVisible(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.cardTitle}>{t("duel.changeSquad")}</Text>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderCopy}>
+                <Text style={styles.cardTitle}>{t("duel.changeSquad")}</Text>
+                <Text style={styles.modalCounter}>{t("duel.squadSelectedCount", { count: activeSquadIds.length, max: maxActiveBugSquadSize })}</Text>
+              </View>
+              <Pressable style={styles.closeButton} onPress={() => setSquadModalVisible(false)}>
+                <Text style={styles.closeButtonText}>x</Text>
+              </Pressable>
+            </View>
             <Text style={styles.modalIntro}>{t("bugdex.activeSquadHint")}</Text>
-            <ScrollView style={styles.squadChoiceList} showsVerticalScrollIndicator={false}>
-              {squadChoiceInventory.map((item) => {
-                const entry = entryByBugId(item.bugId);
-                const bonus = activeBugSquadBonusList([item.bugId])[0];
-                if (!entry || !bonus) return null;
-                const selected = activeSquadIds.includes(item.bugId);
-                const disabled = !selected && activeSquadIds.length >= maxActiveBugSquadSize;
-                return (
-                  <Pressable
-                    key={item.bugId}
-                    disabled={disabled || squadBusyId === item.bugId}
-                    style={[styles.squadChoice, selected && styles.squadChoiceActive, disabled && styles.disabled]}
-                    onPress={() => toggleActiveSquadBug(item.bugId)}
-                  >
-                    <BugArtImage bugId={item.bugId} size={38} />
-                    <View style={styles.squadChoiceText}>
-                      <Text style={styles.squadChoiceName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>
-                      <Text style={styles.squadChoiceMeta} numberOfLines={1}>{rarityLabel(entry.rarity, t)} - {squadBonusLabel(bonus.category, t)} {squadBonusValue(bonus.category, bonus.value)}</Text>
-                    </View>
-                    <Text style={[styles.squadSelectedPill, selected && styles.squadSelectedPillActive]}>{selected ? t("duel.active") : "+"}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal)}
+            {squadLoading ? (
+              <View style={styles.modalState}>
+                <ActivityIndicator color="#15724f" />
+                <Text style={styles.modalStateText}>{t("duel.squadLoading")}</Text>
+              </View>
+            ) : squadChoiceInventory.length === 0 ? (
+              <View style={styles.modalState}>
+                <Text style={styles.modalStateText}>{t("duel.squadEmptyCollection")}</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.squadChoiceList} showsVerticalScrollIndicator={false}>
+                <View style={styles.squadChoiceGrid}>
+                  {squadChoiceInventory.map((item) => {
+                    const entry = entryByBugId(item.bugId);
+                    const bonus = activeBugSquadBonusList([item.bugId])[0];
+                    if (!entry || !bonus) return null;
+                    const selected = activeSquadIds.includes(item.bugId);
+                    const disabled = !selected && activeSquadIds.length >= maxActiveBugSquadSize;
+                    return (
+                      <Pressable
+                        key={item.bugId}
+                        disabled={disabled || squadBusyId === item.bugId}
+                        style={[styles.squadChoice, selected && styles.squadChoiceActive, disabled && styles.disabled, { borderColor: selected ? rarityColors[entry.rarity] : "#d7e1d9" }]}
+                        onPress={() => toggleActiveSquadBug(item.bugId)}
+                      >
+                        <BugArtImage bugId={item.bugId} size={50} />
+                        <Text style={[styles.squadChoiceName, selected && styles.squadChoiceNameActive]} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>
+                        <Text style={[styles.rarityPill, { backgroundColor: rarityColors[entry.rarity] }]}>{rarityLabel(entry.rarity, t)}</Text>
+                        <Text style={[styles.squadChoiceMeta, selected && styles.squadChoiceMetaActive]} numberOfLines={2}>{squadBonusLabel(bonus.category, t)} {squadBonusValue(bonus.category, bonus.value)}</Text>
+                        <Text style={[styles.squadSelectedPill, selected && styles.squadSelectedPillActive]}>{selected ? t("duel.active") : "+"}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            )}
             <Pressable style={sharedStyles.button} onPress={() => setSquadModalVisible(false)}>
               <Text style={sharedStyles.buttonText}>{t("common.done")}</Text>
             </Pressable>
@@ -460,7 +500,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   );
 }
 
-function renderSquadJars(activeSquadIds: string[], bonuses: ReturnType<typeof activeBugSquadBonusList>, t: (key: string, params?: Record<string, string | number>) => string) {
+function renderSquadJars(activeSquadIds: string[], bonuses: ReturnType<typeof activeBugSquadBonusList>, t: (key: string, params?: Record<string, string | number>) => string, onOpen: () => void) {
   return (
     <View style={styles.squadJars}>
       {Array.from({ length: maxActiveBugSquadSize }).map((_, index) => {
@@ -468,7 +508,7 @@ function renderSquadJars(activeSquadIds: string[], bonuses: ReturnType<typeof ac
         const entry = bugId ? entryByBugId(bugId) : null;
         const bonus = bonuses.find((item) => item.bugId === bugId);
         return (
-          <View key={index} style={styles.squadJarWrap}>
+          <Pressable key={index} style={styles.squadJarWrap} onPress={onOpen}>
             <View style={[styles.squadJarLid, entry && { backgroundColor: rarityColors[entry.rarity], borderColor: rarityColors[entry.rarity] }]} />
             <View style={[styles.squadJar, entry && { borderColor: rarityColors[entry.rarity] }]}>
               <View style={styles.squadJarShine} />
@@ -486,7 +526,7 @@ function renderSquadJars(activeSquadIds: string[], bonuses: ReturnType<typeof ac
               )}
               <View style={styles.squadJarBase} />
             </View>
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -658,6 +698,22 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 8
   },
+  closeButton: {
+    alignItems: "center",
+    backgroundColor: "#edf6ea",
+    borderColor: "#d7e1d9",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    width: 34
+  },
+  closeButtonText: {
+    color: "#102018",
+    fontSize: 18,
+    fontWeight: "900",
+    lineHeight: 20
+  },
   content: {
     paddingBottom: 160
   },
@@ -732,6 +788,27 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 8
   },
+  incomingBody: {
+    color: "#102018",
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 20
+  },
+  incomingHint: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17
+  },
+  incomingPanel: {
+    backgroundColor: "#fff8e8",
+    borderColor: "#d7bd57",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 9,
+    marginTop: 10,
+    padding: 12
+  },
   modalBackdrop: {
     alignItems: "center",
     backgroundColor: "rgba(16,32,24,0.72)",
@@ -748,12 +825,44 @@ const styles = StyleSheet.create({
     padding: 14,
     width: "100%"
   },
+  modalCounter: {
+    color: "#15724f",
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: -4
+  },
+  modalHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between"
+  },
+  modalHeaderCopy: {
+    flex: 1,
+    minWidth: 0
+  },
   modalIntro: {
     color: "#53645d",
     fontSize: 12,
     fontWeight: "800",
     lineHeight: 17,
     marginBottom: 10
+  },
+  modalState: {
+    alignItems: "center",
+    backgroundColor: "#edf6ea",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    marginBottom: 10,
+    padding: 18
+  },
+  modalStateText: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "center"
   },
   noticeText: {
     color: "#15724f",
@@ -793,6 +902,18 @@ const styles = StyleSheet.create({
   opponentNameSelected: {
     color: "#ffffff"
   },
+  pendingBadge: {
+    backgroundColor: "#fff8e8",
+    borderColor: "#d7bd57",
+    borderRadius: 999,
+    borderWidth: 1,
+    color: "#102018",
+    fontSize: 11,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 9,
+    paddingVertical: 5
+  },
   resultBox: {
     gap: 6,
     marginTop: 10
@@ -818,6 +939,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900"
   },
+  rarityPill: {
+    borderRadius: 999,
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "900",
+    marginTop: 3,
+    overflow: "hidden",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    textAlign: "center"
+  },
   smallButton: {
     backgroundColor: "#edf6ea",
     borderColor: "#15724f",
@@ -837,14 +969,18 @@ const styles = StyleSheet.create({
     borderColor: "#d7e1d9",
     borderRadius: 8,
     borderWidth: 1,
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 8,
-    padding: 9
+    flexBasis: "48%",
+    minHeight: 148,
+    padding: 8
   },
   squadChoiceActive: {
     backgroundColor: "#102018",
     borderColor: "#d7bd57"
+  },
+  squadChoiceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   squadChoiceList: {
     marginBottom: 10,
@@ -854,16 +990,23 @@ const styles = StyleSheet.create({
     color: "#6f7f5f",
     fontSize: 11,
     fontWeight: "800",
-    marginTop: 2
+    marginTop: 4,
+    minHeight: 28,
+    textAlign: "center"
+  },
+  squadChoiceMetaActive: {
+    color: "#dce9df"
   },
   squadChoiceName: {
     color: "#102018",
     fontSize: 13,
-    fontWeight: "900"
+    fontWeight: "900",
+    marginTop: 5,
+    maxWidth: "100%",
+    textAlign: "center"
   },
-  squadChoiceText: {
-    flex: 1,
-    minWidth: 0
+  squadChoiceNameActive: {
+    color: "#ffffff"
   },
   squadJar: {
     alignItems: "center",

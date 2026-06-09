@@ -40,13 +40,13 @@ import { checkLatestVersion, VersionNotice } from "./src/services/versionService
 import {
   defaultNotificationSettings,
   getNotificationSettings,
-  initializePhoneNotifications,
   markNotificationRead,
   notifyBugUpdate,
   notifyBugSmashDuelAccepted,
   notifyBugSmashDuelRequest,
   notifyComment,
   notifyNewBug,
+  registerPhoneNotificationsForUser,
   saveNotificationSettings,
   showBugDexUnlockNotification,
   showMovementRewardNotification,
@@ -71,6 +71,11 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.1.6": [
+    { key: "changelog.2.1.6.duelNotify", image: require("./assets/generated/bug-smash-duel-concept.jpg"), tone: "purple" },
+    { key: "changelog.2.1.6.helpers", image: require("./assets/generated/bug-squad-jar-hd.png"), tone: "green" },
+    { key: "changelog.2.1.6.settings", image: require("./assets/generated/settings-gear-hd.png"), tone: "gold" }
+  ],
   "2.1.4": [
     { key: "changelog.2.1.4.install", image: require("./assets/generated/bugbaas-splash-badge-hd.png"), tone: "green" },
     { key: "changelog.2.1.4.duel", image: require("./assets/generated/bug-smash-duel-concept.jpg"), tone: "purple" },
@@ -347,7 +352,9 @@ function AppContent() {
   useEffect(() => {
     if (!user) return;
     void getNotificationSettings(user).then(setNotificationSettings);
-    void initializePhoneNotifications().catch(() => undefined);
+    void registerPhoneNotificationsForUser(user).then((updated) => {
+      if (updated) setUser(updated);
+    }).catch(() => undefined);
   }, [user?.uid]);
 
   useEffect(() => {
