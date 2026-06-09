@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.5
+
+- Duel starten vanaf een collega-profiel houdt die collega nu direct geselecteerd in het duel-scherm.
+- Het duel-wachtscherm toont duidelijk dat je op acceptatie wacht en laat je actieve Bug Squad-bugs als potjes met bugafbeelding zien.
+- Actieve duel-bonussen kunnen vanuit het duel-scherm worden gewisseld zonder eerst terug naar BugDex te gaan.
+
 ## 2.1.4
 
 - Simpele collega-install release: één ARM64 APK, zonder AAB in GitHub release.
