@@ -406,12 +406,17 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
     activeSquadBonuses.forEach((bonus, helperIndex) => {
       const spec = helperSpecForBonus(bonus);
-      const readyAt = helperCooldownAtRef.current[bonus.bugId] ?? 0;
+      const readyAt = helperCooldownAtRef.current[bonus.bugId];
+      if (readyAt === undefined) {
+        helperCooldownAtRef.current[bonus.bugId] = timestamp + helperInitialCooldownMs(spec.cooldownMs, helperIndex);
+        return;
+      }
       if (timestamp < readyAt) return;
       const target = selectHelperTarget(visibleTargets, bonus, hitCountsRef.current, timestamp);
       if (!target) return;
 
       helperCooldownAtRef.current[bonus.bugId] = timestamp + spec.cooldownMs + helperIndex * 260;
+      const targetHits = helperHitsForTarget(bonus, target, hitCountsRef.current, assist);
       const splashTargets = spec.splashTargets > 0
         ? visibleTargets
           .filter((item) => item.bugId !== target.bugId && distanceBetweenTargets(item, target) <= spec.splashRadius)
@@ -425,14 +430,17 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         target.motion.y,
         spec.color,
         spec.kind,
-        helperKindLabel(spec.kind, t),
+        helperImpactLabel(spec.kind, targetHits, t),
         helperAnimationStyleForIndex(helperIndex),
         source,
         splashTargets.map((item) => ({ id: item.bugId, x: item.motion.x, y: item.motion.y }))
       );
-      for (let hit = 0; hit < spec.hits; hit += 1) applyBugHit(target.bugId, "helper");
+      for (let hit = 0; hit < targetHits; hit += 1) applyBugHit(target.bugId, "helper");
 
-      splashTargets.forEach((item) => applyBugHit(item.bugId, "helper"));
+      splashTargets.forEach((item) => {
+        const splashHits = helperSplashHitsForTarget(bonus, item);
+        for (let hit = 0; hit < splashHits; hit += 1) applyBugHit(item.bugId, "helper");
+      });
     });
   }
 
@@ -931,13 +939,59 @@ function distanceBetweenTargets(first: VisibleDuelTarget, second: VisibleDuelTar
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+function helperHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusList>[number], target: VisibleDuelTarget, hitCounts: Record<string, number>, assist: BugSmashDuelBalance) {
+  const required = requiredTapsForTarget(target.entry.rarity, assist, target.index);
+  const remaining = Math.max(1, required - (hitCounts[target.bugId] ?? 0));
+  const helperRank = helperRarityRank(bonus.rarity);
+  const targetRank = helperRarityRank(target.entry.rarity);
+  const kind = helperKindForCategory(bonus.category);
+  const baseDamage = helperBaseHitsForRarity(bonus.rarity);
+  const resistance = Math.max(0, Math.floor(targetRank / 2));
+  const tierAdvantage = helperRank >= targetRank + 2 ? 1 : 0;
+  const urgentShieldHit = kind === "shield" && target.motion.progress > 0.68 ? 1 : 0;
+  const damage = Math.max(1, baseDamage - resistance + tierAdvantage + urgentShieldHit);
+  return Math.min(remaining, damage);
+}
+
+function helperSplashHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusList>[number], target: VisibleDuelTarget) {
+  const helperRank = helperRarityRank(bonus.rarity);
+  const targetRank = helperRarityRank(target.entry.rarity);
+  return helperRank >= 3 && targetRank <= 1 ? 2 : 1;
+}
+
+function helperBaseHitsForRarity(rarity: BugDexRarity) {
+  if (rarity === "Mythisch") return 4;
+  if (rarity === "Legendarisch") return 3;
+  if (rarity === "Episch") return 2;
+  return 1;
+}
+
+function helperCooldownMsForRarity(rarity: BugDexRarity) {
+  if (rarity === "Mythisch") return 5000;
+  if (rarity === "Legendarisch") return 5400;
+  if (rarity === "Episch") return 6800;
+  if (rarity === "Zeldzaam") return 7600;
+  return 8400;
+}
+
+function helperInitialCooldownMs(cooldownMs: number, helperIndex: number) {
+  return Math.round(cooldownMs * Math.max(0.34, 0.62 - helperIndex * 0.12));
+}
+
+function helperRarityRank(rarity: BugDexRarity) {
+  if (rarity === "Mythisch") return 4;
+  if (rarity === "Legendarisch") return 3;
+  if (rarity === "Episch") return 2;
+  if (rarity === "Zeldzaam") return 1;
+  return 0;
+}
+
 function helperSpecForBonus(bonus: ReturnType<typeof activeBugSquadBonusList>[number]) {
   const rarityBoost = bonus.rarity === "Mythisch" ? 4 : bonus.rarity === "Legendarisch" ? 3 : bonus.rarity === "Episch" ? 2 : bonus.rarity === "Zeldzaam" ? 1 : 0;
   const kind = helperKindForCategory(bonus.category);
   return {
     color: helperColorForKind(kind),
-    cooldownMs: 8200 - rarityBoost * 650,
-    hits: bonus.rarity === "Mythisch" ? 2 : 1,
+    cooldownMs: helperCooldownMsForRarity(bonus.rarity),
     kind,
     splashRadius: kind === "splash" ? 18 + rarityBoost * 2 : 0,
     splashTargets: kind === "splash" && rarityBoost >= 2 ? Math.min(2, rarityBoost - 1) : 0
@@ -962,6 +1016,11 @@ function helperColorForKind(kind: HelperImpactKind) {
 
 function helperKindLabel(kind: HelperImpactKind, t: (key: string) => string) {
   return t(`duel.helper.${kind}`);
+}
+
+function helperImpactLabel(kind: HelperImpactKind, hits: number, t: (key: string) => string) {
+  const label = helperKindLabel(kind, t);
+  return hits > 1 ? `${label} x${hits}` : label;
 }
 
 function helperTowerSourcePosition(index: number, count: number) {
