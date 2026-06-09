@@ -68,6 +68,11 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.0.6": [
+    { key: "changelog.2.0.6.movement", image: require("./assets/generated/release-2.0.6-hero.jpg"), tone: "green" },
+    { key: "changelog.2.0.6.trade", image: require("./assets/generated/bugdex-workshop-shortcut.png"), tone: "gold" },
+    { key: "changelog.2.0.6.expo", image: require("./assets/generated/bugbaas-splash-badge-hd.png"), tone: "purple" }
+  ],
   "2.0.5": [
     { key: "changelog.2.0.5.profileButtons", image: require("./assets/characters/character-rookie-bug-catcher.png"), tone: "green" },
     { key: "changelog.2.0.5.bugdexCollection", image: require("./assets/generated/bugdex-collection-view-hd.jpg"), tone: "gold" },

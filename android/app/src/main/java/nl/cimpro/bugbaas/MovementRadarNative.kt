@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
@@ -17,7 +18,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Calendar
 import kotlin.math.max
 
 data class MovementGoalSnapshot(
@@ -57,14 +57,18 @@ data class MovementClaimSnapshot(
 object MovementRadarNative {
   private const val actionMovementCheck = "nl.cimpro.bugbaas.action.MOVEMENT_RADAR_CHECK"
   private const val estimatedMetersPerStep = 0.75
-  private const val walkingMetersPerRadarBug = 2500.0
-  private const val runningMetersPerRadarBug = 4000.0
-  private const val cyclingMetersPerRadarBug = 6000.0
-  private const val maxMovementRadarBugsPerDay = 5
+  private const val walkingMetersPerRadarBug = 1500.0
+  private const val runningMetersPerRadarBug = 3000.0
+  private const val cyclingMetersPerRadarBug = 5000.0
+  private const val maxMovementRadarBugsPerDay = 10
   private const val movementCheckMinutes = 60
   private const val movementRequestCode = 4343
   private const val prefsName = "movement_radar_native"
   private const val prefAwardedUnits = "awarded_units"
+  private const val prefCarryoverCyclingMeters = "carryover_cycling_meters"
+  private const val prefCarryoverDay = "carryover_day"
+  private const val prefCarryoverRunningMeters = "carryover_running_meters"
+  private const val prefCarryoverWalkingMeters = "carryover_walking_meters"
   private const val prefDay = "day"
 
   fun schedulePeriodicCheck(context: Context) {
@@ -85,16 +89,18 @@ object MovementRadarNative {
   }
 
   suspend fun claimAvailable(context: Context, movementBoost: Double = 0.0, queueForWidget: Boolean = true): MovementClaimSnapshot {
-    val snapshot = readHealthConnectSnapshot(context)
-    if (!snapshot.available) return MovementClaimSnapshot(0, emptyList(), 0.0, snapshot.reason)
+    val rawSnapshot = readHealthConnectSnapshot(context)
+    if (!rawSnapshot.available) return MovementClaimSnapshot(0, emptyList(), 0.0, rawSnapshot.reason)
 
     val today = localDayId()
     val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
     val awardedToday = if (prefs.getString(prefDay, "") == today) prefs.getInt(prefAwardedUnits, 0) else 0
     val targets = boostedTargets(movementBoost)
+    val snapshot = withCarryover(rawSnapshot, prefs, today)
     val earnedToday = earnedUnits(snapshot, targets)
     val claimable = maxOf(0, minOf(maxMovementRadarBugsPerDay, earnedToday) - awardedToday)
-    if (claimable <= 0) return MovementClaimSnapshot(0, emptyList(), snapshot.estimatedKm)
+    storeNextCarryover(prefs, snapshot, targets)
+    if (claimable <= 0) return MovementClaimSnapshot(0, emptyList(), rawSnapshot.estimatedKm)
 
     val bugIds = BugRadarWidgetProvider.pickRandomRadarBugIds(claimable)
     val awarded = if (queueForWidget) BugRadarWidgetProvider.enqueueRadarBugs(context, bugIds) else bugIds.size
@@ -104,19 +110,21 @@ object MovementRadarNative {
         .putInt(prefAwardedUnits, minOf(maxMovementRadarBugsPerDay, awardedToday + awarded))
         .apply()
     }
-    return MovementClaimSnapshot(awarded, bugIds.take(awarded), snapshot.estimatedKm)
+    return MovementClaimSnapshot(awarded, bugIds.take(awarded), rawSnapshot.estimatedKm)
   }
 
   suspend fun progress(context: Context, movementBoost: Double = 0.0): MovementProgressSnapshot {
-    val snapshot = readHealthConnectSnapshot(context)
-    if (!snapshot.available) return emptyProgress(snapshot.reason ?: "health_error", snapshot.dataTypes)
+    val rawSnapshot = readHealthConnectSnapshot(context)
+    if (!rawSnapshot.available) return emptyProgress(rawSnapshot.reason ?: "health_error", rawSnapshot.dataTypes)
 
     val targets = boostedTargets(movementBoost)
     val today = localDayId()
     val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
     val awardedToday = if (prefs.getString(prefDay, "") == today) prefs.getInt(prefAwardedUnits, 0) else 0
+    val snapshot = withCarryover(rawSnapshot, prefs, today)
     val earnedToday = earnedUnits(snapshot, targets)
     val claimable = maxOf(0, minOf(maxMovementRadarBugsPerDay, earnedToday) - awardedToday)
+    storeNextCarryover(prefs, snapshot, targets)
     return MovementProgressSnapshot(
       available = true,
       awardedToday = awardedToday,
@@ -314,6 +322,29 @@ object MovementRadarNative {
     return minOf(maxMovementRadarBugsPerDay, walking + running + cycling)
   }
 
+  private fun withCarryover(snapshot: ExerciseSnapshot, prefs: SharedPreferences, today: String): ExerciseSnapshot {
+    if (prefs.getString(prefCarryoverDay, "") != today) return snapshot
+    return snapshot.copy(
+      walkingMeters = snapshot.walkingMeters + prefs.getFloat(prefCarryoverWalkingMeters, 0f).toDouble(),
+      runningMeters = snapshot.runningMeters + prefs.getFloat(prefCarryoverRunningMeters, 0f).toDouble(),
+      cyclingMeters = snapshot.cyclingMeters + prefs.getFloat(prefCarryoverCyclingMeters, 0f).toDouble()
+    )
+  }
+
+  private fun storeNextCarryover(prefs: SharedPreferences, snapshot: ExerciseSnapshot, targets: MovementTargets) {
+    prefs.edit()
+      .putString(prefCarryoverDay, nextLocalDayId())
+      .putFloat(prefCarryoverWalkingMeters, remainderMeters(snapshot.walkingMeters, targets.walking).toFloat())
+      .putFloat(prefCarryoverRunningMeters, remainderMeters(snapshot.runningMeters, targets.running).toFloat())
+      .putFloat(prefCarryoverCyclingMeters, remainderMeters(snapshot.cyclingMeters, targets.cycling).toFloat())
+      .apply()
+  }
+
+  private fun remainderMeters(meters: Double, targetMeters: Double): Double {
+    if (targetMeters <= 0.0) return 0.0
+    return maxOf(0.0, meters % targetMeters)
+  }
+
   private fun boostedTargets(movementBoost: Double): MovementTargets {
     val boost = movementBoost.coerceIn(0.0, 1.0)
     val multiplier = 1.0 + boost
@@ -393,8 +424,11 @@ object MovementRadarNative {
   }
 
   private fun localDayId(): String {
-    val calendar = Calendar.getInstance()
-    return "${calendar.get(Calendar.YEAR)}-${calendar.get(Calendar.DAY_OF_YEAR)}"
+    return LocalDate.now(ZoneId.systemDefault()).toString()
+  }
+
+  private fun nextLocalDayId(): String {
+    return LocalDate.now(ZoneId.systemDefault()).plusDays(1).toString()
   }
 
   private fun maxInstant(first: Instant, second: Instant): Instant = if (first.isAfter(second)) first else second

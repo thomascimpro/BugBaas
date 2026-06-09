@@ -1,7 +1,6 @@
 import Constants from "expo-constants";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
-import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 import { AppBackground } from "../components/AppBackground";
 import { BugArtImage } from "../components/BugArtImage";
 import { WalkingBugsLayer } from "../components/WalkingBugsLayer";
@@ -9,6 +8,15 @@ import { useI18n } from "../services/i18n";
 import { sharedStyles } from "./sharedStyles";
 
 const splashBadge = require("../../assets/generated/bugbaas-splash-badge-hd.png");
+
+function googleSignInModule() {
+  if (Constants.appOwnership === "expo") return null;
+  try {
+    return require("@react-native-google-signin/google-signin");
+  } catch {
+    return null;
+  }
+}
 
 type Props = {
   error: string;
@@ -31,7 +39,9 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
   const googleClientId = String(Constants.expoConfig?.extra?.googleClientId || "");
 
   useEffect(() => {
-    GoogleSignin.configure({
+    const google = googleSignInModule();
+    if (!google?.GoogleSignin) return;
+    google.GoogleSignin.configure({
       webClientId: googleClientId,
       offlineAccess: false
     });
@@ -67,11 +77,16 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
       setGoogleError(t("login.googleNotConfigured"));
       return;
     }
+    const google = googleSignInModule();
+    if (!google?.GoogleSignin) {
+      setGoogleError(t("login.googleFailed"));
+      return;
+    }
     setGoogleBusy(true);
     setGoogleError("");
     try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const result = await GoogleSignin.signIn();
+      await google.GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const result = await google.GoogleSignin.signIn();
       if (result.type === "cancelled") {
         setGoogleBusy(false);
         return;
@@ -90,7 +105,7 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
       handledGoogleTokenRef.current = idToken;
       await onGoogleSubmit(idToken);
     } catch (error) {
-      if (typeof error === "object" && error !== null && "code" in error && error.code === statusCodes.SIGN_IN_CANCELLED) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === google.statusCodes.SIGN_IN_CANCELLED) {
         setGoogleBusy(false);
         return;
       }
