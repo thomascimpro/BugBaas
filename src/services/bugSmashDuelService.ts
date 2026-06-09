@@ -7,7 +7,7 @@ const demoDuels = new Map<string, BugSmashDuel>();
 
 export const bugSmashDuelDurationMs = 30000;
 export const bugSmashDuelStartDelayMs = 5000;
-export const bugSmashDuelBugCount = 24;
+export const bugSmashDuelBugCount = 36;
 
 function nowIso() {
   return new Date().toISOString();

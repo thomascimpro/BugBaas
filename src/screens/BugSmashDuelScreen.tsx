@@ -36,8 +36,8 @@ type Props = {
 
 const duelHeroImage = require("../../assets/generated/bug-smash-duel-concept.jpg");
 const DuelTargetBugArt = React.memo(BugArtImage);
-const duelGameTickMs = 160;
-const maxVisibleDuelTargets = 7;
+const duelGameTickMs = 55;
+const maxVisibleDuelTargets = 10;
 
 const rarityColors: Record<BugDexRarity, string> = {
   Gewoon: "#6f7f5f",
@@ -297,9 +297,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     if (!entry || caughtBugIdsRef.current.includes(bugId)) return;
     const targetIndex = activeDuel.bugIds.indexOf(bugId);
     const requiredTaps = requiredTapsForTarget(entry.rarity, assist, targetIndex);
-    const nextHits = (hitCountsRef.current[bugId] ?? 0) + 1;
+    const currentHits = hitCountsRef.current;
+    const nextHits = (currentHits[bugId] ?? 0) + 1;
+    hitCountsRef.current = { ...currentHits, [bugId]: nextHits };
     playBugSwatterFeedback(hitFeedbackFor(bugId));
-    setHitCounts((current) => ({ ...current, [bugId]: nextHits }));
+    setHitCounts(hitCountsRef.current);
     if (nextHits < requiredTaps) {
       const hitAt = Date.now();
       if (hitAt - lastHitSoundAtRef.current > 90) {
@@ -312,8 +314,10 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     const catchAt = Date.now();
     comboRef.current = catchAt - lastCatchAtRef.current <= assist.comboGraceMs ? comboRef.current + 1 : 1;
     lastCatchAtRef.current = catchAt;
-    setCaughtBugIds((current) => current.includes(bugId) ? current : [...current, bugId]);
-    setScore((current) => current + scoreByRarity[entry.rarity] + duelCatchBonusPoints(entry.rarity, bugId, assist) + duelComboBonusPoint(comboRef.current));
+    caughtBugIdsRef.current = caughtBugIdsRef.current.includes(bugId) ? caughtBugIdsRef.current : [...caughtBugIdsRef.current, bugId];
+    scoreRef.current += scoreByRarity[entry.rarity] + duelCatchBonusPoints(entry.rarity, bugId, assist) + duelComboBonusPoint(comboRef.current);
+    setCaughtBugIds(caughtBugIdsRef.current);
+    setScore(scoreRef.current);
   }
 
   function hitFeedbackFor(bugId: string) {
@@ -645,9 +649,9 @@ function targetPriority(rarity: BugDexRarity, progress: number) {
 function targetMotion(index: number, seed: number, elapsedMs: number, rarity: BugDexRarity, assist: BugSmashDuelBalance) {
   const lane = (index * 37 + seed) % 82;
   const wave = (index % 5) + 2;
-  const rarityLifetime = rarity === "Gewoon" ? 3600 : rarity === "Zeldzaam" ? 4700 : rarity === "Episch" ? 5900 : rarity === "Legendarisch" ? 7000 : 8200;
+  const rarityLifetime = rarity === "Gewoon" ? 3900 : rarity === "Zeldzaam" ? 5000 : rarity === "Episch" ? 6200 : rarity === "Legendarisch" ? 7400 : 8600;
   const duration = rarityLifetime * assist.speedMultiplier;
-  const spawnStart = index * 1180 * assist.targetSpacingMultiplier + ((seed + index * 173) % 520);
+  const spawnStart = index * 780 * assist.targetSpacingMultiplier + ((seed + index * 173) % 420);
   const progress = (elapsedMs - spawnStart) / duration;
   if (progress < 0 || progress > 1) return { visible: false, progress, x: 0, y: 0, rotate: 0 };
   const direction = index % 2 === 0 ? 1 : -1;

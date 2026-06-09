@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.8
+
+- Bug Smash Duel beweegt vloeiender: targets updaten vaker met kleinere stappen in plaats van grote zichtbare sprongen.
+- Taps registreren directer doordat hit-count, score en gevangen bugs meteen in lokale refs worden bijgewerkt.
+- Er komen meer bugs langs per duel, met een hogere zichtbare cap zonder de arena onbeperkt vol te renderen.
+
 ## 2.1.7
 
 - Bug Smash Duel is lichter gemaakt voor Android: achtergrondbugs, foreground catch en in-app overlays draaien niet meer mee tijdens de duel-route.
