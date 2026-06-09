@@ -15,7 +15,7 @@ service cloud.firestore {
     }
 
     function validNotificationType(type) {
-      return type in ['trade', 'new_bug', 'comment', 'bug_update', 'bugdex'];
+      return type in ['trade', 'new_bug', 'comment', 'bug_update', 'bugdex', 'duel'];
     }
 
     function validInventoryData(bugId) {
@@ -135,6 +135,7 @@ service cloud.firestore {
           'movementRegisteredDayKm',
           'mythicBugDexCount',
           'nameSet',
+          'notificationPushToken',
           'splatCount',
           'title',
           'totalPoints',
@@ -143,6 +144,7 @@ service cloud.firestore {
           'upvoteGivenPointCount',
           'upvoteReceivedPointCount'
         ])
+        && (!request.resource.data.keys().hasAny(['notificationPushToken']) || request.resource.data.notificationPushToken is string)
         && (!request.resource.data.keys().hasAny(['active']) || request.resource.data.active == true);
     }
 
@@ -158,6 +160,108 @@ service cloud.firestore {
       return onlyUpvoteFieldsChanged()
         && resource.data.reporterId != request.auth.uid
         && (firstLegacyUpvote() || toggledOwnUpvote());
+    }
+
+    function isDuelParticipant(data) {
+      return data.fromUserId == request.auth.uid || data.toUserId == request.auth.uid;
+    }
+
+    function validDuelCreate(duelId) {
+      return signedIn()
+        && request.resource.data.keys().hasOnly([
+          'bugIds',
+          'createdAt',
+          'durationMs',
+          'fromUserId',
+          'fromUserName',
+          'id',
+          'rewardClaimedBy',
+          'scores',
+          'seed',
+          'status',
+          'toUserId',
+          'toUserName',
+          'updatedAt'
+        ])
+        && request.resource.data.id == duelId
+        && request.resource.data.fromUserId == request.auth.uid
+        && request.resource.data.toUserId is string
+        && request.resource.data.toUserId != request.auth.uid
+        && request.resource.data.fromUserName is string
+        && request.resource.data.toUserName is string
+        && request.resource.data.status == 'pending'
+        && request.resource.data.seed is int
+        && request.resource.data.bugIds is list
+        && request.resource.data.bugIds.size() == 24
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string
+        && request.resource.data.durationMs is int
+        && request.resource.data.durationMs == 30000
+        && request.resource.data.scores is map
+        && request.resource.data.scores.size() == 0
+        && request.resource.data.rewardClaimedBy is list
+        && request.resource.data.rewardClaimedBy.size() == 0;
+    }
+
+    function acceptOrDeclineDuel() {
+      return signedIn()
+        && resource.data.status == 'pending'
+        && resource.data.toUserId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'startAt'])
+        && request.resource.data.status in ['accepted', 'declined']
+        && request.resource.data.updatedAt is string
+        && (
+          request.resource.data.status == 'declined'
+          || (request.resource.data.keys().hasAny(['startAt']) && request.resource.data.startAt is string)
+        );
+    }
+
+    function cancelOwnDuel() {
+      return signedIn()
+        && resource.data.status == 'pending'
+        && resource.data.fromUserId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status == 'cancelled'
+        && request.resource.data.updatedAt is string;
+    }
+
+    function submitOwnDuelScore() {
+      let otherUserId = resource.data.fromUserId == request.auth.uid ? resource.data.toUserId : resource.data.fromUserId;
+      let ownScore = request.resource.data.scores[request.auth.uid];
+      return signedIn()
+        && isDuelParticipant(resource.data)
+        && resource.data.status in ['accepted', 'completed']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scores', 'status', 'winnerId', 'updatedAt'])
+        && request.resource.data.status in ['accepted', 'completed']
+        && request.resource.data.updatedAt is string
+        && request.resource.data.scores is map
+        && request.resource.data.scores.keys().hasOnly([resource.data.fromUserId, resource.data.toUserId])
+        && request.resource.data.scores.keys().hasAny([request.auth.uid])
+        && (!resource.data.scores.keys().hasAny([otherUserId]) || request.resource.data.scores[otherUserId] == resource.data.scores[otherUserId])
+        && ownScore.score is int
+        && ownScore.score >= 0
+        && ownScore.score <= 500
+        && ownScore.caughtBugIds is list
+        && ownScore.caughtBugIds.size() <= 24
+        && ownScore.bonusScore is int
+        && ownScore.bonusScore >= 0
+        && ownScore.bonusScore <= 100
+        && ownScore.submittedAt is string
+        && (!request.resource.data.keys().hasAny(['winnerId']) || request.resource.data.winnerId is string);
+    }
+
+    function claimOwnDuelReward() {
+      return signedIn()
+        && resource.data.status == 'completed'
+        && resource.data.winnerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rewardClaimedBy', 'updatedAt'])
+        && request.resource.data.updatedAt is string
+        && resource.data.rewardClaimedBy is list
+        && request.resource.data.rewardClaimedBy is list
+        && !(request.auth.uid in resource.data.rewardClaimedBy)
+        && request.auth.uid in request.resource.data.rewardClaimedBy
+        && request.resource.data.rewardClaimedBy.size() == resource.data.rewardClaimedBy.size() + 1
+        && request.resource.data.rewardClaimedBy.hasAll(resource.data.rewardClaimedBy);
     }
 
     match /users/{userId} {
@@ -205,7 +309,8 @@ service cloud.firestore {
           && request.resource.data.new_bug is bool
           && request.resource.data.comment is bool
           && request.resource.data.bug_update is bool
-          && request.resource.data.bugdex is bool;
+          && request.resource.data.bugdex is bool
+          && request.resource.data.duel is bool;
         allow delete: if false;
       }
 
@@ -272,6 +377,16 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
         && request.resource.data.status in ['Geaccepteerd', 'Afgewezen']
         && request.resource.data.updatedAt is string;
+      allow delete: if false;
+    }
+
+    match /bugSmashDuels/{duelId} {
+      allow read: if signedIn() && isDuelParticipant(resource.data);
+      allow create: if validDuelCreate(duelId);
+      allow update: if acceptOrDeclineDuel()
+        || cancelOwnDuel()
+        || submitOwnDuelScore()
+        || claimOwnDuelReward();
       allow delete: if false;
     }
   }

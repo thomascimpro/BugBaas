@@ -13,8 +13,9 @@ export type User = {
   bugLampActiveUntil?: string;
   bugLampCount?: number;
   nameSet?: boolean;
-  helpSeen?: boolean;
-  splatCount?: number;
+    helpSeen?: boolean;
+    notificationPushToken?: string;
+    splatCount?: number;
   bugDexCount?: number;
   commentPointCount?: number;
   legendaryBugDexCount?: number;

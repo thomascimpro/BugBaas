@@ -1,9 +1,10 @@
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { AppNotification, BugComment, BugReport, NotificationSettings, NotificationType, User } from "../types";
-import { listUsers } from "./userService";
+import { listUsers, updateUserNotificationPushToken } from "./userService";
 
 export const defaultNotificationSettings: NotificationSettings = {
   trade: true,
@@ -64,6 +65,24 @@ export async function initializePhoneNotifications(): Promise<void> {
     });
   }
   await Notifications.requestPermissionsAsync();
+}
+
+export async function registerPhoneNotificationsForUser(user: User): Promise<User | null> {
+  await initializePhoneNotifications();
+  const permissions = await Notifications.getPermissionsAsync();
+  if (!permissions.granted) return null;
+  const token = await getExpoPushToken();
+  if (!token || token === user.notificationPushToken) return null;
+  return updateUserNotificationPushToken(user, token);
+}
+
+async function getExpoPushToken(): Promise<string> {
+  const constants = Constants as typeof Constants & { easConfig?: { projectId?: string } };
+  const projectId = constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId ?? Constants.expoConfig?.extra?.easProjectId;
+  const token = projectId
+    ? await Notifications.getExpoPushTokenAsync({ projectId })
+    : await Notifications.getExpoPushTokenAsync();
+  return token.data;
 }
 
 export async function showPhoneNotification(notification: AppNotification): Promise<void> {
@@ -127,16 +146,17 @@ export function subscribeUserNotifications(
   });
 }
 
-async function createNotification(userId: string, notification: Omit<AppNotification, "id" | "read" | "createdAt">) {
+async function createNotification(userId: string, notification: Omit<AppNotification, "id" | "read" | "createdAt">): Promise<AppNotification> {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const item: AppNotification = { ...notification, id, read: false, createdAt: nowIso() };
 
   if (!isFirebaseConfigured) {
     demoNotifications.set(userId, [item, ...(demoNotifications.get(userId) ?? [])]);
-    return;
+    return item;
   }
 
   await setDoc(doc(db, "users", userId, "notifications", id), item);
+  return item;
 }
 
 async function notifyRecipients(
@@ -222,7 +242,7 @@ export async function notifyTradeAccepted(requesterId: string, actor: User, rece
 }
 
 export async function notifyBugSmashDuelRequest(recipientId: string, actor: User, duelId: string): Promise<void> {
-  await createNotification(recipientId, {
+  const notification = await createNotification(recipientId, {
     type: "duel",
     title: "Bug Smash Duel",
     body: `${actor.displayName} daagt je uit. Open de duel-arena om te accepteren.`,
@@ -230,16 +250,51 @@ export async function notifyBugSmashDuelRequest(recipientId: string, actor: User
     actorName: actor.displayName,
     duelId
   });
+  await sendRemotePhoneNotification(recipientId, notification).catch(() => undefined);
 }
 
 export async function notifyBugSmashDuelAccepted(requesterId: string, actor: User, duelId: string): Promise<void> {
-  await createNotification(requesterId, {
+  const notification = await createNotification(requesterId, {
     type: "duel",
     title: "Duel geaccepteerd",
     body: `${actor.displayName} accepteerde je Bug Smash Duel. De ronde start zo.`,
     actorId: actor.uid,
     actorName: actor.displayName,
     duelId
+  });
+  await sendRemotePhoneNotification(requesterId, notification).catch(() => undefined);
+}
+
+async function sendRemotePhoneNotification(userId: string, notification: AppNotification): Promise<void> {
+  if (!isFirebaseConfigured) return;
+  const settingsSnapshot = await getDoc(doc(db, "users", userId, "settings", "notifications"));
+  const settings = settingsSnapshot.exists() ? normalizeSettings(settingsSnapshot.data() as Partial<NotificationSettings>) : defaultNotificationSettings;
+  if (!settings[notification.type]) return;
+
+  const userSnapshot = await getDoc(doc(db, "users", userId));
+  const recipient = userSnapshot.exists() ? userSnapshot.data() as User : null;
+  const token = recipient?.notificationPushToken;
+  if (!token || !/^(ExponentPushToken|ExpoPushToken)\[.+\]$/.test(token)) return;
+
+  await fetch("https://exp.host/--/api/v2/push/send", {
+    body: JSON.stringify({
+      body: notification.body,
+      channelId: phoneNotificationChannelId,
+      data: {
+        bugId: notification.bugId ?? "",
+        duelId: notification.duelId ?? "",
+        notificationId: notification.id,
+        type: notification.type
+      },
+      priority: "high",
+      sound: "default",
+      title: notification.title,
+      to: token
+    }),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    method: "POST"
   });
 }
 

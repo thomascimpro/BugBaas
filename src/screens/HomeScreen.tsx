@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Alert, DimensionValue, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { DimensionValue, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { RouteName } from "../../App";
 import { BugArtImage } from "../components/BugArtImage";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
@@ -36,7 +36,7 @@ const rarityColors: Record<BugDexRarity, string> = {
   Mythisch: "#7c3aed"
 };
 
-const settingsBadgeImage = require("../../assets/generated/bugbaas-splash-badge-hd.png");
+const settingsGearImage = require("../../assets/generated/settings-gear-hd.png");
 const bugSmashDuelImage = require("../../assets/generated/bug-smash-duel-concept.jpg");
 
 export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRadarClaimed, onMovementRegistered, onOpenBugSmashDuel, onOpenBugDexWorkshop, user, onNavigate }: Props) {
@@ -151,7 +151,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
                 <CharacterAvatarImage characterId={user.characterId} size={40} />
               </Pressable>
               <Pressable accessibilityLabel={t("home.settings")} accessibilityRole="button" hitSlop={8} style={styles.settingsPill} onPress={() => onNavigate("settings")}>
-                <Image accessibilityIgnoresInvertColors resizeMode="contain" source={settingsBadgeImage} style={styles.settingsImage} />
+                <Image accessibilityIgnoresInvertColors resizeMode="contain" source={settingsGearImage} style={styles.settingsImage} />
               </Pressable>
             </View>
           </View>
@@ -173,19 +173,9 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
         </View>
       </View>
       {movementProgress && (
-        <View style={styles.movementCard}>
-          <View style={styles.movementHeader}>
-            <View style={styles.movementTitleRow}>
+          <View style={styles.movementCard}>
+            <View style={styles.movementHeader}>
               <Text style={styles.movementTitle}>{t("home.movementRadar")}</Text>
-              <Pressable
-                accessibilityLabel={t("home.healthInfo")}
-                hitSlop={10}
-                onPress={() => showMovementConnectInfo(t)}
-                style={({ pressed }) => [styles.movementInfoButton, pressed && styles.movementInfoButtonPressed]}
-              >
-                <Text style={styles.movementInfoText}>i</Text>
-              </Pressable>
-            </View>
             <View style={styles.movementHeaderActions}>
               <Text style={styles.movementReward}>{t("home.bugsReward", { awarded: movementProgress.awardedToday, max: movementProgress.maxRewards })}</Text>
               {canClaimMovement && (
@@ -418,28 +408,6 @@ function ProfileIcon() {
   );
 }
 
-function SettingsIcon() {
-  return (
-    <View style={styles.settingsIcon}>
-      <View style={styles.settingsCog}>
-        <View style={styles.settingsDot} />
-      </View>
-      <View style={[styles.settingsSpoke, styles.settingsSpokeTop]} />
-      <View style={[styles.settingsSpoke, styles.settingsSpokeRight]} />
-      <View style={[styles.settingsSpoke, styles.settingsSpokeBottom]} />
-      <View style={[styles.settingsSpoke, styles.settingsSpokeLeft]} />
-    </View>
-  );
-}
-
-function showMovementConnectInfo(t: (key: string) => string): void {
-  Alert.alert(
-    t("health.connectTitle"),
-    t("health.connectBody"),
-    [{ text: "OK" }]
-  );
-}
-
 const styles = StyleSheet.create({
   content: {
     paddingBottom: 160
@@ -555,56 +523,8 @@ const styles = StyleSheet.create({
     width: 46
   },
   settingsImage: {
-    height: 40,
-    width: 40
-  },
-  settingsIcon: {
-    alignItems: "center",
-    height: 22,
-    justifyContent: "center",
-    width: 22
-  },
-  settingsCog: {
-    alignItems: "center",
-    borderColor: "#ffffff",
-    borderRadius: 999,
-    borderWidth: 2,
-    height: 15,
-    justifyContent: "center",
-    width: 15,
-    zIndex: 2
-  },
-  settingsDot: {
-    backgroundColor: "#ffffff",
-    borderRadius: 999,
-    height: 4,
-    width: 4
-  },
-  settingsSpoke: {
-    backgroundColor: "#ffffff",
-    borderRadius: 999,
-    height: 3,
-    position: "absolute",
-    width: 8
-  },
-  settingsSpokeTop: {
-    top: 1,
-    transform: [{ rotate: "90deg" }]
-  },
-  settingsSpokeRight: {
-    right: 1
-  },
-  settingsSpokeBottom: {
-    bottom: 1,
-    transform: [{ rotate: "90deg" }]
-  },
-  settingsSpokeLeft: {
-    left: 1
-  },
-  settingsText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "900"
+    height: 44,
+    width: 44
   },
   scoreText: {
     color: "#dbe8de",
@@ -655,29 +575,6 @@ const styles = StyleSheet.create({
   movementTitle: {
     color: "#102018",
     fontSize: 15,
-    fontWeight: "900"
-  },
-  movementTitleRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 7
-  },
-  movementInfoButton: {
-    alignItems: "center",
-    backgroundColor: "#e8f1eb",
-    borderColor: "#b8cbbd",
-    borderRadius: 10,
-    borderWidth: 1,
-    height: 20,
-    justifyContent: "center",
-    width: 20
-  },
-  movementInfoButtonPressed: {
-    opacity: 0.7
-  },
-  movementInfoText: {
-    color: "#15724f",
-    fontSize: 12,
     fontWeight: "900"
   },
   movementReward: {

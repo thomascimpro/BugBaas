@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.6
+
+- Duel-uitdagingen geven nu een echte telefoonmelding aan de uitgedaagde speler zodra diens app pushmeldingen heeft geregistreerd.
+- Het duel-scherm toont voor de ontvanger duidelijk dat hij is uitgedaagd, met accepteer/weiger actie zolang het duel wacht.
+- Helpers wisselen in het duel-scherm opent nu duidelijk de gevangen BugDex-collectie en de actieve helperpotjes zijn zelf tappable.
+- Home gebruikt een nieuw HD settings-tandwiel en de losse `(i)` knop bij Beweeg radar is verwijderd.
+
 ## 2.1.5
 
 - Duel starten vanaf een collega-profiel houdt die collega nu direct geselecteerd in het duel-scherm.

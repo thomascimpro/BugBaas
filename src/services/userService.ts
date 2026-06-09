@@ -54,7 +54,7 @@ function normalizeUser(user: User): User {
 }
 
 function publicUser(user: User): User {
-  return { ...user, email: "" };
+  return { ...user, email: "", notificationPushToken: "" };
 }
 
 async function listAllBugsForScores(): Promise<BugReport[]> {
@@ -342,6 +342,21 @@ export async function updateUserBugSquad(user: User, bugIds: string[]): Promise<
   }
 
   await updateDoc(doc(db, "users", user.uid), { activeBugSquad });
+  return updated;
+}
+
+export async function updateUserNotificationPushToken(user: User, notificationPushToken: string): Promise<User> {
+  const token = notificationPushToken.trim();
+  if (!token) return normalizeUser(user);
+  const updated = normalizeUser({ ...user, notificationPushToken: token });
+
+  if (!isFirebaseConfigured) {
+    demoUsers.set(updated.email, updated);
+    if (demoUser?.uid === user.uid) demoUser = updated;
+    return updated;
+  }
+
+  await updateDoc(doc(db, "users", user.uid), { notificationPushToken: token });
   return updated;
 }
 
