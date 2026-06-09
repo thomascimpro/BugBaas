@@ -90,6 +90,7 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
   const [activeBug, setActiveBug] = useState<ActiveBug | null>(null);
   const [hits, setHits] = useState(0);
   const [caught, setCaught] = useState(false);
+  const [hitboxSize, setHitboxSize] = useState(92);
   const progress = useRef(new Animated.Value(0)).current;
   const hitFeedback = useRef(new Animated.Value(0)).current;
   const poof = useRef(new Animated.Value(0)).current;
@@ -166,7 +167,7 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
 
   const translateX = useMemo(() => {
     if (!activeBug) return 0;
-    const hitboxWidth = activeBug.size + 130;
+    const hitboxWidth = hitboxSize;
     const minLeft = 10;
     const maxLeft = Math.max(minLeft, width - hitboxWidth - 10);
     const range = maxLeft - minLeft;
@@ -174,11 +175,11 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
       inputRange: movementInput,
       outputRange: activeBug.pathX.map((fraction) => minLeft + range * fraction)
     });
-  }, [activeBug, progress, width]);
+  }, [activeBug, hitboxSize, progress, width]);
 
   const translateY = useMemo(() => {
     if (!activeBug) return 0;
-    const hitboxHeight = activeBug.size + 90;
+    const hitboxHeight = hitboxSize;
     const minTop = Math.max(24, height * 0.1);
     const maxTop = Math.max(minTop, height - hitboxHeight - 96);
     const range = maxTop - minTop;
@@ -186,7 +187,7 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
       inputRange: movementInput,
       outputRange: activeBug.pathY.map((fraction) => minTop + range * clamp(fraction, 0, 1))
     });
-  }, [activeBug, height, progress]);
+  }, [activeBug, height, hitboxSize, progress]);
 
   const transform = useMemo(() => {
     if (!activeBug) return [];
@@ -227,7 +228,8 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
     const rarity = forcedId ? rarityByBugId[forcedId] ?? "common" : pickRarity();
     const bugId = forcedId ?? pickBugId(rarity);
     const settings = raritySettings[rarity];
-    const requiredTaps = Math.max(1, Math.ceil(settings.requiredTaps * (1 - clamp(catchAssist, 0, 0.2))));
+    const hitboxMultiplier = 1.06 + clamp(catchAssist, 0, 0.22);
+    const requiredTaps = settings.requiredTaps;
     const durationMs = Math.round(catchDurationMs * (1 + clamp(catchTimeBonus, 0, 0.2)));
     const direction = Math.random() > 0.5 ? "right" : "left";
     const motionPath = createMotionPath(rarity, direction);
@@ -246,6 +248,7 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
       size: settings.size,
       stepBob: settings.stepBob
     });
+    setHitboxSize(Math.round(settings.size * hitboxMultiplier));
   }
 
   function clearActiveBug() {
@@ -317,7 +320,7 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
           }
         ]}
       >
-        <Pressable hitSlop={42} onPress={tapBug} style={[styles.hitbox, { minHeight: activeBug.size + 90, minWidth: activeBug.size + 130 }]}>
+        <Pressable hitSlop={8} onPress={tapBug} style={[styles.hitbox, { minHeight: hitboxSize, minWidth: hitboxSize }]}>
           <BugSwatterHit bugSize={activeBug.size} feedback={hitFeedback} />
           {!caught && (
             <View pointerEvents="none" style={[styles.timerBadge, { height: timerSize, width: timerSize }]}>

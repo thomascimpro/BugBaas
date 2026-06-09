@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.1
+
+- Bug Squad boosts in foreground en Bug Smash Duel zijn opnieuw gebalanceerd: elke bonuscategorie heeft nu een concreet nuttig effect.
+- Catch assist vergroot nu de echte raakzone in plaats van gratis taps te verlagen; de vliegenmepper blijft alleen visuele feedback.
+- Duel-bonussen zijn verdeeld over hitbox, rustiger targets, combo grace, support bonuspunten, focus startvoordeel, rarity/shard bonuspunten en betere duel-reward kans.
+- Release builds worden niet meer met de Android debug-keystore ondertekend, maar met een lokale upload-keystore.
+- Onnodige gevoelige Android-permissies zoals camera, microfoon, overlay en write external storage zijn uit de release manifest gehaald.
+
 ## 2.1.0
 
 - Nieuw spelletje: Bug Smash Duel, waarin je een collega uitdaagt, na 3-2-1 tegelijk bugs smashed en de winnaar een BugDex reward kan claimen.

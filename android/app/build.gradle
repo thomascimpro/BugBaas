@@ -3,6 +3,17 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def uploadKeystoreProperties = new Properties()
+def uploadKeystorePropertiesFile = file("upload-keystore.properties")
+if (uploadKeystorePropertiesFile.exists()) {
+    uploadKeystorePropertiesFile.withInputStream { uploadKeystoreProperties.load(it) }
+}
+
+def uploadStoreFile = System.getenv("BUGBAAS_UPLOAD_STORE_FILE") ?: uploadKeystoreProperties["storeFile"]
+def uploadStorePassword = System.getenv("BUGBAAS_UPLOAD_STORE_PASSWORD") ?: uploadKeystoreProperties["storePassword"]
+def uploadKeyAlias = System.getenv("BUGBAAS_UPLOAD_KEY_ALIAS") ?: uploadKeystoreProperties["keyAlias"]
+def uploadKeyPassword = System.getenv("BUGBAAS_UPLOAD_KEY_PASSWORD") ?: uploadKeystoreProperties["keyPassword"]
+def hasUploadSigning = uploadStoreFile && uploadStorePassword && uploadKeyAlias && uploadKeyPassword
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -92,8 +103,8 @@ android {
         applicationId 'nl.cimpro.bugbaas'
         minSdkVersion 26
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 71
-        versionName "2.1.0"
+        versionCode 72
+        versionName "2.1.1"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -104,15 +115,24 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        upload {
+            if (hasUploadSigning) {
+                storeFile file(uploadStoreFile)
+                storePassword uploadStorePassword
+                keyAlias uploadKeyAlias
+                keyPassword uploadKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            if (!hasUploadSigning) {
+                throw new GradleException("Release signing is missing. Set BUGBAAS_UPLOAD_* env vars or android/app/upload-keystore.properties.")
+            }
+            signingConfig signingConfigs.upload
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

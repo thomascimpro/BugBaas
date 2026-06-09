@@ -299,7 +299,9 @@ export async function rollSpecificBugDexDrop(user: User, bugId: string, source: 
 }
 
 export async function grantBugDexReward(user: User, source: BugDexDropSource): Promise<BugDexDropResult> {
-  return grantSpecificBug(user, pickEntry(source, activeBugSquadBonuses(user).radar_rarity + bugLampStatus(user).rarityBoost), source);
+  const bonuses = activeBugSquadBonuses(user);
+  const duelQuestBoost = source === "duel_win" ? bonuses.quest_boost * 0.35 : 0;
+  return grantSpecificBug(user, pickEntry(source, bonuses.radar_rarity + duelQuestBoost + bugLampStatus(user).rarityBoost), source);
 }
 
 export async function combineBugDexDuplicates(user: User, bugId: string): Promise<BugDexDropResult> {
