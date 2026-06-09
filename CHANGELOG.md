@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.5
+
+- Home gebruikt grotere HD-knoppen voor profiel en instellingen, met character/app-badge visuals in plaats van simpele iconen.
+- Home claim en radar-widget zijn gekoppeld: als een beweegreward via een van beide wordt geclaimd, verdwijnt dezelfde reward overal.
+- Beweegrewards die via Home worden geclaimd starten direct als foreground bug reward in de app.
+- BugDex collectie op profiel heeft een nieuwe HD kaart en de losse previewrij met vijf bugs is verwijderd.
+- Collega-profielen bekijken is read-only en geeft geen random BugDex unlock meer.
+- Bestaande badges worden bij deze update niet opnieuw als unlock-popup getoond; alleen nieuw verdiende badges verschijnen nog.
+
 ## 2.0.4
 
 - Home-header is rustiger gemaakt: de grote bug bovenaan is weggehaald zodat lange namen beter passen.

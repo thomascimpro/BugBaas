@@ -68,6 +68,12 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.0.5": [
+    { key: "changelog.2.0.5.profileButtons", image: require("./assets/characters/character-rookie-bug-catcher.png"), tone: "green" },
+    { key: "changelog.2.0.5.bugdexCollection", image: require("./assets/generated/bugdex-collection-view-hd.jpg"), tone: "gold" },
+    { key: "changelog.2.0.5.radarClaim", image: require("./assets/bugdex/schaatsenrijder.png"), tone: "purple" },
+    { key: "changelog.2.0.5.profileReward", image: require("./assets/generated/active-bug-squad-selection-hd.jpg"), tone: "green" }
+  ],
   "2.0.3": [
     { key: "changelog.2.0.3.bugdex", image: require("./assets/bugdex/atlaskever.png"), tone: "purple" },
     { key: "changelog.2.0.3.squad", image: require("./assets/generated/active-bug-squad-selection-hd.jpg"), tone: "green" },
@@ -234,19 +240,6 @@ function AppContent() {
     }
     previousBadgesRef.current = { badges: currentBadges, uid: user.uid };
   }, [badgeNamesKey, badgeUnlock, user?.uid]);
-
-  useEffect(() => {
-    if (!user || user.nameSet !== true || !helpGateChecked) return;
-    const currentBadges = user.badges ?? [];
-    if (!currentBadges.length) return;
-    let active = true;
-    void queueUnseenBadgeUnlocks(badgeDefinitionsForNames(currentBadges)).then(() => {
-      if (!active) return;
-    }).catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [badgeNamesKey, helpGateChecked, user?.nameSet, user?.uid]);
 
   useEffect(() => {
     if (badgeUnlock || rankUpTier || bugDexDrop || notification || helpVisible || changelogVersion || splatBonusVisible || versionNotice) return;
@@ -683,7 +676,6 @@ function AppContent() {
       }
       setSelectedUser(freshUser);
     }).catch(() => undefined);
-    if (!isOwnProfile) rewardActivity("profile_view");
   }
 
   if (authLoading) {
@@ -712,7 +704,17 @@ function AppContent() {
       <AppBackground />
       <WalkingBugsLayer onSplat={() => void handleBugSplat()} />
       <View style={styles.content}>
-        {route === "home" && <HomeScreen movementBoost={movementBoostForUser()} user={user} onActivateBugLamp={handleActivateBugLamp} onNavigate={setRoute} onOpenBugDexWorkshop={openBugDexTrades} onMovementRegistered={registerMovementKilometers} />}
+        {route === "home" && (
+          <HomeScreen
+            movementBoost={movementBoostForUser()}
+            user={user}
+            onActivateBugLamp={handleActivateBugLamp}
+            onMovementRadarClaimed={(bugIds) => setPendingRadarBugIds((queue) => [...queue, ...bugIds])}
+            onNavigate={setRoute}
+            onOpenBugDexWorkshop={openBugDexTrades}
+            onMovementRegistered={registerMovementKilometers}
+          />
+        )}
         {route === "bugs" && (
           <BugListScreen
             onBack={() => setRoute("home")}

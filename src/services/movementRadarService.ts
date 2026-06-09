@@ -38,7 +38,10 @@ export type MovementRadarProgress = {
 
 const nativeModule = NativeModules.BugBaasNative as {
   claimMovementRadarBonuses?: (movementBoost: number) => Promise<MovementRadarResult>;
+  claimMovementRadarBonusesForApp?: (movementBoost: number) => Promise<MovementRadarResult>;
+  claimQueuedRadarBugs?: () => Promise<BugArtId[]>;
   getMovementRadarProgress?: (movementBoost: number) => Promise<MovementRadarProgress>;
+  getQueuedRadarBugIds?: () => Promise<BugArtId[]>;
   requestHealthPermissions?: () => Promise<boolean>;
 } | undefined;
 
@@ -56,6 +59,27 @@ export async function claimMovementRadarBonuses(uid: string, movementBoost = 0):
     return emptyResult("health_permission_requested");
   }
   return nativeResult;
+}
+
+export async function claimMovementRadarBonusesForApp(uid: string, movementBoost = 0): Promise<MovementRadarResult> {
+  if (Platform.OS !== "android") return emptyResult("platform");
+  if (!nativeModule?.claimMovementRadarBonusesForApp) return claimMovementRadarBonuses(uid, movementBoost);
+
+  const nativeResult = await nativeModule.claimMovementRadarBonusesForApp(clampBoost(movementBoost));
+  if (nativeResult.reason === "health_permission" && await requestHealthConnectPermissionsOnce(uid)) {
+    return emptyResult("health_permission_requested");
+  }
+  return nativeResult;
+}
+
+export async function getQueuedRadarBugIds(): Promise<BugArtId[]> {
+  if (Platform.OS !== "android" || !nativeModule?.getQueuedRadarBugIds) return [];
+  return nativeModule.getQueuedRadarBugIds();
+}
+
+export async function claimQueuedRadarBugs(): Promise<BugArtId[]> {
+  if (Platform.OS !== "android" || !nativeModule?.claimQueuedRadarBugs) return [];
+  return nativeModule.claimQueuedRadarBugs();
 }
 
 export async function getMovementRadarProgress(_uid: string, movementBoost = 0): Promise<MovementRadarProgress> {

@@ -2,12 +2,14 @@ import React, { useEffect, useState } from "react";
 import { Alert, DimensionValue, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { RouteName } from "../../App";
 import { BugArtImage } from "../components/BugArtImage";
+import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { TierBadge } from "../components/TierBadge";
 import { listBugs } from "../services/bugService";
+import { BugArtId } from "../services/bugArt";
 import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
 import { bugLampStatus } from "../services/bugLampService";
 import { maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
-import { claimMovementRadarBonuses, getMovementRadarProgress, MovementRadarProgress } from "../services/movementRadarService";
+import { claimMovementRadarBonusesForApp, claimQueuedRadarBugs, getMovementRadarProgress, getQueuedRadarBugIds, MovementRadarProgress } from "../services/movementRadarService";
 import { bugDexEntries, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { languages, useI18n } from "../services/i18n";
 import { listUsers } from "../services/userService";
@@ -18,6 +20,7 @@ import { sharedStyles } from "./sharedStyles";
 type Props = {
   movementBoost?: number;
   onActivateBugLamp?: () => Promise<void>;
+  onMovementRadarClaimed?: (bugIds: BugArtId[]) => void;
   onMovementRegistered?: (estimatedKm: number) => Promise<void>;
   onOpenBugDexWorkshop?: () => void;
   user: User;
@@ -32,13 +35,16 @@ const rarityColors: Record<BugDexRarity, string> = {
   Mythisch: "#7c3aed"
 };
 
-export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRegistered, onOpenBugDexWorkshop, user, onNavigate }: Props) {
+const settingsBadgeImage = require("../../assets/generated/bugbaas-splash-badge-hd.png");
+
+export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRadarClaimed, onMovementRegistered, onOpenBugDexWorkshop, user, onNavigate }: Props) {
   const { language, setLanguage, t, tr } = useI18n();
   const tier = getTierForPoints(user.totalPoints);
   const [users, setUsers] = useState<User[]>([]);
   const [bugs, setBugs] = useState<BugReport[]>([]);
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
   const [movementProgress, setMovementProgress] = useState<MovementRadarProgress | null>(null);
+  const [queuedRadarBugIds, setQueuedRadarBugIds] = useState<BugArtId[]>([]);
   const [bugLampActivating, setBugLampActivating] = useState(false);
   const [movementClaiming, setMovementClaiming] = useState(false);
   const [showAllTiers, setShowAllTiers] = useState(false);
@@ -50,7 +56,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementReg
     .map((bugId) => entryByBugId(bugId))
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   const missions = weeklyMissionSet(user, bugs);
-  const canClaimMovement = Boolean(movementProgress && movementProgress.claimableRewards > 0);
+  const canClaimMovement = Boolean((movementProgress && movementProgress.claimableRewards > 0) || queuedRadarBugIds.length > 0);
   const movementDataTypes = movementProgress?.dataTypes ?? [];
   const hasMovementSourceData = movementDataTypes.some((item) => item.available);
   const showMovementSourceHelp = Boolean(movementProgress && movementDataTypes.length > 0 && !hasMovementSourceData);
@@ -67,9 +73,15 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementReg
 
   async function refreshMovementProgress() {
     try {
-      setMovementProgress(await getMovementRadarProgress(user.uid, movementBoost));
+      const [progress, queuedBugIds] = await Promise.all([
+        getMovementRadarProgress(user.uid, movementBoost),
+        getQueuedRadarBugIds()
+      ]);
+      setMovementProgress(progress);
+      setQueuedRadarBugIds(queuedBugIds);
     } catch {
       setMovementProgress(null);
+      setQueuedRadarBugIds([]);
     }
   }
 
@@ -77,8 +89,16 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementReg
     if (movementClaiming) return;
     setMovementClaiming(true);
     try {
-      const result = await claimMovementRadarBonuses(user.uid, movementBoost);
+      const queuedBugIds = await claimQueuedRadarBugs();
+      if (queuedBugIds.length > 0) {
+        onMovementRadarClaimed?.(queuedBugIds);
+        await refreshMovementProgress();
+        return;
+      }
+
+      const result = await claimMovementRadarBonusesForApp(user.uid, movementBoost);
       if (result.estimatedKm > 0) await onMovementRegistered?.(result.estimatedKm);
+      if (result.bugIds.length > 0) onMovementRadarClaimed?.(result.bugIds);
       await refreshMovementProgress();
     } catch {
       await refreshMovementProgress();
@@ -126,10 +146,10 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementReg
                 </View>
               )}
               <Pressable accessibilityLabel={t("home.profile")} accessibilityRole="button" hitSlop={8} style={styles.profilePill} onPress={() => onNavigate("profile")}>
-                <ProfileIcon />
+                <CharacterAvatarImage characterId={user.characterId} size={40} />
               </Pressable>
               <Pressable accessibilityLabel={t("home.settings")} accessibilityRole="button" hitSlop={8} style={styles.settingsPill} onPress={() => onNavigate("settings")}>
-                <SettingsIcon />
+                <Image accessibilityIgnoresInvertColors resizeMode="contain" source={settingsBadgeImage} style={styles.settingsImage} />
               </Pressable>
             </View>
           </View>
@@ -440,11 +460,14 @@ const styles = StyleSheet.create({
   },
   profilePill: {
     alignItems: "center",
-    backgroundColor: "#d7bd57",
+    backgroundColor: "#fdfefb",
+    borderColor: "#d7bd57",
     borderRadius: 8,
-    height: 34,
+    borderWidth: 2,
+    height: 46,
     justifyContent: "center",
-    width: 38
+    overflow: "hidden",
+    width: 46
   },
   heroActions: {
     alignItems: "stretch",
@@ -512,13 +535,18 @@ const styles = StyleSheet.create({
   },
   settingsPill: {
     alignItems: "center",
-    backgroundColor: "rgba(253,254,251,0.14)",
-    borderColor: "rgba(253,254,251,0.34)",
+    backgroundColor: "#fdfefb",
+    borderColor: "rgba(253,254,251,0.62)",
     borderRadius: 8,
     borderWidth: 1,
-    height: 34,
+    height: 46,
     justifyContent: "center",
-    width: 38
+    overflow: "hidden",
+    width: 46
+  },
+  settingsImage: {
+    height: 40,
+    width: 40
   },
   settingsIcon: {
     alignItems: "center",

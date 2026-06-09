@@ -349,6 +349,18 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
       return maxOf(0, after.size - before.size)
     }
 
+    fun activeRadarBugIds(context: Context): List<String> {
+      return readActiveRadarBugIds(context)
+    }
+
+    fun claimActiveRadarBugs(context: Context): List<String> {
+      val bugIds = readActiveRadarBugIds(context)
+      if (bugIds.isEmpty()) return emptyList()
+      writeActiveRadarBugIds(context, emptyList())
+      BugRadarWidgetProvider().updateAllWidgets(context)
+      return bugIds
+    }
+
     fun pickRandomRadarBugIds(count: Int): List<String> {
       return List(maxOf(0, count)) { pickCompanionRadarBug().id }
     }

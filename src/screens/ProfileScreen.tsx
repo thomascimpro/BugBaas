@@ -17,6 +17,8 @@ import { upvotePointValue } from "../services/userService";
 import { BugDexInventoryItem, BugReport, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
+const bugDexCollectionImage = require("../../assets/generated/bugdex-collection-view-hd.jpg");
+
 type Props = {
   user: User;
   isOwnProfile?: boolean;
@@ -127,26 +129,21 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
       <TierBadge points={user.totalPoints} />
 
       <View style={styles.card}>
-        <View style={styles.bugDexHeader}>
-          <View style={styles.bugDexHeaderText}>
-            <Text style={styles.cardTitle}>{t("profile.bugdexCollection")}</Text>
-            <Text style={styles.bugDexIntro}>{t("profile.bugdexReadOnly")}</Text>
+        <Pressable style={styles.bugDexFeatureButton} onPress={() => setBugDexVisible(true)}>
+          <Image accessibilityIgnoresInvertColors resizeMode="cover" source={bugDexCollectionImage} style={styles.bugDexFeatureImage} />
+          <View style={styles.bugDexFeatureOverlay}>
+            <View style={styles.bugDexHeaderText}>
+              <Text style={styles.bugDexFeatureTitle}>{t("profile.bugdexCollection")}</Text>
+              <Text style={styles.bugDexFeatureMeta}>
+                {loadingBugDex ? "..." : bugDexItems.length ? `${bugDexItems.length}/${bugDexEntries.length}` : t("profile.noBugDex")}
+              </Text>
+              <Text style={styles.bugDexFeatureIntro}>{t("profile.bugdexReadOnly")}</Text>
+            </View>
+            <View style={styles.bugDexOpenButton}>
+              <Text style={styles.bugDexOpenButtonText}>{t("profile.viewBugDex")}</Text>
+            </View>
           </View>
-          <Pressable style={styles.bugDexOpenButton} onPress={() => setBugDexVisible(true)}>
-            <Text style={styles.bugDexOpenButtonText}>{t("profile.viewBugDex")}</Text>
-          </Pressable>
-        </View>
-        {loadingBugDex ? <ActivityIndicator /> : (
-          <View style={styles.bugDexPreview}>
-            {bugDexItems.length ? bugDexItems.slice(0, 5).map(({ entry, index, item }) => (
-              <View key={entry.id} style={styles.bugDexPreviewItem}>
-                <Text style={styles.bugDexNumber}>{String(index + 1).padStart(2, "0")}</Text>
-                <BugArtImage bugId={entry.id} size={42} />
-                {item.count > 1 && <Text style={styles.bugDexCount}>x{item.count}</Text>}
-              </View>
-            )) : <Text style={styles.emptyText}>{t("profile.noBugDex")}</Text>}
-          </View>
-        )}
+        </Pressable>
       </View>
 
       <View style={styles.card}>
@@ -527,31 +524,64 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 10
   },
-  bugDexHeader: {
-    alignItems: "flex-start",
-    gap: 10
-  },
-  bugDexHeaderText: {
-    minWidth: 0
-  },
-  bugDexIntro: {
-    color: "#53645d",
-    fontSize: 12,
-    fontWeight: "800",
-    lineHeight: 16,
-    marginBottom: 2
-  },
-  bugDexOpenButton: {
-    alignSelf: "flex-start",
+  bugDexFeatureButton: {
     backgroundColor: "#102018",
     borderColor: "#d7bd57",
     borderRadius: 8,
     borderWidth: 1,
+    minHeight: 172,
+    overflow: "hidden"
+  },
+  bugDexFeatureImage: {
+    height: 172,
+    width: "100%"
+  },
+  bugDexFeatureOverlay: {
+    alignItems: "center",
+    backgroundColor: "rgba(16,32,24,0.76)",
+    bottom: 0,
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    left: 0,
+    padding: 12,
+    position: "absolute",
+    right: 0
+  },
+  bugDexHeaderText: {
+    flex: 1,
+    minWidth: 0
+  },
+  bugDexFeatureTitle: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  bugDexFeatureMeta: {
+    color: "#d7bd57",
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  bugDexFeatureIntro: {
+    color: "#dce9df",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
+    marginTop: 3
+  },
+  bugDexOpenButton: {
+    alignItems: "center",
+    backgroundColor: "#d7bd57",
+    borderColor: "#d7bd57",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
     paddingHorizontal: 12,
     paddingVertical: 8
   },
   bugDexOpenButtonText: {
-    color: "#ffffff",
+    color: "#102018",
     fontSize: 12,
     fontWeight: "900"
   },
