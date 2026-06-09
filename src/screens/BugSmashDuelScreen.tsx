@@ -35,6 +35,9 @@ type Props = {
 };
 
 const duelHeroImage = require("../../assets/generated/bug-smash-duel-concept.jpg");
+const DuelTargetBugArt = React.memo(BugArtImage);
+const duelGameTickMs = 160;
+const maxVisibleDuelTargets = 7;
 
 const rarityColors: Record<BugDexRarity, string> = {
   Gewoon: "#6f7f5f",
@@ -45,11 +48,19 @@ const rarityColors: Record<BugDexRarity, string> = {
 };
 
 const baseTapsByRarity: Record<BugDexRarity, number> = {
+  Gewoon: 2,
+  Zeldzaam: 3,
+  Episch: 5,
+  Legendarisch: 7,
+  Mythisch: 9
+};
+
+const scoreByRarity: Record<BugDexRarity, number> = {
   Gewoon: 1,
   Zeldzaam: 2,
-  Episch: 3,
-  Legendarisch: 4,
-  Mythisch: 5
+  Episch: 4,
+  Legendarisch: 6,
+  Mythisch: 9
 };
 
 const raritySortOrder: Record<BugDexRarity, number> = {
@@ -86,6 +97,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const hitCountsRef = useRef<Record<string, number>>({});
   const hitFeedbackValues = useRef(new Map<string, Animated.Value>()).current;
   const lastCatchAtRef = useRef(0);
+  const lastHitSoundAtRef = useRef(0);
   const assist = useMemo(() => bugSmashDuelBalanceForUser({ activeBugSquad: activeSquadIds }), [activeSquadIds]);
   const opponents = useMemo(() => {
     const items = users.filter((item) => item.uid !== user.uid);
@@ -139,6 +151,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     hitCountsRef.current = {};
     hitFeedbackValues.clear();
     lastCatchAtRef.current = 0;
+    lastHitSoundAtRef.current = 0;
     setScore(0);
     setCaughtBugIds([]);
     setHitCounts({});
@@ -170,7 +183,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           .then((duel) => setActiveDuel(duel))
           .catch(() => setError(t("duel.submitFailed")));
       }
-    }, 90);
+    }, duelGameTickMs);
     return () => clearInterval(interval);
   }, [activeDuel?.id, activeDuel?.status, activeDuel?.startAt, activeDuel?.durationMs, assist, t, user]);
 
@@ -288,7 +301,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     playBugSwatterFeedback(hitFeedbackFor(bugId));
     setHitCounts((current) => ({ ...current, [bugId]: nextHits }));
     if (nextHits < requiredTaps) {
-      playBugSound("bug_hit");
+      const hitAt = Date.now();
+      if (hitAt - lastHitSoundAtRef.current > 90) {
+        lastHitSoundAtRef.current = hitAt;
+        playBugSound("bug_hit");
+      }
       return;
     }
     playBugSound("bug_catch");
@@ -296,7 +313,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     comboRef.current = catchAt - lastCatchAtRef.current <= assist.comboGraceMs ? comboRef.current + 1 : 1;
     lastCatchAtRef.current = catchAt;
     setCaughtBugIds((current) => current.includes(bugId) ? current : [...current, bugId]);
-    setScore((current) => current + 1 + duelCatchBonusPoints(entry.rarity, bugId, assist) + duelComboBonusPoint(comboRef.current));
+    setScore((current) => current + scoreByRarity[entry.rarity] + duelCatchBonusPoints(entry.rarity, bugId, assist) + duelComboBonusPoint(comboRef.current));
   }
 
   function hitFeedbackFor(bugId: string) {
@@ -314,6 +331,39 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const remainingSeconds = activeDuel?.status === "accepted" && activeDuel.startAt ? Math.max(0, Math.ceil((Date.parse(activeDuel.startAt) + activeDuel.durationMs - now) / 1000)) : 0;
   const activeDuelScore = activeScore?.score ?? (submittedRef.current ? score + duelBonusScore(score, assist) : score);
   const incomingPendingDuel = activeDuel?.status === "pending" && activeDuel.toUserId === user.uid;
+  const fullscreenGame = activeDuel?.status === "accepted";
+
+  if (fullscreenGame) {
+    return (
+      <View style={styles.fullscreenGame}>
+        <View style={styles.gameHud}>
+          <View style={styles.gameHudPlayer}>
+            <Text style={styles.gameOpponent} numberOfLines={1}>{opponentLabel(activeDuel, user)}</Text>
+            <Text style={styles.gameScore}>{t("duel.yourScore", { score: activeDuelScore })}</Text>
+          </View>
+          <Text style={styles.gameTimer}>{remainingSeconds}s</Text>
+          <View style={styles.gameHudPlayer}>
+            <Text style={styles.gameOpponent} numberOfLines={1}>{opponentScore ? t("duel.theirScore", { score: opponentScore.score }) : t("duel.waitingScore")}</Text>
+            <Pressable style={styles.gameExitButton} onPress={onBack}>
+              <Text style={styles.gameExitText}>x</Text>
+            </Pressable>
+          </View>
+        </View>
+        <View style={styles.fullscreenArena}>
+          {countdown > 0 ? (
+            <Text style={styles.countdown}>{countdown}</Text>
+          ) : isRunning(activeDuel, now) ? (
+            renderTargets(activeDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, hitBug)
+          ) : (
+            <ActivityIndicator color="#d7bd57" size="large" />
+          )}
+        </View>
+        <View style={styles.gameFooter}>
+          <Text style={styles.gameFooterText}>Kies je targets. Hoge rarity kost meer taps, maar scoort veel meer.</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.content} style={sharedStyles.screen} showsVerticalScrollIndicator={false}>
@@ -544,16 +594,22 @@ function renderTargets(
 ) {
   const startAt = duel.startAt ? Date.parse(duel.startAt) : timestamp;
   const elapsed = timestamp - startAt;
-  return duel.bugIds.map((bugId, index) => {
+  return duel.bugIds.flatMap((bugId, index) => {
     if (caughtBugIds.includes(bugId)) return null;
     const entry = entryByBugId(bugId);
     if (!entry) return null;
     const motion = targetMotion(index, duel.seed, elapsed, entry.rarity, assist);
     if (!motion.visible) return null;
+    return [{ bugId, entry, index, motion }];
+  })
+    .filter((target): target is NonNullable<typeof target> => Boolean(target))
+    .sort((a, b) => targetPriority(b.entry.rarity, b.motion.progress) - targetPriority(a.entry.rarity, a.motion.progress))
+    .slice(0, maxVisibleDuelTargets)
+    .map(({ bugId, entry, index, motion }) => {
     const requiredTaps = requiredTapsForTarget(entry.rarity, assist, index);
     const hits = hitCounts[bugId] ?? 0;
     const feedback = hitFeedbackValues.get(bugId);
-    const targetSize = Math.round(52 * assist.hitboxMultiplier);
+    const targetSize = Math.round(46 * assist.hitboxMultiplier);
     return (
       <Pressable
         key={bugId}
@@ -571,7 +627,7 @@ function renderTargets(
         onPress={() => onHit(bugId)}
       >
         {feedback && <BugSwatterHit bugSize={44} feedback={feedback} style={styles.targetSwatter} />}
-        <BugArtImage bugId={bugId} size={44} />
+        <DuelTargetBugArt bugId={bugId} size={38} />
         <View style={styles.hitTrack}>
           <View style={[styles.hitFill, { backgroundColor: rarityColors[entry.rarity], width: `${Math.min(100, (hits / requiredTaps) * 100)}%` }]} />
         </View>
@@ -580,21 +636,26 @@ function renderTargets(
   });
 }
 
+function targetPriority(rarity: BugDexRarity, progress: number) {
+  const rarityValue = scoreByRarity[rarity];
+  const urgency = progress > 0.72 ? 2 : progress > 0.48 ? 1 : 0;
+  return rarityValue + urgency;
+}
+
 function targetMotion(index: number, seed: number, elapsedMs: number, rarity: BugDexRarity, assist: BugSmashDuelBalance) {
-  const lane = (index * 37 + seed) % 76;
+  const lane = (index * 37 + seed) % 82;
   const wave = (index % 5) + 2;
-  const raritySpeed = rarity === "Gewoon" ? 1 : rarity === "Zeldzaam" ? 0.92 : rarity === "Episch" ? 0.84 : rarity === "Legendarisch" ? 0.78 : 0.72;
-  const duration = 9500 * raritySpeed * assist.speedMultiplier;
-  const waveStart = Math.floor(index / 8) * 9000;
-  const spawnStart = waveStart + (index % 8) * 950 * assist.targetSpacingMultiplier;
+  const rarityLifetime = rarity === "Gewoon" ? 3600 : rarity === "Zeldzaam" ? 4700 : rarity === "Episch" ? 5900 : rarity === "Legendarisch" ? 7000 : 8200;
+  const duration = rarityLifetime * assist.speedMultiplier;
+  const spawnStart = index * 1180 * assist.targetSpacingMultiplier + ((seed + index * 173) % 520);
   const progress = (elapsedMs - spawnStart) / duration;
-  if (progress < 0 || progress > 1) return { visible: false, x: 0, y: 0, rotate: 0 };
+  if (progress < 0 || progress > 1) return { visible: false, progress, x: 0, y: 0, rotate: 0 };
   const direction = index % 2 === 0 ? 1 : -1;
-  const x = direction === 1 ? -10 + progress * 116 : 106 - progress * 116;
-  const crawl = Math.sin(progress * Math.PI * wave + index) * 8 + Math.sin(progress * Math.PI * 9 + seed) * 2;
-  const y = Math.max(5, Math.min(82, lane + crawl));
-  const rotate = direction * (Math.sin(progress * Math.PI * 2 + index) * 18 + 8);
-  return { visible: true, x, y, rotate };
+  const x = direction === 1 ? -12 + progress * 114 : 100 - progress * 114;
+  const crawl = Math.sin(progress * Math.PI * wave + index) * 10 + Math.sin(progress * Math.PI * 7 + seed) * 2;
+  const y = Math.max(4, Math.min(86, lane + crawl));
+  const rotate = direction * (Math.sin(progress * Math.PI * 2 + index) * 15 + 8);
+  return { visible: true, progress, x, y, rotate };
 }
 
 function requiredTapsForTarget(rarity: BugDexRarity, assist: BugSmashDuelBalance, targetIndex: number) {
@@ -613,9 +674,9 @@ function duelComboBonusPoint(combo: number) {
 }
 
 function duelBonusScore(score: number, assist: BugSmashDuelBalance) {
-  const supportBonus = assist.supportBonusEvery > 0 ? Math.min(2, Math.floor(score / assist.supportBonusEvery)) : 0;
-  const movementBonus = score >= 8 ? assist.movementFinalBonusCap : 0;
-  const streakBonus = score >= 10 ? assist.streakMissForgiveness : 0;
+  const supportBonus = assist.supportBonusEvery > 0 ? Math.min(3, Math.floor(score / assist.supportBonusEvery)) : 0;
+  const movementBonus = score >= 12 ? assist.movementFinalBonusCap : 0;
+  const streakBonus = score >= 16 ? assist.streakMissForgiveness : 0;
   return supportBonus + movementBonus + streakBonus;
 }
 
@@ -754,6 +815,81 @@ const styles = StyleSheet.create({
     color: "#b83227",
     fontWeight: "900",
     marginTop: 10
+  },
+  fullscreenArena: {
+    backgroundColor: "#0c1d14",
+    borderColor: "#d7bd57",
+    borderRadius: 0,
+    borderTopWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    overflow: "hidden",
+    position: "relative"
+  },
+  fullscreenGame: {
+    backgroundColor: "#0c1d14",
+    flex: 1
+  },
+  gameExitButton: {
+    alignItems: "center",
+    alignSelf: "flex-end",
+    backgroundColor: "#fdfefb",
+    borderRadius: 8,
+    height: 34,
+    justifyContent: "center",
+    marginTop: 4,
+    width: 38
+  },
+  gameExitText: {
+    color: "#102018",
+    fontSize: 18,
+    fontWeight: "900",
+    lineHeight: 20
+  },
+  gameFooter: {
+    backgroundColor: "#102018",
+    borderTopColor: "rgba(215,189,87,0.5)",
+    borderTopWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8
+  },
+  gameFooterText: {
+    color: "#dce9df",
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center"
+  },
+  gameHud: {
+    alignItems: "center",
+    backgroundColor: "#102018",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 8
+  },
+  gameHudPlayer: {
+    flex: 1,
+    minWidth: 0
+  },
+  gameOpponent: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  gameScore: {
+    color: "#dce9df",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 2
+  },
+  gameTimer: {
+    color: "#d7bd57",
+    fontSize: 30,
+    fontWeight: "900",
+    minWidth: 70,
+    textAlign: "center"
   },
   header: {
     alignItems: "center",
