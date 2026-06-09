@@ -3,7 +3,7 @@ import { ActivityIndicator, Animated, Image, Pressable, ScrollView, StyleSheet, 
 import { BugArtImage } from "../components/BugArtImage";
 import { BugSwatterHit, playBugSwatterFeedback } from "../components/BugSwatterHit";
 import { BugDexDropResult, grantBugDexReward } from "../services/bugDexService";
-import { activeBugSquadBonuses } from "../services/bugSquadService";
+import { bugSmashDuelBalanceForUser, BugSmashDuelBalance } from "../services/bugSquadGameBalance";
 import {
   bugSmashDuelDurationMs,
   cancelBugSmashDuel,
@@ -30,12 +30,6 @@ type Props = {
   onDuelAccepted?: (requesterId: string, duelId: string) => Promise<void>;
   onDuelRequest?: (recipientId: string, duelId: string) => Promise<void>;
   onRewardDrop?: (drop: BugDexDropResult) => void;
-};
-
-type DuelAssist = {
-  scoreBoost: number;
-  speedAssist: number;
-  tapAssist: number;
 };
 
 const duelHeroImage = require("../../assets/generated/bug-smash-duel-concept.jpg");
@@ -72,9 +66,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const submittedRef = useRef(false);
   const scoreRef = useRef(0);
   const caughtBugIdsRef = useRef<string[]>([]);
+  const comboRef = useRef(0);
   const hitCountsRef = useRef<Record<string, number>>({});
   const hitFeedbackValues = useRef(new Map<string, Animated.Value>()).current;
-  const assist = useMemo(() => duelAssistForUser(user), [user.activeBugSquad, user.uid]);
+  const lastCatchAtRef = useRef(0);
+  const assist = useMemo(() => bugSmashDuelBalanceForUser(user), [user.activeBugSquad, user.uid]);
   const opponents = users.filter((item) => item.uid !== user.uid);
 
   useEffect(() => {
@@ -107,8 +103,10 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     submittedRef.current = false;
     scoreRef.current = 0;
     caughtBugIdsRef.current = [];
+    comboRef.current = 0;
     hitCountsRef.current = {};
     hitFeedbackValues.clear();
+    lastCatchAtRef.current = 0;
     setScore(0);
     setCaughtBugIds([]);
     setHitCounts({});
@@ -135,14 +133,14 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       const endAt = startAt + activeDuel.durationMs;
       if (timestamp >= endAt && !submittedRef.current) {
         submittedRef.current = true;
-        const bonusScore = duelBonusScore(scoreRef.current, assist.scoreBoost);
+        const bonusScore = duelBonusScore(scoreRef.current, assist);
         void submitBugSmashDuelScore(user, activeDuel.id, scoreRef.current + bonusScore, caughtBugIdsRef.current, bonusScore)
           .then((duel) => setActiveDuel(duel))
           .catch(() => setError(t("duel.submitFailed")));
       }
     }, 90);
     return () => clearInterval(interval);
-  }, [activeDuel?.id, activeDuel?.status, activeDuel?.startAt, activeDuel?.durationMs, assist.scoreBoost, t, user]);
+  }, [activeDuel?.id, activeDuel?.status, activeDuel?.startAt, activeDuel?.durationMs, assist, t, user]);
 
   async function refreshDuels() {
     setDuels(await listBugSmashDuels(user));
@@ -216,7 +214,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     if (!activeDuel || !isRunning(activeDuel, now)) return;
     const entry = entryByBugId(bugId);
     if (!entry || caughtBugIdsRef.current.includes(bugId)) return;
-    const requiredTaps = requiredTapsForRarity(entry.rarity, assist.tapAssist);
+    const targetIndex = activeDuel.bugIds.indexOf(bugId);
+    const requiredTaps = requiredTapsForTarget(entry.rarity, assist, targetIndex);
     const nextHits = (hitCountsRef.current[bugId] ?? 0) + 1;
     playBugSwatterFeedback(hitFeedbackFor(bugId));
     setHitCounts((current) => ({ ...current, [bugId]: nextHits }));
@@ -225,8 +224,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       return;
     }
     playBugSound("bug_catch");
+    const catchAt = Date.now();
+    comboRef.current = catchAt - lastCatchAtRef.current <= assist.comboGraceMs ? comboRef.current + 1 : 1;
+    lastCatchAtRef.current = catchAt;
     setCaughtBugIds((current) => current.includes(bugId) ? current : [...current, bugId]);
-    setScore((current) => current + 1);
+    setScore((current) => current + 1 + duelCatchBonusPoints(entry.rarity, bugId, assist) + duelComboBonusPoint(comboRef.current));
   }
 
   function hitFeedbackFor(bugId: string) {
@@ -242,7 +244,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const opponentScore = opponentId ? activeDuel?.scores?.[opponentId] : undefined;
   const countdown = activeDuel?.status === "accepted" && activeDuel.startAt ? Math.max(0, Math.ceil((Date.parse(activeDuel.startAt) - now) / 1000)) : 0;
   const remainingSeconds = activeDuel?.status === "accepted" && activeDuel.startAt ? Math.max(0, Math.ceil((Date.parse(activeDuel.startAt) + activeDuel.durationMs - now) / 1000)) : 0;
-  const activeDuelScore = activeScore?.score ?? (submittedRef.current ? score + duelBonusScore(score, assist.scoreBoost) : score);
+  const activeDuelScore = activeScore?.score ?? (submittedRef.current ? score + duelBonusScore(score, assist) : score);
 
   return (
     <ScrollView contentContainerStyle={styles.content} style={sharedStyles.screen} showsVerticalScrollIndicator={false}>
@@ -340,9 +342,9 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("duel.bonusTitle")}</Text>
-        <Text style={styles.bonusLine}>{t("duel.tapAssist", { value: Math.round(assist.tapAssist * 100) })}</Text>
-        <Text style={styles.bonusLine}>{t("duel.speedAssist", { value: Math.round(assist.speedAssist * 100) })}</Text>
-        <Text style={styles.bonusLine}>{t("duel.scoreAssist", { value: Math.round(assist.scoreBoost * 100) })}</Text>
+        <Text style={styles.bonusLine}>{t("duel.tapAssist", { value: Math.round((assist.hitboxMultiplier - 1.05) * 100) })}</Text>
+        <Text style={styles.bonusLine}>{t("duel.speedAssist", { value: Math.round((assist.speedMultiplier - 1) * 100) })}</Text>
+        <Text style={styles.bonusLine}>{t("duel.scoreAssist", { value: duelBonusScore(12, assist) })}</Text>
       </View>
 
       {duels.length > 0 && (
@@ -365,7 +367,7 @@ function renderTargets(
   timestamp: number,
   caughtBugIds: string[],
   hitCounts: Record<string, number>,
-  assist: DuelAssist,
+  assist: BugSmashDuelBalance,
   hitFeedbackValues: Map<string, Animated.Value>,
   onHit: (bugId: string) => void
 ) {
@@ -375,11 +377,12 @@ function renderTargets(
     if (caughtBugIds.includes(bugId)) return null;
     const entry = entryByBugId(bugId);
     if (!entry) return null;
-    const motion = targetMotion(index, duel.seed, elapsed, entry.rarity, assist.speedAssist);
+    const motion = targetMotion(index, duel.seed, elapsed, entry.rarity, assist);
     if (!motion.visible) return null;
-    const requiredTaps = requiredTapsForRarity(entry.rarity, assist.tapAssist);
+    const requiredTaps = requiredTapsForTarget(entry.rarity, assist, index);
     const hits = hitCounts[bugId] ?? 0;
     const feedback = hitFeedbackValues.get(bugId);
+    const targetSize = Math.round(52 * assist.hitboxMultiplier);
     return (
       <Pressable
         key={bugId}
@@ -387,9 +390,11 @@ function renderTargets(
           styles.target,
           {
             borderColor: rarityColors[entry.rarity],
+            height: targetSize,
             left: `${motion.x}%`,
             top: `${motion.y}%`,
-            transform: [{ rotate: `${motion.rotate}deg` }]
+            transform: [{ rotate: `${motion.rotate}deg` }],
+            width: targetSize
           }
         ]}
         onPress={() => onHit(bugId)}
@@ -404,13 +409,13 @@ function renderTargets(
   });
 }
 
-function targetMotion(index: number, seed: number, elapsedMs: number, rarity: BugDexRarity, speedAssist: number) {
+function targetMotion(index: number, seed: number, elapsedMs: number, rarity: BugDexRarity, assist: BugSmashDuelBalance) {
   const lane = (index * 37 + seed) % 76;
   const wave = (index % 5) + 2;
   const raritySpeed = rarity === "Gewoon" ? 1 : rarity === "Zeldzaam" ? 0.92 : rarity === "Episch" ? 0.84 : rarity === "Legendarisch" ? 0.78 : 0.72;
-  const duration = 9500 * raritySpeed * (1 + speedAssist);
+  const duration = 9500 * raritySpeed * assist.speedMultiplier;
   const waveStart = Math.floor(index / 8) * 9000;
-  const spawnStart = waveStart + (index % 8) * 950;
+  const spawnStart = waveStart + (index % 8) * 950 * assist.targetSpacingMultiplier;
   const progress = (elapsedMs - spawnStart) / duration;
   if (progress < 0 || progress > 1) return { visible: false, x: 0, y: 0, rotate: 0 };
   const direction = index % 2 === 0 ? 1 : -1;
@@ -421,21 +426,32 @@ function targetMotion(index: number, seed: number, elapsedMs: number, rarity: Bu
   return { visible: true, x, y, rotate };
 }
 
-function requiredTapsForRarity(rarity: BugDexRarity, tapAssist: number) {
-  return Math.max(1, Math.ceil(baseTapsByRarity[rarity] * (1 - tapAssist)));
+function requiredTapsForTarget(rarity: BugDexRarity, assist: BugSmashDuelBalance, targetIndex: number) {
+  const focusReduction = targetIndex >= 0 && targetIndex < assist.focusEasyHits ? 1 : 0;
+  return Math.max(1, baseTapsByRarity[rarity] - focusReduction);
 }
 
-function duelAssistForUser(user: User): DuelAssist {
-  const bonuses = activeBugSquadBonuses(user);
-  return {
-    tapAssist: Math.min(0.25, bonuses.catch_assist + bonuses.knowledge_boost * 0.6 + bonuses.support_boost * 0.4),
-    speedAssist: Math.min(0.18, bonuses.catch_time + bonuses.knowledge_boost * 0.3),
-    scoreBoost: Math.min(0.1, bonuses.support_boost * 0.7 + bonuses.knowledge_boost * 0.5)
-  };
+function duelCatchBonusPoints(rarity: BugDexRarity, bugId: string, assist: BugSmashDuelBalance) {
+  const rareBonus = rarity !== "Gewoon" && stableChance(`${bugId}:rare`, assist.radarRarePointChance) ? 1 : 0;
+  const shardBonus = stableChance(`${bugId}:shard`, assist.shardDuplicatePointChance) ? 1 : 0;
+  return Math.min(1, rareBonus + shardBonus);
 }
 
-function duelBonusScore(score: number, boost: number) {
-  return Math.min(3, Math.floor(score * boost));
+function duelComboBonusPoint(combo: number) {
+  return combo > 0 && combo % 5 === 0 ? 1 : 0;
+}
+
+function duelBonusScore(score: number, assist: BugSmashDuelBalance) {
+  const supportBonus = assist.supportBonusEvery > 0 ? Math.min(2, Math.floor(score / assist.supportBonusEvery)) : 0;
+  const movementBonus = score >= 8 ? assist.movementFinalBonusCap : 0;
+  const streakBonus = score >= 10 ? assist.streakMissForgiveness : 0;
+  return supportBonus + movementBonus + streakBonus;
+}
+
+function stableChance(seed: string, chance: number) {
+  if (chance <= 0) return false;
+  const value = seed.split("").reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) >>> 0, 0);
+  return (value % 1000) / 1000 < chance;
 }
 
 function isRunning(duel: BugSmashDuel, timestamp: number) {

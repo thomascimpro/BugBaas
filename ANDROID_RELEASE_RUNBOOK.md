@@ -28,11 +28,19 @@ npm.cmd run typecheck
 .\android\gradlew.bat -p android :app:assembleRelease --no-daemon --console=plain
 ```
 
-5. Kopieer de APK naar `dist`, controleer `aapt2 dump badging` en noteer de SHA256.
+5. Controleer dat release signing niet de debug-key gebruikt:
 
-6. Stage alleen release-relevante runtime bestanden. Laat `tmp`, `screenshots`, losse bronafbeeldingen en previews buiten git.
+```powershell
+& "$env:ANDROID_HOME\build-tools\36.0.0\apksigner.bat" verify --print-certs 'android\app\build\outputs\apk\release\app-release.apk'
+```
 
-7. Commit, tag, push en maak de GitHub Release met dezelfde changelogtekst.
+De DN mag niet `CN=Android Debug` zijn.
+
+6. Kopieer de APK naar `dist`, controleer `aapt2 dump badging` en noteer de SHA256.
+
+7. Stage alleen release-relevante runtime bestanden. Laat `tmp`, `screenshots`, losse bronafbeeldingen en previews buiten git.
+
+8. Commit, tag, push en maak de GitHub Release met dezelfde changelogtekst.
 
 Snelheidsafspraken:
 
@@ -171,3 +179,26 @@ gh release view v1.2.0 --repo thomascimpro/cimpro-bugbaas --json tagName,name,ur
 - Java 8 staat eerder op `Path`: zet JDK 21 vooraan of stel `JAVA_HOME` expliciet in per build.
 - Android SDK env vars ontbreken: zet `ANDROID_HOME` en `ANDROID_SDK_ROOT`.
 - `gh release view --json isLatest` werkt niet: gebruik `gh release list` om `Latest` te controleren.
+
+## Release signing
+
+Release builds mogen niet met `android/app/debug.keystore` worden getekend. Gebruik lokaal:
+
+```properties
+# android/app/upload-keystore.properties
+storeFile=bugbaas-upload.jks
+storePassword=...
+keyAlias=bugbaas-upload
+keyPassword=...
+```
+
+Of zet dezelfde waarden via env vars:
+
+```powershell
+$env:BUGBAAS_UPLOAD_STORE_FILE='bugbaas-upload.jks'
+$env:BUGBAAS_UPLOAD_STORE_PASSWORD='...'
+$env:BUGBAAS_UPLOAD_KEY_ALIAS='bugbaas-upload'
+$env:BUGBAAS_UPLOAD_KEY_PASSWORD='...'
+```
+
+`android/app/*.jks` en `android/app/upload-keystore.properties` blijven buiten git.

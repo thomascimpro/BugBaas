@@ -4,6 +4,9 @@ node_modules/
 android/.gradle/
 android/build/
 android/app/build/
+android/app/*.jks
+android/app/*release*.keystore
+android/app/upload-keystore.properties
 release/*.apk
 *.log
 *.hprof
