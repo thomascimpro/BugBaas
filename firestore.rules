@@ -129,6 +129,7 @@ service cloud.firestore {
           'commentPointCount',
           'displayName',
           'helpSeen',
+          'lastActiveAt',
           'legendaryBugDexCount',
           'movementKmTotal',
           'movementRegisteredDay',
@@ -144,6 +145,7 @@ service cloud.firestore {
           'upvoteGivenPointCount',
           'upvoteReceivedPointCount'
         ])
+        && (!request.resource.data.keys().hasAny(['lastActiveAt']) || request.resource.data.lastActiveAt is string)
         && (!request.resource.data.keys().hasAny(['notificationPushToken']) || request.resource.data.notificationPushToken is string)
         && (!request.resource.data.keys().hasAny(['active']) || request.resource.data.active == true);
     }

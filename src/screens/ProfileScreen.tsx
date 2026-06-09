@@ -11,6 +11,7 @@ import { listBugs } from "../services/bugService";
 import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
 import { bugSquadBonusForEntry, BugSquadBonusCategory } from "../services/bugSquadService";
 import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
+import { presenceLabel } from "../services/presenceService";
 import { BadgeDefinition, badgeDefinitions, BugDexEntry, BugDexRarity, bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
 import { bestUnlockedCharacterId, CharacterId, characterOptions, isCharacterUnlocked, safeCharacterId } from "../services/characterService";
 import { upvotePointValue } from "../services/userService";
@@ -35,6 +36,7 @@ const bugSmashDuelImage = require("../../assets/generated/bug-smash-duel-concept
 export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onUpdateCharacter, onUpdateDisplayName, onSelectBug, onChallengeDuel }: Props) {
   const { t, tr } = useI18n();
   const tier = getTierForPoints(user.totalPoints);
+  const userPresence = presenceLabel(user, t);
   const [bugs, setBugs] = useState<BugReport[]>([]);
   const [editNameVisible, setEditNameVisible] = useState(false);
   const [characterBusy, setCharacterBusy] = useState("");
@@ -105,6 +107,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
           <Text style={styles.kicker}>{isOwnProfile ? t("profile.own") : t("profile.colleague")}</Text>
           <Text style={styles.name} numberOfLines={1}>{user.displayName}</Text>
           {isOwnProfile && <Text style={styles.email} numberOfLines={1}>{user.email}</Text>}
+          <Text style={styles.presence} numberOfLines={1}>{userPresence}</Text>
           {isOwnProfile && onUpdateDisplayName && (
             <Pressable style={styles.nameButton} onPress={() => setEditNameVisible(true)}>
               <Text style={styles.nameButtonText}>{t("profile.changeName")}</Text>
@@ -430,6 +433,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     marginTop: 5
+  },
+  presence: {
+    alignSelf: "flex-start",
+    backgroundColor: "#d7bd57",
+    borderRadius: 8,
+    color: "#102018",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 7,
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 4
   },
   nameButton: {
     alignSelf: "flex-start",

@@ -7,6 +7,7 @@ export type User = {
   displayName: string;
   email: string;
   active?: boolean;
+  lastActiveAt?: string;
   testAccount?: boolean;
   characterId?: string;
   activeBugSquad?: string[];
