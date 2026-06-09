@@ -1,7 +1,9 @@
-import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, writeBatch } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, User } from "../types";
-import { BugDexEntry, BugDexRarity, bugDexEntries } from "./pointsService";
+import { bugLampStatus, shouldAwardBugLamp, withAwardedBugLamp } from "./bugLampService";
+import { activeBugSquadBonuses } from "./bugSquadService";
+import { BugDexEntry, BugDexRarity, bugDexEntries, isBugDexEntryUnlocked } from "./pointsService";
 
 export type BugDexDropSource =
   | "daily_login"
@@ -102,6 +104,47 @@ export async function listBugDexInventory(user: User): Promise<BugDexInventoryIt
   return snapshot.docs.map((item) => item.data() as BugDexInventoryItem).filter((item) => item.count > 0);
 }
 
+export async function syncPointUnlockedBugDex(user: Pick<User, "uid" | "totalPoints" | "bugCount">): Promise<void> {
+  const unlockedEntries = bugDexEntries.filter((entry) => isBugDexEntryUnlocked(entry, user));
+  if (!unlockedEntries.length) return;
+  const now = new Date().toISOString();
+
+  if (!isFirebaseConfigured) {
+    const inventory = demoInventory.get(user.uid) ?? new Map<string, BugDexInventoryItem>();
+    for (const entry of unlockedEntries) {
+      if (inventory.has(entry.id)) continue;
+      inventory.set(entry.id, {
+        bugId: entry.id,
+        count: 1,
+        firstUnlockedAt: now,
+        lastUnlockedAt: now,
+        rarity: entry.rarity,
+        sources: ["rank_unlock"]
+      });
+    }
+    demoInventory.set(user.uid, inventory);
+    return;
+  }
+
+  const snapshot = await getDocs(collection(db, "users", user.uid, "bugdex"));
+  const existingIds = new Set(snapshot.docs.map((item) => item.id));
+  const missingEntries = unlockedEntries.filter((entry) => !existingIds.has(entry.id));
+  if (!missingEntries.length) return;
+
+  const batch = writeBatch(db);
+  for (const entry of missingEntries) {
+    batch.set(doc(db, "users", user.uid, "bugdex", entry.id), {
+      bugId: entry.id,
+      count: 1,
+      firstUnlockedAt: now,
+      lastUnlockedAt: now,
+      rarity: entry.rarity,
+      sources: ["rank_unlock"]
+    } satisfies BugDexInventoryItem);
+  }
+  await batch.commit();
+}
+
 export async function countBugDexInventory(userOrUid: Pick<User, "uid"> | string): Promise<number> {
   const uid = typeof userOrUid === "string" ? userOrUid : userOrUid.uid;
   if (!isFirebaseConfigured) {
@@ -165,6 +208,10 @@ export async function claimDailyLoginBug(user: User): Promise<BugDexDropResult |
     const daysUntilBetterReward = daysUntilNextDailyStreakReward(streakDay);
     const now = new Date().toISOString();
     const entry = pickDailyCommonEntry();
+    const userRef = doc(db, "users", user.uid);
+    const userSnapshot = await transaction.get(userRef);
+    const currentUser = userSnapshot.exists() ? userSnapshot.data() as User : user;
+    const updatedUser = shouldAwardBugLamp(streakDay) ? withAwardedBugLamp(currentUser) : undefined;
     const inventoryRef = doc(db, "users", user.uid, "bugdex", entry.id);
     const inventorySnapshot = await transaction.get(inventoryRef);
     const existing = inventorySnapshot.exists() ? inventorySnapshot.data() as BugDexInventoryItem : null;
@@ -178,17 +225,21 @@ export async function claimDailyLoginBug(user: User): Promise<BugDexDropResult |
       source: "daily_login",
       rewardType: "bug",
       rewardValue: entry.id,
+      bugLampAwarded: Boolean(updatedUser),
       streakDay,
       localDay: day,
       createdAt: now
     });
-    return { rewardType: "bug", entry, item, isNew: !existing, source: "daily_login", streakDay, daysUntilBetterReward };
+    if (updatedUser) transaction.update(userRef, { bugLampCount: updatedUser.bugLampCount });
+    return { rewardType: "bug", entry, item, isNew: !existing, source: "daily_login", streakDay, daysUntilBetterReward, updatedUser };
   });
 }
 
 export async function rollBugDexDrop(user: User, source: BugDexDropSource): Promise<BugDexDropResult | null> {
-  if (Math.random() > dropChances[source]) return null;
-  const entry = pickEntry(source);
+  const bonuses = activeBugSquadBonuses(user);
+  const chanceBoost = sourceChanceBoost(source, bonuses);
+  if (Math.random() > Math.min(0.95, dropChances[source] * (1 + chanceBoost))) return null;
+  const entry = pickEntry(source, bonuses.radar_rarity + bugLampStatus(user).rarityBoost);
   const now = new Date().toISOString();
 
   if (!isFirebaseConfigured) {
@@ -245,7 +296,7 @@ export async function rollSpecificBugDexDrop(user: User, bugId: string, source: 
 }
 
 export async function grantBugDexReward(user: User, source: BugDexDropSource): Promise<BugDexDropResult> {
-  return grantSpecificBug(user, pickEntry(source), source);
+  return grantSpecificBug(user, pickEntry(source, activeBugSquadBonuses(user).radar_rarity + bugLampStatus(user).rarityBoost), source);
 }
 
 export async function combineBugDexDuplicates(user: User, bugId: string): Promise<BugDexDropResult> {
@@ -370,7 +421,8 @@ export async function combineDifferentBugDexUpgrade(user: User, bugIds: string[]
 async function grantDailyReward(user: User, streakDay: number): Promise<BugDexDropResult> {
   const daysUntilBetterReward = daysUntilNextDailyStreakReward(streakDay);
   const result = await grantSpecificBug(user, pickDailyCommonEntry(), "daily_login");
-  return { ...result, streakDay, daysUntilBetterReward };
+  const updatedUser = shouldAwardBugLamp(streakDay) ? withAwardedBugLamp(user) : undefined;
+  return { ...result, streakDay, daysUntilBetterReward, updatedUser };
 }
 
 async function grantSpecificBug(user: User, entry: BugDexEntry, source: BugDexDropSource): Promise<BugDexDropResult> {
@@ -482,8 +534,8 @@ function pickCombineTarget(rarity: BugDexRarity, inventory: BugDexInventoryItem[
   return pickFrom(undiscovered) ?? pickFrom(candidates) ?? bugDexEntries[0];
 }
 
-function pickEntry(source: BugDexDropSource): BugDexEntry {
-  const rarity = pickRarity(source);
+function pickEntry(source: BugDexDropSource, rarityBoost = 0): BugDexEntry {
+  const rarity = pickRarity(source, rarityBoost);
   if (rarity === "Mythisch") {
     const specialIds = mythicPools[source] ?? [];
     const special = pickFrom(specialIds.map((id) => entryByBugId(id)).filter((entry): entry is BugDexEntry => Boolean(entry)));
@@ -497,8 +549,8 @@ function pickEntry(source: BugDexDropSource): BugDexEntry {
   return pickFrom(bugDexEntries.filter((entry) => entry.rarity === rarity)) ?? bugDexEntries[0];
 }
 
-function pickRarity(source: BugDexDropSource): BugDexRarity {
-  const weights = rarityWeights[source];
+function pickRarity(source: BugDexDropSource, rarityBoost = 0): BugDexRarity {
+  const weights = boostedRarityWeights(rarityWeights[source], rarityBoost);
   const roll = Math.random() * weights.reduce((total, [, weight]) => total + weight, 0);
   let cursor = 0;
   for (const [rarity, weight] of weights) {
@@ -506,6 +558,39 @@ function pickRarity(source: BugDexDropSource): BugDexRarity {
     if (roll <= cursor) return rarity;
   }
   return weights[0][0];
+}
+
+function boostedRarityWeights(weights: Array<[BugDexRarity, number]>, rarityBoost: number): Array<[BugDexRarity, number]> {
+  const boost = Math.max(0, Math.min(0.05, rarityBoost));
+  if (boost <= 0) return weights;
+  const commonIndex = weights.findIndex(([rarity]) => rarity === "Gewoon");
+  if (commonIndex < 0) return weights;
+
+  const nextWeights = weights.map(([rarity, weight]) => [rarity, weight] as [BugDexRarity, number]);
+  const total = nextWeights.reduce((sum, [, weight]) => sum + weight, 0);
+  const shift = Math.min(nextWeights[commonIndex][1], total * boost);
+  nextWeights[commonIndex][1] -= shift;
+
+  const rareIndex = nextWeights.findIndex(([rarity]) => rarity === "Zeldzaam");
+  const epicIndex = nextWeights.findIndex(([rarity]) => rarity === "Episch");
+  if (rareIndex >= 0) nextWeights[rareIndex][1] += shift * 0.65;
+  if (epicIndex >= 0) nextWeights[epicIndex][1] += shift * 0.35;
+  if (rareIndex < 0 && epicIndex < 0) nextWeights[commonIndex][1] += shift;
+  return nextWeights;
+}
+
+function sourceChanceBoost(source: BugDexDropSource, bonuses: ReturnType<typeof activeBugSquadBonuses>): number {
+  const base = bonuses.radar_spawn;
+  const boost = source === "bug_reported"
+    ? base + bonuses.focus_boost + bonuses.knowledge_boost
+    : source === "comment" || source === "upvote_given"
+      ? base + bonuses.support_boost
+      : source === "status_update" || source === "bug_fixed"
+        ? base + bonuses.focus_boost
+        : source === "weekly_mission"
+          ? base + bonuses.quest_boost
+          : base;
+  return Math.min(0.15, boost);
 }
 
 function pickFrom<T>(items: T[]): T | undefined {

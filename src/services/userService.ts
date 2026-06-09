@@ -11,8 +11,10 @@ import {
 import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db, isFirebaseConfigured } from "../firebase";
 import { BugComment, BugReport, User } from "../types";
-import { countBugDexInventory } from "./bugDexService";
-import { CharacterId, defaultCharacterId, safeCharacterId } from "./characterService";
+import { entryByBugId, listBugDexInventory, syncPointUnlockedBugDex } from "./bugDexService";
+import { normalizeBugLampActiveUntil, normalizeBugLampCount, withActivatedBugLamp } from "./bugLampService";
+import { sanitizeActiveBugSquad } from "./bugSquadService";
+import { bestUnlockedCharacterId, CharacterId, defaultCharacterId, isCharacterUnlocked, safeCharacterId } from "./characterService";
 import { badgesForUser, titleForPoints } from "./pointsService";
 
 export const upvotePointValue = 3;
@@ -25,16 +27,29 @@ let demoUser: User | null = null;
 const demoUsers = new Map<string, User>();
 
 function normalizeUser(user: User): User {
-  return {
+  const safeId = safeCharacterId(user.characterId);
+  const unlockedCharacterId = isCharacterUnlocked(safeId, user.totalPoints) ? safeId : bestUnlockedCharacterId(user.totalPoints);
+  const bugLampActiveUntil = normalizeBugLampActiveUntil(user.bugLampActiveUntil);
+  const normalized = {
     ...user,
     active: user.active !== false,
+    activeBugSquad: sanitizeActiveBugSquad(user.activeBugSquad),
+    ...(bugLampActiveUntil ? { bugLampActiveUntil } : {}),
+    bugLampCount: normalizeBugLampCount(user.bugLampCount),
     bugDexCount: user.bugDexCount ?? 0,
-    characterId: safeCharacterId(user.characterId),
+    characterId: unlockedCharacterId,
     commentPointCount: user.commentPointCount ?? 0,
+    legendaryBugDexCount: user.legendaryBugDexCount ?? 0,
+    movementKmTotal: user.movementKmTotal ?? 0,
+    movementRegisteredDayKm: user.movementRegisteredDayKm ?? 0,
+    mythicBugDexCount: user.mythicBugDexCount ?? 0,
+    splatCount: user.splatCount ?? 0,
+    tradedBugDexCount: user.tradedBugDexCount ?? 0,
+    upgradedBugDexCount: user.upgradedBugDexCount ?? 0,
     upvoteGivenPointCount: user.upvoteGivenPointCount ?? 0,
-    title: titleForPoints(user.totalPoints),
-    badges: badgesForUser(user)
+    title: titleForPoints(user.totalPoints)
   };
+  return { ...normalized, badges: badgesForUser(normalized) };
 }
 
 function withUpvoteBonus(user: User, bugs: BugReport[]): User {
@@ -66,7 +81,22 @@ async function countUserComments(uid: string, bugs: BugReport[]): Promise<number
 
 async function withPublicStats(user: User, bugs: BugReport[]): Promise<User> {
   const scored = withUpvoteBonus(user, bugs);
-  return { ...scored, bugDexCount: await countBugDexInventory(user.uid) };
+  return normalizeUser({ ...scored, ...await bugDexAchievementStats(scored) });
+}
+
+async function bugDexAchievementStats(user: Pick<User, "uid" | "activeBugSquad" | "totalPoints" | "bugCount">): Promise<Pick<User, "activeBugSquad" | "bugDexCount" | "legendaryBugDexCount" | "mythicBugDexCount" | "tradedBugDexCount" | "upgradedBugDexCount">> {
+  if (!isFirebaseConfigured || auth.currentUser?.uid === user.uid) {
+    await syncPointUnlockedBugDex(user);
+  }
+  const inventory = await listBugDexInventory(user as User);
+  return {
+    activeBugSquad: sanitizeActiveBugSquad(user.activeBugSquad, inventory),
+    bugDexCount: inventory.length,
+    legendaryBugDexCount: inventory.filter((item) => entryByBugId(item.bugId)?.rarity === "Legendarisch").length,
+    mythicBugDexCount: inventory.filter((item) => entryByBugId(item.bugId)?.rarity === "Mythisch").length,
+    tradedBugDexCount: inventory.filter((item) => item.sources.includes("trade")).length,
+    upgradedBugDexCount: inventory.filter((item) => item.sources.includes("combine")).length
+  };
 }
 
 function cleanDisplayName(displayName?: string | null): string {
@@ -81,6 +111,8 @@ function makeUser(uid: string, email: string, displayName?: string | null, nameS
     displayName: name || fallbackName,
     email,
     characterId: defaultCharacterId,
+    activeBugSquad: [],
+    bugLampCount: 0,
     nameSet,
     active: true,
     helpSeen: false,
@@ -90,6 +122,12 @@ function makeUser(uid: string, email: string, displayName?: string | null, nameS
     bugDexCount: 0,
     commentPointCount: 0,
     upvoteGivenPointCount: 0,
+    legendaryBugDexCount: 0,
+    movementKmTotal: 0,
+    movementRegisteredDayKm: 0,
+    mythicBugDexCount: 0,
+    tradedBugDexCount: 0,
+    upgradedBugDexCount: 0,
     title: titleForPoints(0),
     badges: []
   };
@@ -163,14 +201,14 @@ export async function syncEngagementPoints(user: User): Promise<User> {
   const bugs = await listAllBugsForScores();
   const commentCount = await countUserComments(user.uid, bugs);
   const upvoteGivenCount = bugs.filter((bug) => (bug.upvoteUserIds ?? []).includes(user.uid)).length;
-  const bugDexCount = await countBugDexInventory(user.uid);
+  const bugDexStats = await bugDexAchievementStats(user);
 
   if (!isFirebaseConfigured) {
     const pointsDelta =
       (commentCount - (user.commentPointCount ?? 0)) * commentPointValue
       + (upvoteGivenCount - (user.upvoteGivenPointCount ?? 0)) * upvoteGivenPointValue;
     const totalPoints = Math.max(0, user.totalPoints + pointsDelta);
-    const updated = normalizeUser({ ...user, totalPoints, bugDexCount, commentPointCount: commentCount, upvoteGivenPointCount: upvoteGivenCount });
+    const updated = normalizeUser({ ...user, ...bugDexStats, totalPoints, commentPointCount: commentCount, upvoteGivenPointCount: upvoteGivenCount });
     demoUsers.set(updated.email, updated);
     if (demoUser?.uid === user.uid) demoUser = updated;
     return updated;
@@ -185,17 +223,67 @@ export async function syncEngagementPoints(user: User): Promise<User> {
       (commentCount - (current.commentPointCount ?? 0)) * commentPointValue
       + (upvoteGivenCount - (current.upvoteGivenPointCount ?? 0)) * upvoteGivenPointValue;
     const totalPoints = Math.max(0, current.totalPoints + pointsDelta);
-    const updated = normalizeUser({ ...current, active: true, totalPoints, bugDexCount, commentPointCount: commentCount, upvoteGivenPointCount: upvoteGivenCount });
+    const updated = normalizeUser({ ...current, ...bugDexStats, active: true, totalPoints, commentPointCount: commentCount, upvoteGivenPointCount: upvoteGivenCount });
+    const visibleUpdated = withUpvoteBonus(updated, bugs);
     transaction.update(ref, {
       active: true,
       totalPoints: updated.totalPoints,
       title: updated.title,
       badges: updated.badges,
-      bugDexCount,
+      characterId: visibleUpdated.characterId,
+      activeBugSquad: updated.activeBugSquad,
+      ...bugDexStats,
       commentPointCount: commentCount,
       upvoteGivenPointCount: upvoteGivenCount
     });
-    return withUpvoteBonus(updated, bugs);
+    return visibleUpdated;
+  });
+}
+
+export async function syncMovementKilometers(user: User, todayKm: number): Promise<User> {
+  if (!Number.isFinite(todayKm) || todayKm <= 0) return normalizeUser(user);
+  const day = new Date().toISOString().slice(0, 10);
+  const roundedTodayKm = Math.round(todayKm * 100) / 100;
+
+  if (!isFirebaseConfigured) {
+    const current = Array.from(demoUsers.values()).find((item) => item.uid === user.uid) ?? user;
+    const previousDayKm = current.movementRegisteredDay === day ? current.movementRegisteredDayKm ?? 0 : 0;
+    const nextDayKm = Math.max(previousDayKm, roundedTodayKm);
+    const deltaKm = Math.max(0, nextDayKm - previousDayKm);
+    const updated = normalizeUser({
+      ...current,
+      movementKmTotal: Math.round(((current.movementKmTotal ?? 0) + deltaKm) * 100) / 100,
+      movementRegisteredDay: day,
+      movementRegisteredDayKm: nextDayKm
+    });
+    demoUsers.set(updated.email, updated);
+    if (demoUser?.uid === user.uid) demoUser = updated;
+    return updated;
+  }
+
+  const ref = doc(db, "users", user.uid);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error("Gebruiker niet gevonden.");
+    const current = snapshot.data() as User;
+    const previousDayKm = current.movementRegisteredDay === day ? current.movementRegisteredDayKm ?? 0 : 0;
+    const nextDayKm = Math.max(previousDayKm, roundedTodayKm);
+    const deltaKm = Math.max(0, nextDayKm - previousDayKm);
+    const movementKmTotal = Math.round(((current.movementKmTotal ?? 0) + deltaKm) * 100) / 100;
+    const updated = normalizeUser({
+      ...current,
+      movementKmTotal,
+      movementRegisteredDay: day,
+      movementRegisteredDayKm: nextDayKm
+    });
+    transaction.update(ref, {
+      badges: updated.badges,
+      characterId: updated.characterId,
+      movementKmTotal,
+      movementRegisteredDay: day,
+      movementRegisteredDayKm: nextDayKm
+    });
+    return updated;
   });
 }
 
@@ -204,23 +292,34 @@ export async function updateUserDisplayName(user: User, displayName: string): Pr
   if (!name || name.length < 2) throw new Error("Vul een naam in van minimaal 2 tekens.");
 
   if (!isFirebaseConfigured) {
-    const updated = { ...user, displayName: name, nameSet: true };
+    const updated = normalizeUser({ ...user, displayName: name, nameSet: true });
     demoUsers.set(updated.email, updated);
     if (demoUser?.uid === user.uid) demoUser = updated;
-    return normalizeUser(updated);
+    return updated;
   }
 
   if (auth.currentUser?.uid === user.uid) await updateProfile(auth.currentUser, { displayName: name });
-  const updated = { ...user, displayName: name, nameSet: true };
+  const updated = normalizeUser({ ...user, displayName: name, nameSet: true });
   await updateDoc(doc(db, "users", user.uid), {
+    characterId: updated.characterId,
     displayName: updated.displayName,
     nameSet: true
   });
-  return normalizeUser(updated);
+  return updated;
 }
 
 export async function updateUserCharacter(user: User, characterId: CharacterId): Promise<User> {
   const safeId = safeCharacterId(characterId);
+  if (!isCharacterUnlocked(safeId, user.totalPoints)) {
+    const updated = normalizeUser(user);
+    if (isFirebaseConfigured) {
+      await updateDoc(doc(db, "users", user.uid), { characterId: updated.characterId });
+    } else {
+      demoUsers.set(updated.email, updated);
+      if (demoUser?.uid === user.uid) demoUser = updated;
+    }
+    return updated;
+  }
   const updated = normalizeUser({ ...user, characterId: safeId });
 
   if (!isFirebaseConfigured) {
@@ -233,6 +332,37 @@ export async function updateUserCharacter(user: User, characterId: CharacterId):
   return updated;
 }
 
+export async function updateUserBugSquad(user: User, bugIds: string[]): Promise<User> {
+  const inventory = await listBugDexInventory(user);
+  const activeBugSquad = sanitizeActiveBugSquad(bugIds, inventory);
+  const updated = normalizeUser({ ...user, activeBugSquad });
+
+  if (!isFirebaseConfigured) {
+    demoUsers.set(updated.email, updated);
+    if (demoUser?.uid === user.uid) demoUser = updated;
+    return updated;
+  }
+
+  await updateDoc(doc(db, "users", user.uid), { activeBugSquad });
+  return updated;
+}
+
+export async function activateBugLamp(user: User): Promise<User> {
+  const updated = normalizeUser(withActivatedBugLamp(user));
+
+  if (!isFirebaseConfigured) {
+    demoUsers.set(updated.email, updated);
+    if (demoUser?.uid === user.uid) demoUser = updated;
+    return updated;
+  }
+
+  await updateDoc(doc(db, "users", user.uid), {
+    bugLampActiveUntil: updated.bugLampActiveUntil,
+    bugLampCount: updated.bugLampCount
+  });
+  return updated;
+}
+
 export async function markHelpSeen(user: User): Promise<User> {
   const updated = normalizeUser({ ...user, helpSeen: true });
   if (!isFirebaseConfigured) {
@@ -241,7 +371,7 @@ export async function markHelpSeen(user: User): Promise<User> {
     return updated;
   }
 
-  await updateDoc(doc(db, "users", user.uid), { helpSeen: true });
+  await updateDoc(doc(db, "users", user.uid), { characterId: updated.characterId, helpSeen: true });
   return updated;
 }
 
@@ -259,7 +389,7 @@ export async function listUsers(): Promise<User[]> {
     const users = await Promise.all(Array.from(demoUsers.values())
       .filter((user) => user.active !== false)
       .filter((user) => currentIsTest ? user.testAccount === true : user.testAccount !== true)
-      .map(async (user) => ({ ...normalizeUser(user), bugDexCount: await countBugDexInventory(user.uid) })));
+      .map(async (user) => normalizeUser({ ...user, ...await bugDexAchievementStats(user) })));
     return users.sort((a, b) => b.totalPoints - a.totalPoints);
   }
   const snapshot = await getDocs(query(collection(db, "users"), orderBy("totalPoints", "desc")));
@@ -293,8 +423,7 @@ export async function applyUserPoints(uid: string, pointsDelta: number, bugCount
     if (!current) return null;
     const totalPoints = Math.max(0, current.totalPoints + pointsDelta);
     const bugCount = Math.max(0, current.bugCount + bugCountDelta);
-    const updated = { ...current, totalPoints, bugCount, title: titleForPoints(totalPoints) };
-    updated.badges = badgesForUser(updated);
+    const updated = normalizeUser({ ...current, totalPoints, bugCount, title: titleForPoints(totalPoints) });
     demoUsers.set(updated.email, updated);
     if (demoUser?.uid === uid) demoUser = updated;
     return updated;
@@ -306,8 +435,7 @@ export async function applyUserPoints(uid: string, pointsDelta: number, bugCount
   const user = snapshot.data() as User;
   const totalPoints = Math.max(0, user.totalPoints + pointsDelta);
   const bugCount = Math.max(0, user.bugCount + bugCountDelta);
-  const updated = { ...user, totalPoints, bugCount, title: titleForPoints(totalPoints) };
-  updated.badges = badgesForUser(updated);
+  const updated = normalizeUser({ ...user, totalPoints, bugCount, title: titleForPoints(totalPoints) });
   await updateDoc(ref, updated);
   return updated;
 }
@@ -335,6 +463,7 @@ export async function recordBugSplat(user: User): Promise<{ user: User; mileston
     const updated = normalizeUser({ ...current, active: true, splatCount, totalPoints });
     transaction.update(ref, {
       active: true,
+      characterId: updated.characterId,
       splatCount,
       totalPoints,
       title: updated.title,

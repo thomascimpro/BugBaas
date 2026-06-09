@@ -222,9 +222,9 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
   }
 
   @ReactMethod
-  fun getMovementRadarProgress(promise: Promise) {
+  fun getMovementRadarProgress(movementBoost: Double, promise: Promise) {
     scope.launch {
-      val progress = MovementRadarNative.progress(reactContext)
+      val progress = MovementRadarNative.progress(reactContext, movementBoost)
       val result = Arguments.createMap()
       result.putBoolean("available", progress.available)
       result.putInt("awardedToday", progress.awardedToday)
@@ -259,9 +259,9 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
   }
 
   @ReactMethod
-  fun claimMovementRadarBonuses(promise: Promise) {
+  fun claimMovementRadarBonuses(movementBoost: Double, promise: Promise) {
     scope.launch {
-      val claim = MovementRadarNative.claimAvailable(reactContext)
+      val claim = MovementRadarNative.claimAvailable(reactContext, movementBoost)
       val result = Arguments.createMap()
       result.putInt("awarded", claim.awarded)
       result.putDouble("estimatedKm", claim.estimatedKm)

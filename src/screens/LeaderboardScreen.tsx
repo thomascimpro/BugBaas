@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
-import { LeaderboardRow } from "../components/LeaderboardRow";
+import { LastCatchSummary, LeaderboardRow } from "../components/LeaderboardRow";
 import { MedalIcon } from "../components/MedalIcon";
+import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
 import { useI18n } from "../services/i18n";
 import { listUsers } from "../services/userService";
 import { User } from "../types";
@@ -22,10 +23,25 @@ const podiumStyles = [
 export function LeaderboardScreen({ onBack: _onBack, onSelectUser }: Props) {
   const { t } = useI18n();
   const [users, setUsers] = useState<User[]>([]);
+  const [lastCatches, setLastCatches] = useState<Record<string, LastCatchSummary>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    listUsers().then(setUsers).finally(() => setLoading(false));
+    let active = true;
+    async function load() {
+      const nextUsers = await listUsers();
+      const catchPairs = await Promise.all(nextUsers.map(async (item) => [item.uid, await latestCatchForUser(item)] as const));
+      if (!active) return;
+      setUsers(nextUsers);
+      setLastCatches(Object.fromEntries(catchPairs.filter((item): item is readonly [string, LastCatchSummary] => Boolean(item[1]))));
+      setLoading(false);
+    }
+    void load().catch(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
@@ -45,13 +61,31 @@ export function LeaderboardScreen({ onBack: _onBack, onSelectUser }: Props) {
           keyExtractor={(user) => user.uid}
           ListHeaderComponent={users.length ? <Podium users={users.slice(0, 3)} onSelectUser={onSelectUser} /> : null}
           ListEmptyComponent={<Text style={sharedStyles.subtitle}>{t("leaderboard.empty")}</Text>}
-          renderItem={({ item, index }) => <LeaderboardRow user={item} index={index} onPress={() => onSelectUser(item)} />}
+          renderItem={({ item, index }) => <LeaderboardRow user={item} lastCatch={lastCatches[item.uid]} index={index} onPress={() => onSelectUser(item)} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
       )}
     </View>
   );
+}
+
+async function latestCatchForUser(user: User): Promise<LastCatchSummary | null> {
+  try {
+    const inventory = await listBugDexInventory(user);
+    const latest = inventory
+      .filter((item) => item.lastUnlockedAt)
+      .sort((a, b) => Date.parse(b.lastUnlockedAt) - Date.parse(a.lastUnlockedAt))[0];
+    if (!latest) return null;
+    const entry = entryByBugId(latest.bugId);
+    return {
+      bugId: latest.bugId,
+      lastUnlockedAt: latest.lastUnlockedAt,
+      rarity: entry?.rarity ?? "Gewoon"
+    };
+  } catch {
+    return null;
+  }
 }
 
 function Podium({ users, onSelectUser }: { users: User[]; onSelectUser: (user: User) => void }) {

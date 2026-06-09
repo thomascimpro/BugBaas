@@ -9,11 +9,21 @@ export type User = {
   active?: boolean;
   testAccount?: boolean;
   characterId?: string;
+  activeBugSquad?: string[];
+  bugLampActiveUntil?: string;
+  bugLampCount?: number;
   nameSet?: boolean;
   helpSeen?: boolean;
   splatCount?: number;
   bugDexCount?: number;
   commentPointCount?: number;
+  legendaryBugDexCount?: number;
+  movementKmTotal?: number;
+  movementRegisteredDay?: string;
+  movementRegisteredDayKm?: number;
+  mythicBugDexCount?: number;
+  tradedBugDexCount?: number;
+  upgradedBugDexCount?: number;
   upvoteGivenPointCount?: number;
   totalPoints: number;
   bugCount: number;
@@ -77,7 +87,7 @@ export type AppNotification = {
   read: boolean;
 };
 
-export type TradeStatus = "Open" | "Geaccepteerd" | "Afgewezen";
+export type TradeStatus = "Open" | "Geaccepteerd" | "Afgewezen" | "Geannuleerd";
 
 export type TradeRequest = {
   id: string;

@@ -52,7 +52,7 @@ export const userTiers: UserTier[] = [
     evolutionLevel: 1
   },
   {
-    minPoints: 25,
+    minPoints: 40,
     title: "Mierenmelder",
     description: "Draagt reproduceerstappen netjes naar het team.",
     prestige: "Bronze",
@@ -68,7 +68,7 @@ export const userTiers: UserTier[] = [
     evolutionLevel: 2
   },
   {
-    minPoints: 75,
+    minPoints: 120,
     title: "Sprinkhaan Speurder",
     description: "Springt snel naar reproduceerbare bugs.",
     prestige: "Silver",
@@ -84,7 +84,7 @@ export const userTiers: UserTier[] = [
     evolutionLevel: 3
   },
   {
-    minPoints: 150,
+    minPoints: 260,
     title: "Lieveheers Fixer",
     description: "Maakt van losse meldingen nette fixes.",
     prestige: "Silver",
@@ -100,7 +100,7 @@ export const userTiers: UserTier[] = [
     evolutionLevel: 4
   },
   {
-    minPoints: 300,
+    minPoints: 520,
     title: "Duizendpoot Regisseur",
     description: "Houdt meerdere flows tegelijk scherp.",
     prestige: "Gold",
@@ -116,7 +116,7 @@ export const userTiers: UserTier[] = [
     evolutionLevel: 5
   },
   {
-    minPoints: 500,
+    minPoints: 900,
     title: "Schorpioen Sentinel",
     description: "Steekt regressies voordat ze terugkomen.",
     prestige: "Platinum",
@@ -132,7 +132,7 @@ export const userTiers: UserTier[] = [
     evolutionLevel: 5
   },
   {
-    minPoints: 850,
+    minPoints: 1500,
     title: "Neushoorn Commander",
     description: "Duwt zware blokkades uit de release.",
     prestige: "Diamond",
@@ -148,7 +148,7 @@ export const userTiers: UserTier[] = [
     evolutionLevel: 5
   },
   {
-    minPoints: 1350,
+    minPoints: 2400,
     title: "Goliath BugBaas",
     description: "Legendarische eindbaas van de BugDex.",
     prestige: "Diamond",
@@ -454,14 +454,78 @@ export function pointsUntilNextTier(points: number): number | null {
   return nextTier ? nextTier.minPoints - points : null;
 }
 
-export function badgesForUser(user: Pick<User, "totalPoints" | "bugCount">): string[] {
-  const badges = [];
-  if (user.bugCount >= 1) badges.push("Eerste vangst");
-  if (user.bugCount >= 5) badges.push("Speurneus");
-  if (user.totalPoints >= 100) badges.push("Puntenslijper");
-  if (user.totalPoints >= 150) badges.push("Statusstrijder");
-  if (user.totalPoints >= 300) badges.push("Meesterkolonie");
-  return badges;
+export type BadgeDefinition = {
+  id: string;
+  name: string;
+  descriptionKey: string;
+  minBugDexCaught?: number;
+  minBugReports?: number;
+  minComments?: number;
+  minLegendaryBugDex?: number;
+  minMovementKm?: number;
+  minMythicBugDex?: number;
+  minPoints?: number;
+  minSplats?: number;
+  minTradedBugDex?: number;
+  minUpgradedBugDex?: number;
+  minUpvotesGiven?: number;
+};
+
+export const badgeDefinitions: BadgeDefinition[] = [
+  { id: "first-catch", name: "Eerste vangst", descriptionKey: "badge.firstCatch.description", minBugReports: 1 },
+  { id: "scout", name: "Speurneus", descriptionKey: "badge.scout.description", minBugReports: 5 },
+  { id: "bugstorm", name: "Bugstorm", descriptionKey: "badge.bugstorm.description", minBugReports: 20 },
+  { id: "bug-marathon", name: "Bugmarathon", descriptionKey: "badge.bugMarathon.description", minBugReports: 50 },
+  { id: "points", name: "Puntenslijper", descriptionKey: "badge.points.description", minPoints: 100 },
+  { id: "status", name: "Statusstrijder", descriptionKey: "badge.status.description", minPoints: 150 },
+  { id: "colony", name: "Meesterkolonie", descriptionKey: "badge.colony.description", minPoints: 300 },
+  { id: "walker", name: "Wandeljager", descriptionKey: "badge.walker.description", minMovementKm: 5 },
+  { id: "kilometer-colony", name: "Kilometerkolonie", descriptionKey: "badge.kilometerColony.description", minMovementKm: 25 },
+  { id: "marathon-hunter", name: "Marathonjager", descriptionKey: "badge.marathonHunter.description", minMovementKm: 100 },
+  { id: "long-range-tracker", name: "Langeafstandsspeurder", descriptionKey: "badge.longRangeTracker.description", minMovementKm: 250 },
+  { id: "bugdex-starter", name: "Dexstarter", descriptionKey: "badge.dexStarter.description", minBugDexCaught: 10 },
+  { id: "dex-collector", name: "Dexverzamelaar", descriptionKey: "badge.dexCollector.description", minBugDexCaught: 50 },
+  { id: "dex-master", name: "Dexmeester", descriptionKey: "badge.dexMaster.description", minBugDexCaught: 100 },
+  { id: "legendary-catch", name: "Legendarische vangst", descriptionKey: "badge.legendaryCatch.description", minLegendaryBugDex: 1 },
+  { id: "legendary-collector", name: "Legendarische collectie", descriptionKey: "badge.legendaryCollector.description", minLegendaryBugDex: 5 },
+  { id: "mythic-catch", name: "Mythische vangst", descriptionKey: "badge.mythicCatch.description", minMythicBugDex: 1 },
+  { id: "mythic-master", name: "Mythische meester", descriptionKey: "badge.mythicMaster.description", minMythicBugDex: 3 },
+  { id: "trader", name: "Ruilkever", descriptionKey: "badge.trader.description", minTradedBugDex: 1 },
+  { id: "upgrade-smith", name: "Upgrade-smid", descriptionKey: "badge.upgradeSmith.description", minUpgradedBugDex: 1 },
+  { id: "splat-hunter", name: "Splatjager", descriptionKey: "badge.splatHunter.description", minSplats: 10 },
+  { id: "comment-helper", name: "Reactiehelper", descriptionKey: "badge.commentHelper.description", minComments: 5 },
+  { id: "discussion-pro", name: "Discussiepro", descriptionKey: "badge.discussionPro.description", minComments: 25 },
+  { id: "upvote-ally", name: "Stemgenoot", descriptionKey: "badge.upvoteAlly.description", minUpvotesGiven: 10 }
+];
+
+export function badgesForUser(user: Partial<Pick<User,
+  "bugCount" |
+  "bugDexCount" |
+  "commentPointCount" |
+  "legendaryBugDexCount" |
+  "movementKmTotal" |
+  "mythicBugDexCount" |
+  "splatCount" |
+  "totalPoints" |
+  "tradedBugDexCount" |
+  "upvoteGivenPointCount" |
+  "upgradedBugDexCount"
+>>): string[] {
+  return badgeDefinitions
+    .filter((badge) =>
+      (badge.minBugReports === undefined || (user.bugCount ?? 0) >= badge.minBugReports) &&
+      (badge.minBugDexCaught === undefined || (user.bugDexCount ?? 0) >= badge.minBugDexCaught) &&
+      (badge.minLegendaryBugDex === undefined || (user.legendaryBugDexCount ?? 0) >= badge.minLegendaryBugDex) &&
+      (badge.minMovementKm === undefined || (user.movementKmTotal ?? 0) >= badge.minMovementKm) &&
+      (badge.minMythicBugDex === undefined || (user.mythicBugDexCount ?? 0) >= badge.minMythicBugDex) &&
+      (badge.minComments === undefined || (user.commentPointCount ?? 0) >= badge.minComments) &&
+      (badge.minPoints === undefined || (user.totalPoints ?? 0) >= badge.minPoints) &&
+      (badge.minSplats === undefined || (user.splatCount ?? 0) >= badge.minSplats) &&
+      (badge.minTradedBugDex === undefined || (user.tradedBugDexCount ?? 0) >= badge.minTradedBugDex) &&
+      (badge.minUpgradedBugDex === undefined || (user.upgradedBugDexCount ?? 0) >= badge.minUpgradedBugDex) &&
+      (badge.minUpvotesGiven === undefined || (user.upvoteGivenPointCount ?? 0) >= badge.minUpvotesGiven)
+    )
+    .map((badge) => badge.name);
 }
 
 export function isBugDexEntryUnlocked(entry: BugDexEntry, user: Pick<User, "totalPoints" | "bugCount">): boolean {
