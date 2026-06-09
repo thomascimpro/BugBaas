@@ -1,10 +1,16 @@
 # Changelog
 
+## 2.1.2
+
+- De bonus voor dubbele bugs heet nu XP, zodat duidelijk is dat duplicates extra XP-waarde geven.
+- Bug Smash Duel staat duidelijker in de changelog-popup met een korte uitleg en duel-afbeelding.
+- ARM release-APK opnieuw gebouwd met dezelfde echte upload signing, zodat Android/Play Protect hem kan accepteren.
+
 ## 2.1.1
 
 - Bug Squad boosts in foreground en Bug Smash Duel zijn opnieuw gebalanceerd: elke bonuscategorie heeft nu een concreet nuttig effect.
 - Catch assist vergroot nu de echte raakzone in plaats van gratis taps te verlagen; de vliegenmepper blijft alleen visuele feedback.
-- Duel-bonussen zijn verdeeld over hitbox, rustiger targets, combo grace, support bonuspunten, focus startvoordeel, rarity/shard bonuspunten en betere duel-reward kans.
+- Duel-bonussen zijn verdeeld over hitbox, rustiger targets, combo grace, support bonuspunten, focus startvoordeel, rarity/XP bonuspunten en betere duel-reward kans.
 - Release builds worden niet meer met de Android debug-keystore ondertekend, maar met een lokale upload-keystore.
 - Onnodige gevoelige Android-permissies zoals camera, microfoon, overlay en write external storage zijn uit de release manifest gehaald.
 
