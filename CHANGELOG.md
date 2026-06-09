@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.17
+
+- Bug Squad helpers mikken nu alleen op bugs die echt zichtbaar in de arena staan, zodat aanvallen niet meer op verborgen targets lijken te missen.
+- Helpers vermijden targets die al bijna uit beeld zijn; Shield mag nog iets later ingrijpen.
+- Helper charge-bars tonen ook voor de eerste shot een gedeeltelijke lading in plaats van klaar/vol.
+
 ## 2.1.16
 
 - Bug Squad helpers doen nu duidelijker echte hit-damage in Bug Smash Duel, zodat je na hun aanvallen minder hoeft te tikken.
