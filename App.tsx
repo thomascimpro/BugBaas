@@ -5,7 +5,9 @@ import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Image, ImageSourcePropType, Linking, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppNotification, BugComment, BugReport, BugSeverity, NotificationSettings, User } from "./src/types";
-import { applyUserPoints, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
+import { activateBugLamp, applyUserPoints, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, syncMovementKilometers, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
+import { activeBugSquadBonuses } from "./src/services/bugSquadService";
+import { movementBoostWithBugLamp } from "./src/services/bugLampService";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { BugListScreen } from "./src/screens/BugListScreen";
@@ -19,6 +21,7 @@ import { AppBackground } from "./src/components/AppBackground";
 import { BottomNav } from "./src/components/BottomNav";
 import { WalkingBugsLayer } from "./src/components/WalkingBugsLayer";
 import { BugDexUnlockModal } from "./src/components/BugDexUnlockModal";
+import { RankUpModal } from "./src/components/RankUpModal";
 import { BugSplatBonusOverlay } from "./src/components/BugSplatBonusOverlay";
 import { ForegroundCatchBug } from "./src/components/ForegroundCatchBug";
 import { DisplayNameModal } from "./src/components/DisplayNameModal";
@@ -29,6 +32,7 @@ import { CharacterId } from "./src/services/characterService";
 import { LanguageProvider, useI18n } from "./src/services/i18n";
 import { listBugs } from "./src/services/bugService";
 import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, grantBugDexReward, rollBugDexDrop, rollSpecificBugDexDrop } from "./src/services/bugDexService";
+import { getTierForPoints, type UserTier } from "./src/services/pointsService";
 import { claimMovementRadarBonuses } from "./src/services/movementRadarService";
 import { checkLatestVersion, VersionNotice } from "./src/services/versionService";
 import {
@@ -58,6 +62,16 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.0.0": [
+    { key: "changelog.2.0.0.badges", image: require("./assets/badges/badge-overview.png"), tone: "gold" },
+    { key: "changelog.2.0.0.rank", image: require("./assets/bugdex/atlaskever.png"), tone: "purple" }
+  ],
+  "1.5.9": [
+    { key: "changelog.1.5.9.badges", image: require("./assets/bugdex/lieveheersbeestje.png"), tone: "gold" },
+    { key: "changelog.1.5.9.movement", image: require("./assets/bugdex/schaatsenrijder.png"), tone: "green" },
+    { key: "changelog.1.5.9.rare", image: require("./assets/bugdex/koningin-alexandravlinder.png"), tone: "purple" },
+    { key: "changelog.1.5.9.characters", image: require("./assets/characters/character-golden-net-champion.png"), tone: "gold" }
+  ],
   "1.5.8": [
     { key: "changelog.1.5.8.help", image: require("./assets/characters/bugcatcher-classic.png"), tone: "green" },
     { key: "changelog.1.5.8.mythic", image: require("./assets/bugdex/koningin-alexandravlinder.png"), tone: "purple" },
@@ -84,6 +98,7 @@ function AppContent() {
   const [selectedBug, setSelectedBug] = useState<BugReport | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [bugDexDrop, setBugDexDrop] = useState<BugDexDropResult | null>(null);
+  const [rankUpTier, setRankUpTier] = useState<UserTier | null>(null);
   const [bugDexDropQueue, setBugDexDropQueue] = useState<BugDexDropResult[]>([]);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(defaultNotificationSettings);
   const [notification, setNotification] = useState<AppNotification | null>(null);
@@ -100,6 +115,7 @@ function AppContent() {
   const movementCheckInProgress = useRef(false);
   const versionCheckInProgress = useRef(false);
   const userRef = useRef<User | null>(null);
+  const previousRankRef = useRef<{ uid: string; minPoints: number } | null>(null);
   const notificationSettingsRef = useRef<NotificationSettings>(defaultNotificationSettings);
   const handledNotificationResponses = useRef(new Set<string>());
   const dailyLoginClaimedForUsers = useRef(new Set<string>());
@@ -108,6 +124,7 @@ function AppContent() {
     && user.nameSet === true
     && ["home", "bugs", "new", "bugdex", "leaderboard"].includes(route)
     && !bugDexDrop
+    && !rankUpTier
     && !notification
     && !helpVisible
     && !changelogVersion
@@ -118,6 +135,20 @@ function AppContent() {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      previousRankRef.current = null;
+      setRankUpTier(null);
+      return;
+    }
+    const currentTier = getTierForPoints(user.totalPoints);
+    const previous = previousRankRef.current;
+    if (previous?.uid === user.uid && currentTier.minPoints > previous.minPoints) {
+      setRankUpTier(currentTier);
+    }
+    previousRankRef.current = { uid: user.uid, minPoints: currentTier.minPoints };
+  }, [user?.totalPoints, user?.uid]);
 
   useEffect(() => {
     notificationSettingsRef.current = notificationSettings;
@@ -390,7 +421,8 @@ function AppContent() {
     if (!currentUser || currentUser.nameSet !== true || movementCheckInProgress.current) return;
     movementCheckInProgress.current = true;
     try {
-      const result = await claimMovementRadarBonuses(currentUser.uid);
+      const result = await claimMovementRadarBonuses(currentUser.uid, movementBoostForUser(currentUser));
+      await registerMovementKilometers(result.estimatedKm);
       if (result.awarded > 0 && notificationSettingsRef.current.movement) {
         await showMovementRewardNotification(result.awarded);
       }
@@ -399,6 +431,14 @@ function AppContent() {
     } finally {
       movementCheckInProgress.current = false;
     }
+  }
+
+  async function registerMovementKilometers(estimatedKm: number) {
+    const currentUser = userRef.current;
+    if (!currentUser || estimatedKm <= 0) return;
+    const updated = await syncMovementKilometers(currentUser, estimatedKm);
+    setUser(updated);
+    userRef.current = updated;
   }
 
   async function checkForVersionUpdate() {
@@ -413,6 +453,19 @@ function AppContent() {
     } finally {
       versionCheckInProgress.current = false;
     }
+  }
+
+  function squadBonuses() {
+    return activeBugSquadBonuses(user ?? undefined);
+  }
+
+  function movementBoostForUser(currentUser: User | null | undefined = user) {
+    return movementBoostWithBugLamp(currentUser ?? undefined, activeBugSquadBonuses(currentUser ?? undefined).movement_boost);
+  }
+
+  async function handleActivateBugLamp() {
+    if (!user) return;
+    setUser(await activateBugLamp(user));
   }
 
   async function updateNotificationSettings(settings: NotificationSettings) {
@@ -503,7 +556,7 @@ function AppContent() {
       <AppBackground />
       <WalkingBugsLayer onSplat={() => void handleBugSplat()} />
       <View style={styles.content}>
-        {route === "home" && <HomeScreen user={user} onNavigate={setRoute} />}
+        {route === "home" && <HomeScreen movementBoost={movementBoostForUser()} user={user} onActivateBugLamp={handleActivateBugLamp} onNavigate={setRoute} onMovementRegistered={registerMovementKilometers} />}
         {route === "bugs" && (
           <BugListScreen
             onBack={() => setRoute("home")}
@@ -585,7 +638,7 @@ function AppContent() {
             }}
           />
         )}
-        {route === "bugdex" && <BugDexScreen openTradeRequest={openBugDexTradeRequest} user={user} onBack={() => setRoute("home")} />}
+        {route === "bugdex" && <BugDexScreen openTradeRequest={openBugDexTradeRequest} user={user} onBack={() => setRoute("home")} onUserUpdated={setUser} />}
         {route === "settings" && (
           <SettingsScreen settings={notificationSettings} onBack={() => setRoute("home")} onChange={updateNotificationSettings} onShowHelp={showHelpTour} />
         )}
@@ -593,11 +646,14 @@ function AppContent() {
       <BottomNav activeRoute={route} onNavigate={navigateMain} />
       <InAppNotificationToast notification={notification} onClose={closeNotification} onOpen={openNotification} />
       <ForegroundCatchBug
+        catchAssist={squadBonuses().catch_assist}
+        catchTimeBonus={squadBonuses().catch_time}
         enabled={foregroundBugEnabled}
         forcedBugIds={pendingRadarBugIds}
         onCaught={(xp, bugId, rarity) => void handleForegroundBugCaught(xp, bugId, rarity)}
         onForcedBugConsumed={() => setPendingRadarBugIds((queue) => queue.slice(1))}
       />
+      <RankUpModal tier={rankUpTier} onClose={() => setRankUpTier(null)} />
       <BugDexUnlockModal drop={bugDexDrop} onClose={closeBugDexDrop} />
       <DisplayNameModal user={user} visible={Boolean(user && user.nameSet !== true)} onSave={handleDisplayNameSave} />
       <HelpTourOverlay visible={helpVisible && user.nameSet === true} onFinish={finishHelpTour} onNavigate={navigateHelp} />

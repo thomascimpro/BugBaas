@@ -5,6 +5,7 @@ import { BugArtImage } from "../components/BugArtImage";
 import { TierBadge } from "../components/TierBadge";
 import { listBugs } from "../services/bugService";
 import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
+import { bugLampStatus } from "../services/bugLampService";
 import { claimMovementRadarBonuses, getMovementRadarProgress, MovementRadarProgress } from "../services/movementRadarService";
 import { BugDexEntry, bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
 import { languages, useI18n } from "../services/i18n";
@@ -14,17 +15,21 @@ import { BugDexInventoryItem, BugReport, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
+  movementBoost?: number;
+  onActivateBugLamp?: () => Promise<void>;
+  onMovementRegistered?: (estimatedKm: number) => Promise<void>;
   user: User;
   onNavigate: (route: RouteName) => void;
 };
 
-export function HomeScreen({ user, onNavigate }: Props) {
+export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRegistered, user, onNavigate }: Props) {
   const { language, setLanguage, t, tr } = useI18n();
   const tier = getTierForPoints(user.totalPoints);
   const [users, setUsers] = useState<User[]>([]);
   const [bugs, setBugs] = useState<BugReport[]>([]);
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
   const [movementProgress, setMovementProgress] = useState<MovementRadarProgress | null>(null);
+  const [bugLampActivating, setBugLampActivating] = useState(false);
   const [movementClaiming, setMovementClaiming] = useState(false);
   const [showAllTiers, setShowAllTiers] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
@@ -38,17 +43,19 @@ export function HomeScreen({ user, onNavigate }: Props) {
   const hasMovementSourceData = movementDataTypes.some((item) => item.available);
   const showMovementSourceHelp = Boolean(movementProgress && movementDataTypes.length > 0 && !hasMovementSourceData);
   const selectedLanguage = languages.find((item) => item.value === language) ?? languages[0];
+  const lampStatus = bugLampStatus(user);
+  const showBugLamp = lampStatus.active || lampStatus.count > 0;
 
   useEffect(() => {
     listUsers().then(setUsers);
     listBugs().then(setBugs);
     listBugDexInventory(user).then(setInventory);
     refreshMovementProgress();
-  }, [user.uid, user.totalPoints]);
+  }, [movementBoost, user.uid, user.totalPoints]);
 
   async function refreshMovementProgress() {
     try {
-      setMovementProgress(await getMovementRadarProgress(user.uid));
+      setMovementProgress(await getMovementRadarProgress(user.uid, movementBoost));
     } catch {
       setMovementProgress(null);
     }
@@ -58,12 +65,24 @@ export function HomeScreen({ user, onNavigate }: Props) {
     if (movementClaiming) return;
     setMovementClaiming(true);
     try {
-      await claimMovementRadarBonuses(user.uid);
+      const result = await claimMovementRadarBonuses(user.uid, movementBoost);
+      if (result.estimatedKm > 0) await onMovementRegistered?.(result.estimatedKm);
       await refreshMovementProgress();
     } catch {
       await refreshMovementProgress();
     } finally {
       setMovementClaiming(false);
+    }
+  }
+
+  async function handleActivateBugLamp() {
+    if (bugLampActivating || !onActivateBugLamp) return;
+    setBugLampActivating(true);
+    try {
+      await onActivateBugLamp();
+      await refreshMovementProgress();
+    } finally {
+      setBugLampActivating(false);
     }
   }
 
@@ -172,6 +191,35 @@ export function HomeScreen({ user, onNavigate }: Props) {
               {t("home.connectHelp")}
             </Text>
           )}
+        </View>
+      )}
+      {showBugLamp && (
+        <View style={[styles.movementCard, styles.bugLampCard]}>
+          <View style={styles.bugLampHeader}>
+            <View style={styles.bugLampIcon}>
+              <Text style={styles.bugLampIconText}>L</Text>
+            </View>
+            <View style={styles.bugLampText}>
+              <Text style={[styles.movementTitle, styles.bugLampTitle]}>{t("home.bugLamp")}</Text>
+              <Text style={styles.bugLampMeta}>
+                {lampStatus.active ? t("home.bugLampActive", { time: formatRemaining(lampStatus.remainingMs) }) : t("home.bugLampCount", { count: lampStatus.count })}
+              </Text>
+            </View>
+            {!lampStatus.active && lampStatus.count > 0 && (
+              <Pressable
+                disabled={bugLampActivating}
+                onPress={handleActivateBugLamp}
+                style={({ pressed }) => [
+                  styles.bugLampButton,
+                  pressed && styles.movementClaimButtonPressed,
+                  bugLampActivating && styles.movementClaimButtonDisabled
+                ]}
+              >
+                <Text style={styles.bugLampButtonText}>{bugLampActivating ? "..." : t("home.activate")}</Text>
+              </Pressable>
+            )}
+          </View>
+          <Text style={styles.bugLampEffect}>{t("home.bugLampEffect")}</Text>
         </View>
       )}
       <View style={[styles.stage, styles.stageHidden]}>
@@ -293,6 +341,11 @@ export function HomeScreen({ user, onNavigate }: Props) {
 function formatKm(km: number): string {
   if (km >= 10) return String(Math.floor(km));
   return km.toFixed(1).replace(".0", "");
+}
+
+function formatRemaining(ms: number): string {
+  const hours = Math.max(0, Math.ceil(ms / (60 * 60 * 1000)));
+  return `${hours}h`;
 }
 
 function movementGoalLabel(goal: MovementRadarProgress["goals"][number], t: (key: string) => string): string {
@@ -538,6 +591,58 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 15,
     marginTop: 8
+  },
+  bugLampCard: {
+    backgroundColor: "#1f1a2e",
+    borderColor: "#8e6cff"
+  },
+  bugLampHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10
+  },
+  bugLampIcon: {
+    alignItems: "center",
+    backgroundColor: "#f1d36b",
+    borderColor: "#fff4b0",
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 42,
+    justifyContent: "center",
+    width: 42
+  },
+  bugLampIconText: {
+    color: "#2c2207",
+    fontSize: 20,
+    fontWeight: "900"
+  },
+  bugLampText: {
+    flex: 1
+  },
+  bugLampTitle: {
+    color: "#ffffff"
+  },
+  bugLampMeta: {
+    color: "#ddd6ff",
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  bugLampButton: {
+    backgroundColor: "#f1d36b",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  bugLampButtonText: {
+    color: "#2c2207",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  bugLampEffect: {
+    color: "#f8edb5",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 10
   },
   stage: {
     alignItems: "center",

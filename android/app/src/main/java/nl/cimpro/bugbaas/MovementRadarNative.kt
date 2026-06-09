@@ -57,7 +57,7 @@ data class MovementClaimSnapshot(
 object MovementRadarNative {
   private const val actionMovementCheck = "nl.cimpro.bugbaas.action.MOVEMENT_RADAR_CHECK"
   private const val estimatedMetersPerStep = 0.75
-  private const val walkingMetersPerRadarBug = 3000.0
+  private const val walkingMetersPerRadarBug = 2500.0
   private const val runningMetersPerRadarBug = 4000.0
   private const val cyclingMetersPerRadarBug = 6000.0
   private const val maxMovementRadarBugsPerDay = 5
@@ -84,14 +84,15 @@ object MovementRadarNative {
     }
   }
 
-  suspend fun claimAvailable(context: Context): MovementClaimSnapshot {
+  suspend fun claimAvailable(context: Context, movementBoost: Double = 0.0): MovementClaimSnapshot {
     val snapshot = readHealthConnectSnapshot(context)
     if (!snapshot.available) return MovementClaimSnapshot(0, emptyList(), 0.0, snapshot.reason)
 
     val today = localDayId()
     val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
     val awardedToday = if (prefs.getString(prefDay, "") == today) prefs.getInt(prefAwardedUnits, 0) else 0
-    val earnedToday = earnedUnits(snapshot)
+    val targets = boostedTargets(movementBoost)
+    val earnedToday = earnedUnits(snapshot, targets)
     val claimable = maxOf(0, minOf(maxMovementRadarBugsPerDay, earnedToday) - awardedToday)
     if (claimable <= 0) return MovementClaimSnapshot(0, emptyList(), snapshot.estimatedKm)
 
@@ -106,14 +107,15 @@ object MovementRadarNative {
     return MovementClaimSnapshot(added, bugIds.take(added), snapshot.estimatedKm)
   }
 
-  suspend fun progress(context: Context): MovementProgressSnapshot {
+  suspend fun progress(context: Context, movementBoost: Double = 0.0): MovementProgressSnapshot {
     val snapshot = readHealthConnectSnapshot(context)
     if (!snapshot.available) return emptyProgress(snapshot.reason ?: "health_error", snapshot.dataTypes)
 
+    val targets = boostedTargets(movementBoost)
     val today = localDayId()
     val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
     val awardedToday = if (prefs.getString(prefDay, "") == today) prefs.getInt(prefAwardedUnits, 0) else 0
-    val earnedToday = earnedUnits(snapshot)
+    val earnedToday = earnedUnits(snapshot, targets)
     val claimable = maxOf(0, minOf(maxMovementRadarBugsPerDay, earnedToday) - awardedToday)
     return MovementProgressSnapshot(
       available = true,
@@ -121,9 +123,9 @@ object MovementRadarNative {
       claimableRewards = claimable,
       dataTypes = snapshot.dataTypes,
       goals = listOf(
-        makeGoal("walking", "Lopen", snapshot.walkingMeters, walkingMetersPerRadarBug),
-        makeGoal("running", "Hardlopen", snapshot.runningMeters, runningMetersPerRadarBug),
-        makeGoal("cycling", "Fietsen", snapshot.cyclingMeters, cyclingMetersPerRadarBug)
+        makeGoal("walking", "Lopen", snapshot.walkingMeters, targets.walking),
+        makeGoal("running", "Hardlopen", snapshot.runningMeters, targets.running),
+        makeGoal("cycling", "Fietsen", snapshot.cyclingMeters, targets.cycling)
       ),
       maxRewards = maxMovementRadarBugsPerDay
     )
@@ -305,11 +307,21 @@ object MovementRadarNative {
     return gaps
   }
 
-  private fun earnedUnits(snapshot: ExerciseSnapshot): Int {
-    val walking = (snapshot.walkingMeters / walkingMetersPerRadarBug).toInt()
-    val running = (snapshot.runningMeters / runningMetersPerRadarBug).toInt()
-    val cycling = (snapshot.cyclingMeters / cyclingMetersPerRadarBug).toInt()
+  private fun earnedUnits(snapshot: ExerciseSnapshot, targets: MovementTargets): Int {
+    val walking = (snapshot.walkingMeters / targets.walking).toInt()
+    val running = (snapshot.runningMeters / targets.running).toInt()
+    val cycling = (snapshot.cyclingMeters / targets.cycling).toInt()
     return minOf(maxMovementRadarBugsPerDay, walking + running + cycling)
+  }
+
+  private fun boostedTargets(movementBoost: Double): MovementTargets {
+    val boost = movementBoost.coerceIn(0.0, 1.0)
+    val multiplier = 1.0 + boost
+    return MovementTargets(
+      walking = walkingMetersPerRadarBug / multiplier,
+      running = runningMetersPerRadarBug / multiplier,
+      cycling = cyclingMetersPerRadarBug / multiplier
+    )
   }
 
   private fun makeGoal(id: String, label: String, meters: Double, targetMeters: Double): MovementGoalSnapshot {
@@ -388,6 +400,12 @@ object MovementRadarNative {
   private fun maxInstant(first: Instant, second: Instant): Instant = if (first.isAfter(second)) first else second
 
   private fun minInstant(first: Instant, second: Instant): Instant = if (first.isBefore(second)) first else second
+
+  private data class MovementTargets(
+    val walking: Double,
+    val running: Double,
+    val cycling: Double
+  )
 
   private data class ExerciseSnapshot(
     val available: Boolean,

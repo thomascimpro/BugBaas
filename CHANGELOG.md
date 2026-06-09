@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.0.0
+
+- Alle badge-afbeeldingen vervangen door HD game-badges in consistente BugBaas-stijl.
+- Badge-overview vernieuwd voor profiel/changelog visuals.
+- Rank-progressie aangescherpt: hogere tiers vragen nu duidelijk meer XP.
+- BugDex unlocks uit bestaande rank/point-regels worden server-side aangevuld in de gebruiker-inventory.
+
+## 1.5.9
+
+- Badges werken nu actief op basis van bugmeldingen, punten, splats, ruilen, upgrades en BugDex-mijlpalen.
+- Nieuwe beweegbadges tellen totaal geregistreerde loop-, hardloop- en fietskilometers zonder dubbele dagtelling.
+- Nieuwe rarity-badges voor eerste en meerdere Legendarische en Mythische BugDex-vondsten.
+- Nieuwe HD bug-catcher characters zijn vrij te spelen met oplopende tiers en punten.
+- Changelog-popup toont deze badge-update met visuele kaarten en bugbeelden.
+
 ## 1.5.8
 
 - Changelog-popup vernieuwd met visuele kaarten en bugbeelden.

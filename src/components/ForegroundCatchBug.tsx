@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import type { ImageSourcePropType } from "react-native";
 import { allBugArtIds, BugArtId } from "../services/bugArt";
 import { bugDexEntries } from "../services/pointsService";
 import { playBugSound } from "../services/soundService";
@@ -30,6 +31,8 @@ type ActiveBug = {
 };
 
 type Props = {
+  catchAssist?: number;
+  catchTimeBonus?: number;
   enabled: boolean;
   forcedBugIds?: BugArtId[];
   onCaught: (xp: number, bugId: BugArtId, rarity: SpawnRarity) => void;
@@ -40,6 +43,7 @@ const spawnCheckMs = 10 * 60 * 1000;
 const spawnChance = 1;
 const catchDurationMs = 30000;
 const tapDebounceMs = 140;
+const bugSwatterImage = require("../../assets/generated/bug-swatter-hd.png");
 const movementInput = [0, 0.055, 0.1, 0.16, 0.22, 0.3, 0.37, 0.45, 0.53, 0.61, 0.69, 0.76, 0.83, 0.9, 0.96, 1];
 const timerSegments = Array.from({ length: 24 }, (_, index) => index);
 
@@ -84,7 +88,7 @@ const bugPools = (Object.keys(rarityLabels) as SpawnRarity[]).reduce((pools, rar
   return pools;
 }, {} as Record<SpawnRarity, BugArtId[]>);
 
-export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onForcedBugConsumed }: Props) {
+export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enabled, forcedBugIds = [], onCaught, onForcedBugConsumed }: Props) {
   const { height, width } = useWindowDimensions();
   const [activeBug, setActiveBug] = useState<ActiveBug | null>(null);
   const [hits, setHits] = useState(0);
@@ -232,23 +236,61 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
     return [{ scaleX: activeBug.facingScale }, { scaleY: bodySquash }];
   }, [activeBug, progress]);
 
+  const swatterStyle = useMemo(() => {
+    if (!activeBug) return null;
+    const size = activeBug.size * 2.4;
+    const opacity = hitFeedback.interpolate({
+      inputRange: [0, 0.06, 0.72, 1],
+      outputRange: [0, 1, 0.88, 0],
+      extrapolate: "clamp"
+    });
+    const translateX = hitFeedback.interpolate({
+      inputRange: [0, 0.16, 0.34, 0.58, 1],
+      outputRange: [activeBug.size * 0.65, activeBug.size * 0.24, -activeBug.size * 0.06, activeBug.size * 0.02, activeBug.size * 0.72],
+      extrapolate: "clamp"
+    });
+    const translateY = hitFeedback.interpolate({
+      inputRange: [0, 0.16, 0.34, 0.58, 1],
+      outputRange: [-activeBug.size * 1.3, -activeBug.size * 0.72, -activeBug.size * 0.2, -activeBug.size * 0.34, -activeBug.size * 1.36],
+      extrapolate: "clamp"
+    });
+    const rotate = hitFeedback.interpolate({
+      inputRange: [0, 0.16, 0.34, 0.58, 1],
+      outputRange: ["-48deg", "-24deg", "7deg", "-8deg", "-52deg"],
+      extrapolate: "clamp"
+    });
+    const scale = hitFeedback.interpolate({
+      inputRange: [0, 0.3, 0.52, 1],
+      outputRange: [0.8, 1.08, 0.98, 0.84],
+      extrapolate: "clamp"
+    });
+    return {
+      height: size,
+      opacity,
+      transform: [{ translateX }, { translateY }, { rotate }, { scale }],
+      width: size
+    };
+  }, [activeBug, hitFeedback]);
+
   function spawnBug(forcedId?: BugArtId) {
     const rarity = forcedId ? rarityByBugId[forcedId] ?? "common" : pickRarity();
     const bugId = forcedId ?? pickBugId(rarity);
     const settings = raritySettings[rarity];
+    const requiredTaps = Math.max(1, Math.ceil(settings.requiredTaps * (1 - clamp(catchAssist, 0, 0.2))));
+    const durationMs = Math.round(catchDurationMs * (1 + clamp(catchTimeBonus, 0, 0.2)));
     const direction = Math.random() > 0.5 ? "right" : "left";
     const motionPath = createMotionPath(rarity, direction);
     setActiveBug({
       id: Date.now(),
       bugId,
-      durationMs: catchDurationMs,
+      durationMs,
       facingScale: direction === "right" ? 1 : -1,
       motionCycleMs: settings.motionCycleMs,
       pathRotate: motionPath.rotate,
       pathX: motionPath.x,
       pathY: motionPath.y,
       rarity,
-      requiredTaps: settings.requiredTaps,
+      requiredTaps,
       rewardXp: settings.rewardXp,
       size: settings.size,
       stepBob: settings.stepBob
@@ -332,6 +374,13 @@ export function ForegroundCatchBug({ enabled, forcedBugIds = [], onCaught, onFor
         ]}
       >
         <Pressable hitSlop={42} onPress={tapBug} style={[styles.hitbox, { minHeight: activeBug.size + 90, minWidth: activeBug.size + 130 }]}>
+          {swatterStyle && (
+            <Animated.Image
+              resizeMode="contain"
+              source={bugSwatterImage as ImageSourcePropType}
+              style={[styles.swatter, swatterStyle]}
+            />
+          )}
           {!caught && (
             <View pointerEvents="none" style={[styles.timerBadge, { height: timerSize, width: timerSize }]}>
               {timerSegments.map((segment) => {
@@ -469,6 +518,10 @@ const styles = StyleSheet.create({
   hitbox: {
     alignItems: "center",
     justifyContent: "center"
+  },
+  swatter: {
+    position: "absolute",
+    zIndex: 5
   },
   hpBar: {
     bottom: 20,

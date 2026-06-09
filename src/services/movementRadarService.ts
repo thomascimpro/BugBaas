@@ -37,31 +37,31 @@ export type MovementRadarProgress = {
 };
 
 const nativeModule = NativeModules.BugBaasNative as {
-  claimMovementRadarBonuses?: () => Promise<MovementRadarResult>;
-  getMovementRadarProgress?: () => Promise<MovementRadarProgress>;
+  claimMovementRadarBonuses?: (movementBoost: number) => Promise<MovementRadarResult>;
+  getMovementRadarProgress?: (movementBoost: number) => Promise<MovementRadarProgress>;
   requestHealthPermissions?: () => Promise<boolean>;
 } | undefined;
 
-const walkingMetersPerRadarBug = 3000;
+const walkingMetersPerRadarBug = 2500;
 const runningMetersPerRadarBug = 4000;
 const cyclingMetersPerRadarBug = 6000;
 const maxMovementRadarBugsPerDay = 5;
 
-export async function claimMovementRadarBonuses(uid: string): Promise<MovementRadarResult> {
+export async function claimMovementRadarBonuses(uid: string, movementBoost = 0): Promise<MovementRadarResult> {
   if (Platform.OS !== "android") return emptyResult("platform");
   if (!nativeModule?.claimMovementRadarBonuses) return emptyResult("native");
 
-  const nativeResult = await nativeModule.claimMovementRadarBonuses();
+  const nativeResult = await nativeModule.claimMovementRadarBonuses(clampBoost(movementBoost));
   if (nativeResult.reason === "health_permission" && await requestHealthConnectPermissionsOnce(uid)) {
     return emptyResult("health_permission_requested");
   }
   return nativeResult;
 }
 
-export async function getMovementRadarProgress(_uid: string): Promise<MovementRadarProgress> {
+export async function getMovementRadarProgress(_uid: string, movementBoost = 0): Promise<MovementRadarProgress> {
   if (Platform.OS !== "android") return emptyProgress("platform");
   if (!nativeModule?.getMovementRadarProgress) return emptyProgress("native");
-  return nativeModule.getMovementRadarProgress();
+  return nativeModule.getMovementRadarProgress(clampBoost(movementBoost));
 }
 
 async function requestHealthConnectPermissionsOnce(uid: string): Promise<boolean> {
@@ -106,4 +106,8 @@ function makeGoal(id: MovementRadarGoal["id"], label: string, meters: number, ta
     label,
     targetKm: targetMeters / 1000
   };
+}
+
+function clampBoost(value: number): number {
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
 }

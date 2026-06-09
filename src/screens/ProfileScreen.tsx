@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugArtImage } from "../components/BugArtImage";
 import { DisplayNameModal } from "../components/DisplayNameModal";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { StatusBadge } from "../components/StatusBadge";
 import { TierBadge } from "../components/TierBadge";
+import { getBadgeArtSource } from "../services/badgeArt";
 import { listBugs } from "../services/bugService";
 import { useI18n } from "../services/i18n";
-import { bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
-import { CharacterId, characterOptions, safeCharacterId } from "../services/characterService";
+import { BadgeDefinition, badgeDefinitions, bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
+import { bestUnlockedCharacterId, CharacterId, characterOptions, isCharacterUnlocked, safeCharacterId } from "../services/characterService";
 import { upvotePointValue } from "../services/userService";
 import { BugReport, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
@@ -27,14 +28,13 @@ type Props = {
 export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onUpdateCharacter, onUpdateDisplayName, onSelectBug }: Props) {
   const { t, tr } = useI18n();
   const tier = getTierForPoints(user.totalPoints);
-  const badges = user.badges.length ? user.badges : [t("profile.noBadges")];
-  const badgeCount = user.badges.length;
   const [bugs, setBugs] = useState<BugReport[]>([]);
   const [editNameVisible, setEditNameVisible] = useState(false);
   const [characterBusy, setCharacterBusy] = useState("");
   const [characterPickerOpen, setCharacterPickerOpen] = useState(false);
   const [loadingBugs, setLoadingBugs] = useState(true);
-  const selectedCharacterId = safeCharacterId(user.characterId);
+  const storedCharacterId = safeCharacterId(user.characterId);
+  const selectedCharacterId = isCharacterUnlocked(storedCharacterId, user.totalPoints) ? storedCharacterId : bestUnlockedCharacterId(user.totalPoints);
   const selectedCharacter = characterOptions.find((item) => item.id === selectedCharacterId) ?? characterOptions[0];
 
   useEffect(() => {
@@ -97,11 +97,12 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
               <View style={styles.characterGrid}>
                 {characterOptions.map((option) => {
                   const selected = option.id === selectedCharacterId;
+                  const unlocked = isCharacterUnlocked(option.id, user.totalPoints);
                   return (
                     <Pressable
                       key={option.id}
-                      style={[styles.characterOption, selected && { borderColor: option.accent, backgroundColor: "#fff9df" }]}
-                      disabled={Boolean(characterBusy)}
+                      style={[styles.characterOption, !unlocked && styles.characterOptionLocked, selected && { borderColor: option.accent, backgroundColor: "#fff9df" }]}
+                      disabled={Boolean(characterBusy) || !unlocked}
                       onPress={async () => {
                         setCharacterBusy(option.id);
                         try {
@@ -112,7 +113,8 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
                       }}
                     >
                       <CharacterAvatarImage characterId={option.id} selected={selected} size={66} />
-                      <Text style={styles.characterName} numberOfLines={1}>{characterBusy === option.id ? "..." : option.label}</Text>
+                      <Text style={styles.characterName} numberOfLines={2}>{characterBusy === option.id ? "..." : option.label}</Text>
+                      {!unlocked && <Text style={styles.characterLockText} numberOfLines={1}>{t("profile.characterUnlock", { points: option.unlockPoints })}</Text>}
                     </Pressable>
                   );
                 })}
@@ -157,13 +159,25 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("profile.badges")}</Text>
+        <Text style={styles.badgeIntro}>{t("profile.badgesIntro")}</Text>
         <View style={styles.badges}>
-          {badges.map((badge) => (
-            <View key={badge} style={styles.badge}>
-              <BugArtImage bugId="lieveheersbeestje" size={24} />
-              <Text style={styles.badgeText}>{tr(badge)}</Text>
+          {badgeDefinitions.map((badge) => {
+            const unlocked = badgeUnlocked(user, badge);
+            const badgeArt = getBadgeArtSource(badge.id);
+            return (
+            <View key={badge.id} style={[styles.badge, !unlocked && styles.badgeLocked]}>
+              {badgeArt ? (
+                <Image source={badgeArt} style={[styles.badgeImage, !unlocked && styles.badgeImageLocked]} />
+              ) : (
+                <BugArtImage bugId="lieveheersbeestje" size={42} />
+              )}
+              <View style={styles.badgeTextBlock}>
+                <Text style={[styles.badgeText, !unlocked && styles.badgeTextLocked]}>{tr(badge.name)}</Text>
+                <Text style={styles.badgeRequirement}>{badgeRequirementText(badge, t)} - {t(badge.descriptionKey)}</Text>
+              </View>
             </View>
-          ))}
+            );
+          })}
         </View>
       </View>
 
@@ -209,6 +223,35 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
       )}
     </ScrollView>
   );
+}
+
+function badgeUnlocked(user: User, badge: BadgeDefinition): boolean {
+  return (badge.minBugReports === undefined || user.bugCount >= badge.minBugReports) &&
+    (badge.minBugDexCaught === undefined || (user.bugDexCount ?? 0) >= badge.minBugDexCaught) &&
+    (badge.minComments === undefined || (user.commentPointCount ?? 0) >= badge.minComments) &&
+    (badge.minLegendaryBugDex === undefined || (user.legendaryBugDexCount ?? 0) >= badge.minLegendaryBugDex) &&
+    (badge.minMovementKm === undefined || (user.movementKmTotal ?? 0) >= badge.minMovementKm) &&
+    (badge.minMythicBugDex === undefined || (user.mythicBugDexCount ?? 0) >= badge.minMythicBugDex) &&
+    (badge.minPoints === undefined || user.totalPoints >= badge.minPoints) &&
+    (badge.minSplats === undefined || (user.splatCount ?? 0) >= badge.minSplats) &&
+    (badge.minTradedBugDex === undefined || (user.tradedBugDexCount ?? 0) >= badge.minTradedBugDex) &&
+    (badge.minUpgradedBugDex === undefined || (user.upgradedBugDexCount ?? 0) >= badge.minUpgradedBugDex) &&
+    (badge.minUpvotesGiven === undefined || (user.upvoteGivenPointCount ?? 0) >= badge.minUpvotesGiven);
+}
+
+function badgeRequirementText(badge: BadgeDefinition, t: (key: string, params?: Record<string, string | number>) => string): string {
+  if (badge.minBugReports !== undefined) return t("profile.badgeNeedBugs", { count: badge.minBugReports });
+  if (badge.minBugDexCaught !== undefined) return t("profile.badgeNeedBugDex", { count: badge.minBugDexCaught });
+  if (badge.minComments !== undefined) return t("profile.badgeNeedComments", { count: badge.minComments });
+  if (badge.minLegendaryBugDex !== undefined) return t("profile.badgeNeedLegendary", { count: badge.minLegendaryBugDex });
+  if (badge.minMovementKm !== undefined) return t("profile.badgeNeedKm", { count: badge.minMovementKm });
+  if (badge.minMythicBugDex !== undefined) return t("profile.badgeNeedMythic", { count: badge.minMythicBugDex });
+  if (badge.minPoints !== undefined) return t("profile.badgeNeedPoints", { count: badge.minPoints });
+  if (badge.minSplats !== undefined) return t("profile.badgeNeedSplats", { count: badge.minSplats });
+  if (badge.minTradedBugDex !== undefined) return t("profile.badgeNeedTrades", { count: badge.minTradedBugDex });
+  if (badge.minUpgradedBugDex !== undefined) return t("profile.badgeNeedUpgrades", { count: badge.minUpgradedBugDex });
+  if (badge.minUpvotesGiven !== undefined) return t("profile.badgeNeedUpvotes", { count: badge.minUpvotesGiven });
+  return t("profile.badgeUnlocked");
 }
 
 const styles = StyleSheet.create({
@@ -421,11 +464,23 @@ const styles = StyleSheet.create({
     padding: 8,
     width: "31%"
   },
+  characterOptionLocked: {
+    opacity: 0.45
+  },
   characterName: {
     color: "#102018",
     fontSize: 11,
     fontWeight: "900",
+    lineHeight: 13,
     marginTop: 6,
+    minHeight: 26,
+    textAlign: "center"
+  },
+  characterLockText: {
+    color: "#53645d",
+    fontSize: 9,
+    fontWeight: "900",
+    marginTop: 2,
     textAlign: "center"
   },
   statusLine: {
@@ -446,23 +501,53 @@ const styles = StyleSheet.create({
     textAlign: "right"
   },
   badges: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8
+  },
+  badgeIntro: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
+    marginBottom: 10
   },
   badge: {
     alignItems: "center",
     backgroundColor: "#eef4ed",
+    borderColor: "#c6d3cc",
     borderRadius: 8,
+    borderWidth: 1,
     flexDirection: "row",
     gap: 6,
-    paddingHorizontal: 9,
-    paddingVertical: 7
+    padding: 9
+  },
+  badgeImage: {
+    height: 48,
+    width: 48
+  },
+  badgeImageLocked: {
+    opacity: 0.48
+  },
+  badgeLocked: {
+    opacity: 0.62
+  },
+  badgeTextBlock: {
+    flex: 1,
+    minWidth: 0
   },
   badgeText: {
     color: "#17211c",
     fontSize: 12,
     fontWeight: "900"
+  },
+  badgeTextLocked: {
+    color: "#53645d"
+  },
+  badgeRequirement: {
+    color: "#53645d",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 15,
+    marginTop: 2
   },
   bugList: {
     gap: 8

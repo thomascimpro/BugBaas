@@ -1,8 +1,8 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { getTierForPoints } from "../services/pointsService";
-import { bugDexEntries } from "../services/pointsService";
-import { useI18n } from "../services/i18n";
+import { entryByBugId } from "../services/bugDexService";
+import { BugDexRarity, bugDexEntries, getTierForPoints } from "../services/pointsService";
+import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
 import { User } from "../types";
 import { BugArtImage } from "./BugArtImage";
 import { MedalIcon } from "./MedalIcon";
@@ -13,15 +13,29 @@ const topThreeStyles = [
   { border: "#b87842", background: "#fff0df", shine: "#e2a56d", pill: "#7b431f", pillText: "#ffffff", bugId: "duizendpoot" }
 ];
 
-export function LeaderboardRow({ index, user, onPress }: { index: number; user: User; onPress: () => void }) {
+export type LastCatchSummary = {
+  bugId: string;
+  lastUnlockedAt: string;
+  rarity: BugDexRarity;
+};
+
+const rarityColors: Record<BugDexRarity, string> = {
+  Gewoon: "#6f7f5f",
+  Zeldzaam: "#15724f",
+  Episch: "#356d7c",
+  Legendarisch: "#b83227",
+  Mythisch: "#7c3aed"
+};
+
+export function LeaderboardRow({ index, lastCatch, user, onPress }: { index: number; lastCatch?: LastCatchSummary; user: User; onPress: () => void }) {
   const { t, tr } = useI18n();
   const isLeader = index === 0;
   const tier = isLeader ? getTierForPoints(Number.MAX_SAFE_INTEGER) : getTierForPoints(user.totalPoints);
   const medal = topThreeStyles[index];
   const title = isLeader ? t("tier.super") : tr(tier.title);
   const status = statusForUser(user, index, t);
-  const visibleBadges = user.badges.slice(0, 2);
-  const extraBadges = user.badges.length - visibleBadges.length;
+  const lastCatchEntry = lastCatch ? entryByBugId(lastCatch.bugId) : null;
+  const lastCatchColor = lastCatch ? rarityColors[lastCatch.rarity] : "#c6d3cc";
 
   return (
     <Pressable style={[styles.row, medal ? { backgroundColor: medal.background, borderColor: medal.border } : styles.standardRow, medal && styles.topThreeRow, isLeader && styles.leader]} onPress={onPress}>
@@ -37,16 +51,19 @@ export function LeaderboardRow({ index, user, onPress }: { index: number; user: 
         </View>
         <Text style={[styles.meta, { color: tier.color }]}>{title}</Text>
         <Text style={styles.subMeta}>{t("leader.bugsDex", { bugs: user.bugCount, caught: user.bugDexCount ?? 0, total: bugDexEntries.length })}</Text>
-        <View style={styles.badgeRow}>
-          {visibleBadges.length ? (
+        <View style={styles.lastCatchRow}>
+          {lastCatch && lastCatchEntry ? (
             <>
-              {visibleBadges.map((badge) => (
-                <Text key={badge} style={styles.badgeChip} numberOfLines={1}>{tr(badge)}</Text>
-              ))}
-              {extraBadges > 0 && <Text style={styles.badgeChip}>+{extraBadges}</Text>}
+              <View style={[styles.lastCatchBug, { borderColor: lastCatchColor }]}>
+                <BugArtImage bugId={lastCatch.bugId} size={30} />
+              </View>
+              <View style={styles.lastCatchTextBlock}>
+                <Text style={styles.lastCatchTitle} numberOfLines={1}>{bugDexEntryName(lastCatchEntry, t)}</Text>
+                <Text style={[styles.lastCatchMeta, { color: lastCatchColor }]} numberOfLines={1}>{rarityLabel(lastCatch.rarity, t)} - {formatLastCaughtAt(lastCatch.lastUnlockedAt, t)}</Text>
+              </View>
             </>
           ) : (
-            <Text style={styles.badgeChip}>{t("leader.noBadges")}</Text>
+            <Text style={styles.noCatchText}>{t("leader.noLastCatch")}</Text>
           )}
         </View>
       </View>
@@ -64,6 +81,20 @@ function statusForUser(user: User, index: number, t: (key: string) => string): s
   if (user.bugCount >= 5) return t("leader.statusHunter");
   if (user.bugCount >= 1) return t("leader.statusNew");
   return t("leader.statusStart");
+}
+
+function formatLastCaughtAt(value: string, t: (key: string, params?: Record<string, string | number>) => string): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return t("leader.timeUnknown");
+  const diffMs = Date.now() - timestamp;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diffMs < minute) return t("leader.timeNow");
+  if (diffMs < hour) return t("leader.timeMinutes", { count: Math.max(1, Math.floor(diffMs / minute)) });
+  if (diffMs < day) return t("leader.timeHours", { count: Math.max(1, Math.floor(diffMs / hour)) });
+  if (diffMs < 2 * day) return t("leader.timeYesterday");
+  return new Date(timestamp).toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit" });
 }
 
 const styles = StyleSheet.create({
@@ -151,25 +182,43 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 1
   },
-  badgeRow: {
+  lastCatchRow: {
+    alignItems: "center",
     flexDirection: "row",
-    gap: 5,
+    gap: 7,
     marginTop: 6
   },
-  badgeChip: {
+  lastCatchBug: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    borderWidth: 2,
+    height: 38,
+    justifyContent: "center",
+    width: 38
+  },
+  lastCatchTextBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  lastCatchTitle: {
+    color: "#17211c",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  lastCatchMeta: {
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 1
+  },
+  noCatchText: {
     backgroundColor: "#eef4ed",
     borderRadius: 8,
     color: "#52665d",
     fontSize: 10,
-    fontWeight: "800",
-    maxWidth: 86,
+    fontWeight: "900",
     paddingHorizontal: 7,
-    paddingVertical: 3
-  },
-  badges: {
-    color: "#77847f",
-    fontSize: 12,
-    marginTop: 4
+    paddingVertical: 4
   },
   scorePill: {
     alignItems: "center",

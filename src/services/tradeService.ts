@@ -140,6 +140,29 @@ export async function respondToTradeRequest(user: User, trade: TradeRequest, acc
   });
 }
 
+export async function cancelTradeRequest(user: User, trade: TradeRequest): Promise<TradeRequest> {
+  if (user.uid !== trade.fromUserId) throw new Error("Alleen de aanvrager kan dit verzoek annuleren.");
+  if (trade.status !== "Open") throw new Error("Alleen open ruilverzoeken kunnen worden geannuleerd.");
+
+  const cancelled = { ...trade, status: "Geannuleerd" as const, updatedAt: nowIso() };
+  if (!isFirebaseConfigured) {
+    const index = demoTrades.findIndex((item) => item.id === trade.id);
+    if (index >= 0) demoTrades[index] = cancelled;
+    return cancelled;
+  }
+
+  const tradeRef = doc(db, "trades", trade.id);
+  return runTransaction(db, async (transaction) => {
+    const freshTradeSnapshot = await transaction.get(tradeRef);
+    if (!freshTradeSnapshot.exists()) throw new Error("Ruilverzoek niet gevonden.");
+    const freshTrade = freshTradeSnapshot.data() as TradeRequest;
+    if (freshTrade.fromUserId !== user.uid) throw new Error("Alleen de aanvrager kan dit verzoek annuleren.");
+    if (freshTrade.status !== "Open") throw new Error("Alleen open ruilverzoeken kunnen worden geannuleerd.");
+    transaction.update(tradeRef, { status: cancelled.status, updatedAt: cancelled.updatedAt });
+    return { ...freshTrade, status: cancelled.status, updatedAt: cancelled.updatedAt };
+  });
+}
+
 export async function markTradeRequesterSeen(user: User, trade: TradeRequest): Promise<void> {
   if (user.uid !== trade.fromUserId || trade.status !== "Geaccepteerd" || trade.requesterSeenAt) return;
   const requesterSeenAt = nowIso();
