@@ -49,6 +49,10 @@ type HelperImpact = {
   bugId: string;
   color: string;
   kind: HelperImpactKind;
+  label: string;
+  sourceX: number;
+  sourceY: number;
+  splashPoints: Array<{ id: string; x: number; y: number }>;
   x: number;
   y: number;
 };
@@ -406,24 +410,44 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       if (!target) return;
 
       helperCooldownAtRef.current[bonus.bugId] = timestamp + spec.cooldownMs + helperIndex * 260;
-      addHelperImpact(bonus.bugId, target.motion.x, target.motion.y, spec.color, spec.kind);
-      for (let hit = 0; hit < spec.hits; hit += 1) applyBugHit(target.bugId, "helper");
-
-      if (spec.splashTargets > 0) {
-        visibleTargets
+      const splashTargets = spec.splashTargets > 0
+        ? visibleTargets
           .filter((item) => item.bugId !== target.bugId && distanceBetweenTargets(item, target) <= spec.splashRadius)
           .slice(0, spec.splashTargets)
-          .forEach((item) => applyBugHit(item.bugId, "helper"));
-      }
+        : [];
+      const source = helperTowerSourcePosition(helperIndex, activeSquadBonuses.length);
+
+      addHelperImpact(
+        bonus.bugId,
+        target.motion.x,
+        target.motion.y,
+        spec.color,
+        spec.kind,
+        helperKindLabel(spec.kind, t),
+        source,
+        splashTargets.map((item) => ({ id: item.bugId, x: item.motion.x, y: item.motion.y }))
+      );
+      for (let hit = 0; hit < spec.hits; hit += 1) applyBugHit(target.bugId, "helper");
+
+      splashTargets.forEach((item) => applyBugHit(item.bugId, "helper"));
     });
   }
 
-  function addHelperImpact(bugId: string, x: number, y: number, color: string, kind: HelperImpactKind) {
+  function addHelperImpact(
+    bugId: string,
+    x: number,
+    y: number,
+    color: string,
+    kind: HelperImpactKind,
+    label: string,
+    source: { x: number; y: number },
+    splashPoints: Array<{ id: string; x: number; y: number }>
+  ) {
     const id = `helper-${helperImpactIdRef.current++}`;
-    setHelperImpacts((current) => [...current.slice(-8), { id, bugId, color, kind, x, y }]);
+    setHelperImpacts((current) => [...current.slice(-8), { id, bugId, color, kind, label, sourceX: source.x, sourceY: source.y, splashPoints, x, y }]);
     setTimeout(() => {
       setHelperImpacts((current) => current.filter((item) => item.id !== id));
-    }, 520);
+    }, 720);
   }
 
   function startAcceptedDuel() {
@@ -671,6 +695,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         <Text style={styles.bonusLine}>{t("duel.tapAssist", { value: Math.round((assist.hitboxMultiplier - 1.05) * 100) })}</Text>
         <Text style={styles.bonusLine}>{t("duel.speedAssist", { value: Math.round((assist.speedMultiplier - 1) * 100) })}</Text>
         <Text style={styles.bonusLine}>{t("duel.scoreAssist", { value: duelBonusScore(12, assist) })}</Text>
+        <Text style={styles.helperHint}>{t("duel.helperHint")}</Text>
       </View>
 
       <Modal transparent animationType="fade" visible={squadModalVisible} onRequestClose={() => setSquadModalVisible(false)}>
@@ -935,6 +960,12 @@ function helperKindLabel(kind: HelperImpactKind, t: (key: string) => string) {
   return t(`duel.helper.${kind}`);
 }
 
+function helperTowerSourcePosition(index: number, count: number) {
+  const spacing = 13;
+  const start = 50 - ((count - 1) * spacing) / 2;
+  return { x: start + index * spacing, y: 91 };
+}
+
 function HelperTowerPulse({ color, ready }: { color: string; ready: boolean }) {
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -971,26 +1002,79 @@ function HelperImpactEffect({ impact }: { impact: HelperImpact }) {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(pulse, { duration: 480, toValue: 1, useNativeDriver: true }).start();
+    Animated.timing(pulse, { duration: 680, toValue: 1, useNativeDriver: true }).start();
   }, [pulse]);
 
-  const symbol = impact.kind === "zap" ? "✦" : impact.kind === "sticky" ? "✹" : impact.kind === "shield" ? "◇" : impact.kind === "splash" ? "●" : "✷";
+  const symbol = impact.kind === "zap" ? "Z" : impact.kind === "sticky" ? "S" : impact.kind === "shield" ? "SH" : impact.kind === "splash" ? "AOE" : "B";
+  const trailSteps = impact.kind === "zap" ? [0.2, 0.36, 0.52, 0.68, 0.84] : [0.28, 0.48, 0.68, 0.86];
+  const targetScale = impact.kind === "shield" ? [0.72, 2.15] : impact.kind === "splash" ? [0.55, 2.05] : [0.45, 1.8];
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.helperImpact,
-        {
-          borderColor: impact.color,
-          left: `${impact.x}%`,
-          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0] }),
-          top: `${impact.y}%`,
-          transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.8] }) }]
-        }
-      ]}
-    >
-      <Text style={[styles.helperImpactSymbol, { color: impact.color }]}>{symbol}</Text>
-    </Animated.View>
+    <>
+      {trailSteps.map((step, index) => (
+        <Animated.View
+          key={`${impact.id}:trail:${index}`}
+          pointerEvents="none"
+          style={[
+            styles.helperTrailDot,
+            {
+              backgroundColor: impact.color,
+              left: `${impact.sourceX + (impact.x - impact.sourceX) * step}%`,
+              opacity: pulse.interpolate({ inputRange: [0, 0.18 + index * 0.08, 0.76, 1], outputRange: [0, 0.92, 0.45, 0] }),
+              top: `${impact.sourceY + (impact.y - impact.sourceY) * step}%`,
+              transform: [{ scale: pulse.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.6, 1.35, 0.55] }) }]
+            }
+          ]}
+        />
+      ))}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.helperImpact,
+          impact.kind === "shield" && styles.helperImpactShield,
+          impact.kind === "splash" && styles.helperImpactSplash,
+          {
+            borderColor: impact.color,
+            left: `${impact.x}%`,
+            opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0] }),
+            top: `${impact.y}%`,
+            transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: targetScale }) }]
+          }
+        ]}
+      >
+        <Text style={[styles.helperImpactSymbol, { color: impact.color }]}>{symbol}</Text>
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.helperImpactLabel,
+          {
+            borderColor: impact.color,
+            left: `${impact.x}%`,
+            opacity: pulse.interpolate({ inputRange: [0, 0.18, 0.78, 1], outputRange: [0, 1, 1, 0] }),
+            top: `${Math.max(4, impact.y - 9)}%`,
+            transform: [{ scale: pulse.interpolate({ inputRange: [0, 0.18, 1], outputRange: [0.85, 1, 0.95] }) }]
+          }
+        ]}
+      >
+        <Text style={[styles.helperImpactLabelText, { color: impact.color }]}>{impact.label}</Text>
+      </Animated.View>
+      {impact.splashPoints.map((point) => (
+        <Animated.View
+          key={`${impact.id}:splash:${point.id}`}
+          pointerEvents="none"
+          style={[
+            styles.helperSplashEcho,
+            {
+              borderColor: impact.color,
+              left: `${point.x}%`,
+              opacity: pulse.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, 0.8, 0] }),
+              top: `${point.y}%`,
+              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.55] }) }]
+            }
+          ]}
+        />
+      ))}
+    </>
   );
 }
 
@@ -1101,7 +1185,8 @@ const styles = StyleSheet.create({
     height: 310,
     justifyContent: "center",
     marginTop: 12,
-    overflow: "hidden"
+    overflow: "hidden",
+    position: "relative"
   },
   bonusLine: {
     color: "#53645d",
@@ -1285,6 +1370,42 @@ const styles = StyleSheet.create({
     width: 46,
     zIndex: 8
   },
+  helperImpactLabel: {
+    alignItems: "center",
+    backgroundColor: "rgba(16,32,24,0.88)",
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: "center",
+    marginLeft: -31,
+    minWidth: 62,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    position: "absolute",
+    zIndex: 10
+  },
+  helperImpactLabelText: {
+    fontSize: 9,
+    fontWeight: "900",
+    lineHeight: 11,
+    textAlign: "center"
+  },
+  helperImpactShield: {
+    backgroundColor: "rgba(56,189,248,0.12)",
+    borderRadius: 10,
+    borderWidth: 3,
+    height: 54,
+    marginLeft: -27,
+    marginTop: -27,
+    width: 54
+  },
+  helperImpactSplash: {
+    backgroundColor: "rgba(245,158,11,0.12)",
+    borderWidth: 3,
+    height: 58,
+    marginLeft: -29,
+    marginTop: -29,
+    width: 58
+  },
   helperImpactSymbol: {
     fontSize: 19,
     fontWeight: "900",
@@ -1292,6 +1413,12 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(16,32,24,0.75)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3
+  },
+  helperHint: {
+    color: "#7a5f18",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 8
   },
   helperPulse: {
     borderRadius: 999,
@@ -1331,6 +1458,25 @@ const styles = StyleSheet.create({
     marginTop: 2,
     maxWidth: 52,
     textAlign: "center"
+  },
+  helperSplashEcho: {
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 34,
+    marginLeft: -17,
+    marginTop: -17,
+    position: "absolute",
+    width: 34,
+    zIndex: 8
+  },
+  helperTrailDot: {
+    borderRadius: 999,
+    height: 10,
+    marginLeft: -5,
+    marginTop: -5,
+    position: "absolute",
+    width: 10,
+    zIndex: 7
   },
   header: {
     alignItems: "center",

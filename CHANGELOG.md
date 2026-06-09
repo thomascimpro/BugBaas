@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.14
+
+- Helper-aanvallen in Bug Smash Duel zijn duidelijker: je ziet nu vanaf welke actieve bug een hit komt en welke target geraakt wordt.
+- Zap, Sticky, AOE en Shield hebben zichtbare impact-animaties; AOE markeert ook de extra geraakte bugs.
+- Shield heeft een duidelijkere guard-ring en korte uitleg in de actieve Bug Squad-kaart.
+
 ## 2.1.10
 
 - Bug Smash Duel toont de uitdager nu eerst een start-popup zodra de tegenstander accepteert.
