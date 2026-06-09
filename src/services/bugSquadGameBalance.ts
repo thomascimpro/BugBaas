@@ -14,7 +14,7 @@ export type BugSmashDuelBalance = {
   questRewardRarityBoost: number;
   radarRarePointChance: number;
   targetSpacingMultiplier: number;
-  shardDuplicatePointChance: number;
+  xpDuplicatePointChance: number;
   speedMultiplier: number;
   streakMissForgiveness: number;
   supportBonusEvery: number;
@@ -42,7 +42,7 @@ export function bugSmashDuelBalanceForUser(user?: Pick<User, "activeBugSquad"> |
     questRewardRarityBoost: clamp(bonuses.quest_boost * 0.35, 0, 0.05),
     radarRarePointChance: clamp(bonuses.radar_rarity * 1.2, 0, 0.08),
     targetSpacingMultiplier: 1 - clamp(bonuses.radar_spawn * 0.45, 0, 0.08),
-    shardDuplicatePointChance: clamp(bonuses.shard_boost * 0.9, 0, 0.08),
+    xpDuplicatePointChance: clamp(bonuses.xp_boost * 0.9, 0, 0.08),
     speedMultiplier: 1 + clamp(bonuses.catch_time, 0, 0.18),
     streakMissForgiveness: bonuses.streak_protection > 0 ? 1 : 0,
     supportBonusEvery: bonuses.support_boost >= 0.075 ? 4 : bonuses.support_boost >= 0.03 ? 6 : 0

@@ -433,8 +433,8 @@ function requiredTapsForTarget(rarity: BugDexRarity, assist: BugSmashDuelBalance
 
 function duelCatchBonusPoints(rarity: BugDexRarity, bugId: string, assist: BugSmashDuelBalance) {
   const rareBonus = rarity !== "Gewoon" && stableChance(`${bugId}:rare`, assist.radarRarePointChance) ? 1 : 0;
-  const shardBonus = stableChance(`${bugId}:shard`, assist.shardDuplicatePointChance) ? 1 : 0;
-  return Math.min(1, rareBonus + shardBonus);
+  const xpBonus = stableChance(`${bugId}:xp`, assist.xpDuplicatePointChance) ? 1 : 0;
+  return Math.min(1, rareBonus + xpBonus);
 }
 
 function duelComboBonusPoint(combo: number) {

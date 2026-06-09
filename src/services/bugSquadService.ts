@@ -11,7 +11,7 @@ export type BugSquadBonusCategory =
   | "knowledge_boost"
   | "support_boost"
   | "quest_boost"
-  | "shard_boost"
+  | "xp_boost"
   | "streak_protection";
 
 export type BugSquadBonus = {
@@ -44,7 +44,7 @@ const baseBonusValue: Record<BugSquadBonusCategory, number> = {
   knowledge_boost: 0.015,
   support_boost: 0.015,
   quest_boost: 0.015,
-  shard_boost: 0.01,
+  xp_boost: 0.01,
   streak_protection: 1
 };
 
@@ -58,7 +58,7 @@ const bonusCaps: Record<BugSquadBonusCategory, number> = {
   knowledge_boost: 0.15,
   support_boost: 0.15,
   quest_boost: 0.15,
-  shard_boost: 0.1,
+  xp_boost: 0.1,
   streak_protection: 1
 };
 
@@ -98,7 +98,7 @@ export function emptyBugSquadBonuses(): BugSquadBonusTotals {
     knowledge_boost: 0,
     support_boost: 0,
     quest_boost: 0,
-    shard_boost: 0,
+    xp_boost: 0,
     streak_protection: 0
   };
 }
