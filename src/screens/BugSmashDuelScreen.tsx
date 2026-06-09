@@ -43,8 +43,10 @@ const duelGameTickMs = 55;
 const maxVisibleDuelTargets = 10;
 
 type HelperImpactKind = "burst" | "shield" | "splash" | "sticky" | "zap";
+type HelperAnimationStyle = "orb" | "pulse" | "slash";
 
 type HelperImpact = {
+  animationStyle: HelperAnimationStyle;
   id: string;
   bugId: string;
   color: string;
@@ -424,6 +426,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         spec.color,
         spec.kind,
         helperKindLabel(spec.kind, t),
+        helperAnimationStyleForIndex(helperIndex),
         source,
         splashTargets.map((item) => ({ id: item.bugId, x: item.motion.x, y: item.motion.y }))
       );
@@ -440,11 +443,12 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     color: string,
     kind: HelperImpactKind,
     label: string,
+    animationStyle: HelperAnimationStyle,
     source: { x: number; y: number },
     splashPoints: Array<{ id: string; x: number; y: number }>
   ) {
     const id = `helper-${helperImpactIdRef.current++}`;
-    setHelperImpacts((current) => [...current.slice(-8), { id, bugId, color, kind, label, sourceX: source.x, sourceY: source.y, splashPoints, x, y }]);
+    setHelperImpacts((current) => [...current.slice(-8), { animationStyle, id, bugId, color, kind, label, sourceX: source.x, sourceY: source.y, splashPoints, x, y }]);
     setTimeout(() => {
       setHelperImpacts((current) => current.filter((item) => item.id !== id));
     }, 720);
@@ -966,6 +970,10 @@ function helperTowerSourcePosition(index: number, count: number) {
   return { x: start + index * spacing, y: 91 };
 }
 
+function helperAnimationStyleForIndex(index: number): HelperAnimationStyle {
+  return index % 3 === 0 ? "orb" : index % 3 === 1 ? "slash" : "pulse";
+}
+
 function HelperTowerPulse({ color, ready }: { color: string; ready: boolean }) {
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -1006,22 +1014,99 @@ function HelperImpactEffect({ impact }: { impact: HelperImpact }) {
   }, [pulse]);
 
   const symbol = impact.kind === "zap" ? "Z" : impact.kind === "sticky" ? "S" : impact.kind === "shield" ? "SH" : impact.kind === "splash" ? "AOE" : "B";
-  const trailSteps = impact.kind === "zap" ? [0.2, 0.36, 0.52, 0.68, 0.84] : [0.28, 0.48, 0.68, 0.86];
-  const targetScale = impact.kind === "shield" ? [0.72, 2.15] : impact.kind === "splash" ? [0.55, 2.05] : [0.45, 1.8];
+  const targetScale = impact.animationStyle === "pulse" ? [0.65, 2.35] : impact.kind === "shield" ? [0.72, 2.15] : impact.kind === "splash" ? [0.55, 2.05] : [0.45, 1.8];
+  const angle = Math.atan2(impact.y - impact.sourceY, impact.x - impact.sourceX) * 180 / Math.PI;
+  const orbSteps = [0.16, 0.31, 0.47, 0.63, 0.79, 0.9];
+  const slashSteps = [0.3, 0.48, 0.66, 0.84];
+  const pulseSteps = [0.28, 0.5, 0.72, 0.9];
   return (
     <>
-      {trailSteps.map((step, index) => (
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.helperMuzzleFlash,
+          impact.animationStyle === "slash" && styles.helperMuzzleFlashSlash,
+          impact.animationStyle === "pulse" && styles.helperMuzzleFlashPulse,
+          {
+            backgroundColor: impact.animationStyle === "pulse" ? "transparent" : impact.color,
+            borderColor: impact.color,
+            left: `${impact.sourceX}%`,
+            opacity: pulse.interpolate({ inputRange: [0, 0.18, 0.52, 1], outputRange: [0, 0.95, 0.38, 0] }),
+            top: `${impact.sourceY}%`,
+            transform: [
+              { rotate: `${angle}deg` },
+              { scale: pulse.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0.55, 1.55, 0.7] }) }
+            ]
+          }
+        ]}
+      />
+      {impact.animationStyle === "orb" && orbSteps.map((step, index) => {
+        const curve = Math.sin(step * Math.PI) * (index % 2 === 0 ? -4 : 4);
+        return (
+          <Animated.View
+            key={`${impact.id}:orb:${index}`}
+            pointerEvents="none"
+            style={[
+              styles.helperTrailDot,
+              index % 2 === 0 && styles.helperTrailDotLarge,
+              {
+                backgroundColor: impact.color,
+                left: `${impact.sourceX + (impact.x - impact.sourceX) * step}%`,
+                opacity: pulse.interpolate({ inputRange: [0, 0.14 + index * 0.07, 0.82, 1], outputRange: [0, 1, 0.45, 0] }),
+                top: `${impact.sourceY + (impact.y - impact.sourceY) * step + curve}%`,
+                transform: [{ scale: pulse.interpolate({ inputRange: [0, 0.28, 1], outputRange: [0.55, 1.5, 0.45] }) }]
+              }
+            ]}
+          />
+        );
+      })}
+      {impact.animationStyle === "slash" && slashSteps.map((step, index) => (
         <Animated.View
-          key={`${impact.id}:trail:${index}`}
+          key={`${impact.id}:slash:${index}`}
           pointerEvents="none"
           style={[
-            styles.helperTrailDot,
+            styles.helperSlashStreak,
             {
               backgroundColor: impact.color,
               left: `${impact.sourceX + (impact.x - impact.sourceX) * step}%`,
-              opacity: pulse.interpolate({ inputRange: [0, 0.18 + index * 0.08, 0.76, 1], outputRange: [0, 0.92, 0.45, 0] }),
+              opacity: pulse.interpolate({ inputRange: [0, 0.12 + index * 0.08, 0.72, 1], outputRange: [0, 0.9, 0.35, 0] }),
               top: `${impact.sourceY + (impact.y - impact.sourceY) * step}%`,
-              transform: [{ scale: pulse.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.6, 1.35, 0.55] }) }]
+              transform: [
+                { rotate: `${angle}deg` },
+                { scaleX: pulse.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0.55, 1.45, 0.75] }) },
+                { scaleY: pulse.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0.8, 1.1, 0.75] }) }
+              ]
+            }
+          ]}
+        />
+      ))}
+      {impact.animationStyle === "pulse" && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.helperSourcePulse,
+            {
+              borderColor: impact.color,
+              left: `${impact.sourceX}%`,
+              opacity: pulse.interpolate({ inputRange: [0, 0.22, 1], outputRange: [0, 0.75, 0] }),
+              top: `${impact.sourceY}%`,
+              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 2.4] }) }]
+            }
+          ]}
+        />
+      )}
+      {impact.animationStyle === "pulse" && pulseSteps.map((step, index) => (
+        <Animated.View
+          key={`${impact.id}:wave:${index}`}
+          pointerEvents="none"
+          style={[
+            styles.helperWaveDot,
+            {
+              borderColor: impact.color,
+              left: `${impact.sourceX + (impact.x - impact.sourceX) * step}%`,
+              opacity: pulse.interpolate({ inputRange: [0, 0.2 + index * 0.07, 0.84, 1], outputRange: [0, 0.82, 0.35, 0] }),
+              top: `${impact.sourceY + (impact.y - impact.sourceY) * step}%`,
+              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.85] }) }]
             }
           ]}
         />
@@ -1030,6 +1115,9 @@ function HelperImpactEffect({ impact }: { impact: HelperImpact }) {
         pointerEvents="none"
         style={[
           styles.helperImpact,
+          impact.animationStyle === "orb" && styles.helperImpactOrb,
+          impact.animationStyle === "slash" && styles.helperImpactSlash,
+          impact.animationStyle === "pulse" && styles.helperImpactPulse,
           impact.kind === "shield" && styles.helperImpactShield,
           impact.kind === "splash" && styles.helperImpactSplash,
           {
@@ -1070,6 +1158,25 @@ function HelperImpactEffect({ impact }: { impact: HelperImpact }) {
               opacity: pulse.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, 0.8, 0] }),
               top: `${point.y}%`,
               transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.55] }) }]
+            }
+          ]}
+        />
+      ))}
+      {[0, 1, 2].map((spark) => (
+        <Animated.View
+          key={`${impact.id}:spark:${spark}`}
+          pointerEvents="none"
+          style={[
+            styles.helperImpactSpark,
+            {
+              backgroundColor: impact.color,
+              left: `${impact.x + (spark - 1) * 3}%`,
+              opacity: pulse.interpolate({ inputRange: [0, 0.18, 0.72, 1], outputRange: [0, 0.9, 0.45, 0] }),
+              top: `${impact.y + (spark === 1 ? -4 : 3)}%`,
+              transform: [
+                { rotate: `${angle + spark * 42}deg` },
+                { scale: pulse.interpolate({ inputRange: [0, 0.24, 1], outputRange: [0.4, 1.2, 0.45] }) }
+              ]
             }
           ]}
         />
@@ -1389,6 +1496,28 @@ const styles = StyleSheet.create({
     lineHeight: 11,
     textAlign: "center"
   },
+  helperImpactSpark: {
+    borderRadius: 999,
+    height: 4,
+    marginLeft: -2,
+    marginTop: -2,
+    position: "absolute",
+    width: 18,
+    zIndex: 10
+  },
+  helperImpactOrb: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderStyle: "dotted",
+    borderWidth: 3
+  },
+  helperImpactPulse: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 4,
+    height: 62,
+    marginLeft: -31,
+    marginTop: -31,
+    width: 62
+  },
   helperImpactShield: {
     backgroundColor: "rgba(56,189,248,0.12)",
     borderRadius: 10,
@@ -1406,6 +1535,14 @@ const styles = StyleSheet.create({
     marginTop: -29,
     width: 58
   },
+  helperImpactSlash: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    height: 38,
+    marginLeft: -19,
+    marginTop: -19,
+    width: 38
+  },
   helperImpactSymbol: {
     fontSize: 19,
     fontWeight: "900",
@@ -1419,6 +1556,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     marginTop: 8
+  },
+  helperMuzzleFlash: {
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 18,
+    marginLeft: -9,
+    marginTop: -9,
+    position: "absolute",
+    width: 28,
+    zIndex: 8
+  },
+  helperMuzzleFlashPulse: {
+    borderWidth: 2,
+    height: 26,
+    marginLeft: -13,
+    marginTop: -13,
+    width: 26
+  },
+  helperMuzzleFlashSlash: {
+    borderRadius: 2,
+    height: 8,
+    marginLeft: -15,
+    marginTop: -4,
+    width: 30
   },
   helperPulse: {
     borderRadius: 999,
@@ -1459,6 +1620,25 @@ const styles = StyleSheet.create({
     maxWidth: 52,
     textAlign: "center"
   },
+  helperSlashStreak: {
+    borderRadius: 999,
+    height: 7,
+    marginLeft: -18,
+    marginTop: -4,
+    position: "absolute",
+    width: 36,
+    zIndex: 7
+  },
+  helperSourcePulse: {
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 34,
+    marginLeft: -17,
+    marginTop: -17,
+    position: "absolute",
+    width: 34,
+    zIndex: 6
+  },
   helperSplashEcho: {
     borderRadius: 999,
     borderWidth: 2,
@@ -1476,6 +1656,22 @@ const styles = StyleSheet.create({
     marginTop: -5,
     position: "absolute",
     width: 10,
+    zIndex: 7
+  },
+  helperTrailDotLarge: {
+    height: 14,
+    marginLeft: -7,
+    marginTop: -7,
+    width: 14
+  },
+  helperWaveDot: {
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 20,
+    marginLeft: -10,
+    marginTop: -10,
+    position: "absolute",
+    width: 20,
     zIndex: 7
   },
   header: {

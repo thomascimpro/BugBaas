@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.15
+
+- Bug Squad helpers in Bug Smash Duel hebben nu drie verschillende game-achtige attack animaties: orbs, slash en pulse-wave.
+- Hits voelen duidelijker met muzzle flashes, impact sparks, target-ringen en AOE-secondary markers.
+- De gameplay-kracht is gelijk gebleven; deze release verbetert alleen feedback, leesbaarheid en fun.
+
 ## 2.1.14
 
 - Helper-aanvallen in Bug Smash Duel zijn duidelijker: je ziet nu vanaf welke actieve bug een hit komt en welke target geraakt wordt.
