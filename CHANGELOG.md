@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.3
+
+- Install/Play Protect cleanup: overbodige launcher-badge en legacy storage permissies zijn uit de release-APK gehaald.
+- Duel blijft behouden; deze fix raakt alleen Android manifest/signing/installatie.
+- Let op: oude debug-signed APK's kunnen niet over dezelfde package worden geüpdatet met een release-signed APK. Verwijder een oude debug-installatie éénmalig als Android een package/signature conflict meldt.
+
 ## 2.1.2
 
 - De bonus voor dubbele bugs heet nu XP, zodat duidelijk is dat duplicates extra XP-waarde geven.
