@@ -74,6 +74,11 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.2.5": [
+    { key: "changelog.2.2.5.arena", image: require("./assets/generated/bug-smash-duel-concept.jpg"), tone: "purple" },
+    { key: "changelog.2.2.5.widget", image: require("./assets/generated/bug-radar-request-signal-hd.png"), tone: "green" },
+    { key: "changelog.2.2.5.fullscreen", image: require("./assets/generated/bug-squad-empty-jar-hd.png"), tone: "gold" }
+  ],
   "2.2.4": [
     { key: "changelog.2.2.4.jars", image: require("./assets/generated/bug-squad-empty-jar-hd.png"), tone: "green" },
     { key: "changelog.2.2.4.duelStart", image: require("./assets/generated/bug-smash-duel-concept.jpg"), tone: "purple" },
@@ -215,6 +220,7 @@ function AppContent() {
   const [splatBonusVisible, setSplatBonusVisible] = useState(false);
   const [versionNotice, setVersionNotice] = useState<VersionNotice | null>(null);
   const [pendingRadarBugIds, setPendingRadarBugIds] = useState<BugArtId[]>([]);
+  const [duelFullscreen, setDuelFullscreen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const appState = useRef(AppState.currentState);
@@ -801,6 +807,7 @@ function AppContent() {
     setSelectedUser(null);
     setDuelOpponent(opponent ?? null);
     setOpenDuelId(duelId);
+    setDuelFullscreen(false);
     setRoute("duel");
   }
 
@@ -809,6 +816,7 @@ function AppContent() {
     setSelectedUser(null);
     setDuelOpponent(null);
     setOpenDuelId("");
+    setDuelFullscreen(false);
     setRoute(nextRoute);
   }
 
@@ -980,6 +988,7 @@ function AppContent() {
             onBack={() => setRoute("home")}
             onDuelAccepted={(requesterId, duelId) => notifyBugSmashDuelAccepted(requesterId, user, duelId)}
             onDuelRequest={(recipientId, duelId) => notifyBugSmashDuelRequest(recipientId, user, duelId)}
+            onFullscreenChange={setDuelFullscreen}
             onUserUpdated={setUser}
             onRewardDrop={(drop) => {
               if (drop.updatedUser) setUser(drop.updatedUser);
@@ -991,7 +1000,7 @@ function AppContent() {
           <SettingsScreen settings={notificationSettings} onBack={() => setRoute("home")} onChange={updateNotificationSettings} onShowHelp={showHelpTour} />
         )}
       </View>
-      <BottomNav activeRoute={route} onNavigate={navigateMain} />
+      {!(duelRouteActive && duelFullscreen) && <BottomNav activeRoute={route} onNavigate={navigateMain} />}
       {!duelRouteActive && <InAppNotificationToast notification={notification} onClose={closeNotification} onOpen={openNotification} />}
       <ForegroundCatchBug
         catchAssist={squadBonuses().catch_assist}
