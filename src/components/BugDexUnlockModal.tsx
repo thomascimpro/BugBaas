@@ -5,8 +5,10 @@ import { bugDexEntryFact, bugDexEntryName, useI18n } from "../services/i18n";
 import { BugDexRarity } from "../services/pointsService";
 import { playBugSound } from "../services/soundService";
 import { BugArtImage } from "./BugArtImage";
+import { MythicRarityFrame } from "./MythicRarityFrame";
 
 type Props = {
+  busy?: boolean;
   drop: BugDexDropResult | null;
   onClose: () => void;
 };
@@ -57,7 +59,7 @@ const premiumRarityStyles: Record<"Episch" | "Legendarisch" | "Mythisch", {
   }
 };
 
-export function BugDexUnlockModal({ drop, onClose }: Props) {
+export function BugDexUnlockModal({ busy = false, drop, onClose }: Props) {
   const { t } = useI18n();
   const scale = useRef(new Animated.Value(0.82)).current;
   const glow = useRef(new Animated.Value(0)).current;
@@ -91,6 +93,7 @@ export function BugDexUnlockModal({ drop, onClose }: Props) {
   const premiumStyle = !isPointsReward && (drop.entry.rarity === "Episch" || drop.entry.rarity === "Legendarisch" || drop.entry.rarity === "Mythisch")
     ? premiumRarityStyles[drop.entry.rarity]
     : null;
+  const isMythicBugReward = !isPointsReward && drop.entry.rarity === "Mythisch";
   const premiumLabel = premiumStyle && !isPointsReward
     ? drop.entry.rarity === "Episch"
       ? t("bugdex.epicFind")
@@ -142,13 +145,14 @@ export function BugDexUnlockModal({ drop, onClose }: Props) {
               </>
             )}
             <Animated.View style={[styles.glow, { backgroundColor: premiumStyle?.glow ?? rarityColor, opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
-            {isPointsReward ? <Text style={styles.pointsReward}>+{drop.points}</Text> : <BugArtImage bugId={drop.entry.id} size={138} />}
+            {isMythicBugReward && <MythicRarityFrame size={194} style={styles.mythicUnlockFrame} />}
+            {isPointsReward ? <Text style={styles.pointsReward}>+{drop.points}</Text> : <BugArtImage bugId={drop.entry.id} size={138} style={isMythicBugReward && styles.mythicBugArt} />}
           </View>
           <Text style={[styles.name, premiumStyle && { color: premiumStyle.text }]}>{isPointsReward ? t("bugdex.pointsFound") : bugDexEntryName(drop.entry, t)}</Text>
           <Text style={[styles.meta, premiumStyle && { color: premiumStyle.text }]}>{bugFact}</Text>
           {!!streakText && <Text style={styles.streak}>{streakText}</Text>}
-          <Pressable style={[styles.button, premiumStyle && { backgroundColor: premiumStyle.border }]} onPress={onClose}>
-            <Text style={styles.buttonText}>{t("bugdex.nice")}</Text>
+          <Pressable disabled={busy} style={[styles.button, busy && styles.buttonDisabled, premiumStyle && { backgroundColor: premiumStyle.border }]} onPress={onClose}>
+            <Text style={styles.buttonText}>{busy ? "..." : t("bugdex.nice")}</Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -247,6 +251,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: 144
   },
+  mythicUnlockFrame: {
+    zIndex: 3
+  },
+  mythicBugArt: {
+    zIndex: 4
+  },
   name: {
     color: "#102018",
     fontSize: 28,
@@ -279,6 +289,9 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingHorizontal: 28,
     paddingVertical: 14
+  },
+  buttonDisabled: {
+    opacity: 0.64
   },
   buttonText: {
     color: "#ffffff",

@@ -6,15 +6,16 @@ import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { TierBadge } from "../components/TierBadge";
 import { listBugs } from "../services/bugService";
 import { BugArtId } from "../services/bugArt";
-import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
+import { BugDexDropResult, entryByBugId, grantBugDexReward, listBugDexInventory } from "../services/bugDexService";
 import { bugLampStatus } from "../services/bugLampService";
 import { maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
+import { listBugSmashDuels } from "../services/bugSmashDuelService";
 import { claimMovementRadarBonusesForApp, claimQueuedRadarBugs, getMovementRadarProgress, getQueuedRadarBugIds, MovementRadarProgress } from "../services/movementRadarService";
 import { bugDexEntries, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { languages, useI18n } from "../services/i18n";
 import { listUsers } from "../services/userService";
-import { weeklyMissionLabel, weeklyMissionSet } from "../services/weeklyMissionService";
-import { BugDexInventoryItem, BugReport, User } from "../types";
+import { claimedWeeklyMissionIds, claimWeeklyMissionBonus, claimWeeklyMissionXp, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
+import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
@@ -24,6 +25,8 @@ type Props = {
   onMovementRegistered?: (estimatedKm: number) => Promise<void>;
   onOpenBugSmashDuel?: () => void;
   onOpenBugDexWorkshop?: () => void;
+  onRewardDrop?: (drop: BugDexDropResult) => void;
+  onUserUpdated?: (user: User) => void;
   user: User;
   onNavigate: (route: RouteName) => void;
 };
@@ -39,16 +42,21 @@ const rarityColors: Record<BugDexRarity, string> = {
 const settingsGearImage = require("../../assets/generated/settings-gear-hd.png");
 const bugSmashDuelImage = require("../../assets/generated/bug-smash-duel-concept.jpg");
 
-export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRadarClaimed, onMovementRegistered, onOpenBugSmashDuel, onOpenBugDexWorkshop, user, onNavigate }: Props) {
+export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRadarClaimed, onMovementRegistered, onOpenBugSmashDuel, onOpenBugDexWorkshop, onRewardDrop, onUserUpdated, user, onNavigate }: Props) {
   const { language, setLanguage, t, tr } = useI18n();
   const tier = getTierForPoints(user.totalPoints);
   const [users, setUsers] = useState<User[]>([]);
   const [bugs, setBugs] = useState<BugReport[]>([]);
+  const [duels, setDuels] = useState<BugSmashDuel[]>([]);
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
   const [movementProgress, setMovementProgress] = useState<MovementRadarProgress | null>(null);
   const [queuedRadarBugIds, setQueuedRadarBugIds] = useState<BugArtId[]>([]);
   const [bugLampActivating, setBugLampActivating] = useState(false);
   const [movementClaiming, setMovementClaiming] = useState(false);
+  const [claimedMissionIds, setClaimedMissionIds] = useState<Set<string>>(new Set());
+  const [claimingMissionId, setClaimingMissionId] = useState("");
+  const [weeklyBonusClaimed, setWeeklyBonusClaimed] = useState(false);
+  const [weeklyBonusClaiming, setWeeklyBonusClaiming] = useState(false);
   const [showAllTiers, setShowAllTiers] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const leaders = users.slice(0, 3);
@@ -57,11 +65,9 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const activeSquadEntries = sanitizeActiveBugSquad(user.activeBugSquad, inventory)
     .map((bugId) => entryByBugId(bugId))
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-  const missions = weeklyMissionSet(user, bugs);
+  const missions = weeklyMissionSet(user, bugs, { duels, inventory });
+  const missionIdsKey = missions.map((mission) => mission.id).join("|");
   const canClaimMovement = Boolean((movementProgress && movementProgress.claimableRewards > 0) || queuedRadarBugIds.length > 0);
-  const movementDataTypes = movementProgress?.dataTypes ?? [];
-  const hasMovementSourceData = movementDataTypes.some((item) => item.available);
-  const showMovementSourceHelp = Boolean(movementProgress && movementDataTypes.length > 0 && !hasMovementSourceData);
   const selectedLanguage = languages.find((item) => item.value === language) ?? languages[0];
   const lampStatus = bugLampStatus(user);
   const showBugLamp = lampStatus.active || lampStatus.count > 0;
@@ -69,9 +75,15 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   useEffect(() => {
     listUsers().then(setUsers);
     listBugs().then(setBugs);
+    listBugSmashDuels(user).then(setDuels).catch(() => setDuels([]));
     listBugDexInventory(user).then(setInventory);
     refreshMovementProgress();
   }, [movementBoost, user.uid, user.totalPoints]);
+
+  useEffect(() => {
+    claimedWeeklyMissionIds(user, missions.map((mission) => mission.id)).then(setClaimedMissionIds).catch(() => setClaimedMissionIds(new Set()));
+    isWeeklyMissionBonusClaimed(user, missions).then(setWeeklyBonusClaimed).catch(() => setWeeklyBonusClaimed(false));
+  }, [missionIdsKey, user.uid]);
 
   async function refreshMovementProgress() {
     try {
@@ -117,6 +129,31 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
       await refreshMovementProgress();
     } finally {
       setBugLampActivating(false);
+    }
+  }
+
+  async function handleWeeklyMissionClaim(mission: typeof missions[number]) {
+    if (claimingMissionId || mission.progress < mission.target || claimedMissionIds.has(mission.id)) return;
+    setClaimingMissionId(mission.id);
+    try {
+      const updated = await claimWeeklyMissionXp(user, mission);
+      if (updated) onUserUpdated?.(updated);
+      setClaimedMissionIds((current) => new Set([...current, mission.id]));
+    } finally {
+      setClaimingMissionId("");
+    }
+  }
+
+  async function handleWeeklyBonusClaim() {
+    if (weeklyBonusClaiming || weeklyBonusClaimed || !weeklyMissionSetComplete(missions)) return;
+    setWeeklyBonusClaiming(true);
+    try {
+      const canClaim = await claimWeeklyMissionBonus(user, missions);
+      if (!canClaim) return;
+      setWeeklyBonusClaimed(true);
+      onRewardDrop?.(await grantBugDexReward(user, "weekly_mission"));
+    } finally {
+      setWeeklyBonusClaiming(false);
     }
   }
 
@@ -211,11 +248,6 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
               );
             })}
           </View>
-          {showMovementSourceHelp && (
-            <Text style={styles.movementHelp}>
-              {t("home.connectHelp")}
-            </Text>
-          )}
         </View>
       )}
       {showBugLamp && (
@@ -346,6 +378,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
         <View style={styles.missionList}>
           {missions.map((mission) => {
             const done = mission.progress >= mission.target;
+            const claimed = claimedMissionIds.has(mission.id);
             const width: DimensionValue = `${Math.min(100, Math.round((mission.progress / mission.target) * 100))}%`;
             return (
               <View key={mission.id} style={styles.missionItem}>
@@ -356,10 +389,24 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
                 <View style={styles.missionTrack}>
                   <View style={[styles.missionFill, { width }]} />
                 </View>
-                <Text style={styles.missionReward}>{done ? t("home.unlockedExtra") : tr(mission.reward)}</Text>
+                {done && !claimed ? (
+                  <Pressable style={styles.missionClaimButton} disabled={claimingMissionId === mission.id} onPress={() => handleWeeklyMissionClaim(mission)}>
+                    <Text style={styles.missionClaimText}>{claimingMissionId === mission.id ? "..." : t("home.claimWeeklyXp")}</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={styles.missionReward}>{done ? t("home.claimedWeeklyXp") : tr(mission.reward)}</Text>
+                )}
               </View>
             );
           })}
+          {weeklyMissionSetComplete(missions) && !weeklyBonusClaimed && (
+            <Pressable style={styles.missionBonusButton} disabled={weeklyBonusClaiming} onPress={handleWeeklyBonusClaim}>
+              <Text style={styles.missionBonusText}>{weeklyBonusClaiming ? "..." : t("home.claimWeeklyBugDex")}</Text>
+            </Pressable>
+          )}
+          {weeklyMissionSetComplete(missions) && weeklyBonusClaimed && (
+            <Text style={styles.missionReward}>{t("home.claimedWeeklyBugDex")}</Text>
+          )}
         </View>
       </View>
       <View style={styles.quickCard}>
@@ -982,6 +1029,32 @@ const styles = StyleSheet.create({
   missionFill: {
     backgroundColor: "#15724f",
     height: "100%"
+  },
+  missionClaimButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#15724f",
+    borderRadius: 8,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  missionClaimText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  missionBonusButton: {
+    alignItems: "center",
+    backgroundColor: "#d7bd57",
+    borderRadius: 8,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9
+  },
+  missionBonusText: {
+    color: "#102018",
+    fontSize: 12,
+    fontWeight: "900"
   },
   missionReward: {
     color: "#15724f",

@@ -3,7 +3,8 @@ import { db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, User } from "../types";
 import { bugLampStatus, shouldAwardBugLamp, withAwardedBugLamp } from "./bugLampService";
 import { activeBugSquadBonuses } from "./bugSquadService";
-import { BugDexEntry, BugDexRarity, bugDexEntries, isBugDexEntryUnlocked } from "./pointsService";
+import { badgesForUser, BugDexEntry, BugDexRarity, bugDexEntries, isBugDexEntryUnlocked, titleForPoints } from "./pointsService";
+import { dailyLoginXp } from "./rewardBalanceService";
 
 export type BugDexDropSource =
   | "daily_login"
@@ -63,15 +64,15 @@ const dropChances: Record<BugDexDropSource, number> = {
 
 const rarityWeights: Record<BugDexDropSource, Array<[BugDexRarity, number]>> = {
   daily_login: [["Gewoon", 100]],
-  bug_reported: [["Gewoon", 54], ["Zeldzaam", 31], ["Episch", 12], ["Legendarisch", 2.5], ["Mythisch", 0.5]],
+  bug_reported: [["Gewoon", 54.1], ["Zeldzaam", 31], ["Episch", 12], ["Legendarisch", 2.5], ["Mythisch", 0.4]],
   comment: [["Gewoon", 68], ["Zeldzaam", 27], ["Episch", 4.7], ["Legendarisch", 0.3]],
   status_update: [["Zeldzaam", 67], ["Episch", 30], ["Legendarisch", 2.7], ["Mythisch", 0.3]],
-  bug_fixed: [["Zeldzaam", 40], ["Episch", 43], ["Legendarisch", 15], ["Mythisch", 2]],
+  bug_fixed: [["Gewoon", 18], ["Zeldzaam", 50], ["Episch", 25], ["Legendarisch", 6.6], ["Mythisch", 0.4]],
   upvote_given: [["Gewoon", 75], ["Zeldzaam", 24.5], ["Episch", 0.5]],
   profile_view: [["Gewoon", 88], ["Zeldzaam", 12]],
-  bug_splat: [["Gewoon", 65], ["Zeldzaam", 25], ["Episch", 7.5], ["Legendarisch", 2], ["Mythisch", 0.5]],
-  weekly_mission: [["Episch", 72], ["Legendarisch", 25], ["Mythisch", 3]],
-  duel_win: [["Gewoon", 58], ["Zeldzaam", 28], ["Episch", 10], ["Legendarisch", 3], ["Mythisch", 1]],
+  bug_splat: [["Gewoon", 65.1], ["Zeldzaam", 25], ["Episch", 7.5], ["Legendarisch", 2], ["Mythisch", 0.4]],
+  weekly_mission: [["Zeldzaam", 54], ["Episch", 36], ["Legendarisch", 9.6], ["Mythisch", 0.4]],
+  duel_win: [["Gewoon", 68], ["Zeldzaam", 24], ["Episch", 6.5], ["Legendarisch", 1.1], ["Mythisch", 0.4]],
   combine: [["Zeldzaam", 100]]
 };
 
@@ -184,7 +185,7 @@ export async function getDailyUpgradeUsage(user: User): Promise<DailyUpgradeUsag
   return Object.fromEntries(entries.map(([routeId]) => [routeId, usedToday])) as DailyUpgradeUsage;
 }
 
-export async function claimDailyLoginBug(user: User): Promise<BugDexDropResult | null> {
+export async function prepareDailyLoginBug(user: User): Promise<BugDexDropResult | null> {
   const day = localDayId();
   const previousDay = localDayId(addDays(new Date(), -1));
   const eventId = `daily-login-${day}`;
@@ -193,10 +194,42 @@ export async function claimDailyLoginBug(user: User): Promise<BugDexDropResult |
 
   if (!isFirebaseConfigured) {
     if (demoEvents.has(demoKey)) return null;
-    demoEvents.add(demoKey);
     const streakDay = demoEvents.has(`${user.uid}:${previousEventId}`) ? (demoDailyStreaks.get(user.uid) ?? 0) + 1 : 1;
+    return previewDailyReward(user, streakDay);
+  }
+
+  const eventRef = doc(db, "users", user.uid, "bugdexEvents", eventId);
+  const previousEventRef = doc(db, "users", user.uid, "bugdexEvents", previousEventId);
+  const eventSnapshot = await getDoc(eventRef);
+  if (eventSnapshot.exists()) return null;
+
+  const previousEventSnapshot = await getDoc(previousEventRef);
+  const previousStreak = previousEventSnapshot.exists() ? Number(previousEventSnapshot.data().streakDay ?? 0) : 0;
+  const streakDay = previousStreak + 1;
+  const daysUntilBetterReward = daysUntilNextDailyStreakReward(streakDay);
+  const now = new Date().toISOString();
+  const entry = pickDailyCommonEntry();
+  const inventorySnapshot = await getDoc(doc(db, "users", user.uid, "bugdex", entry.id));
+  const existing = inventorySnapshot.exists() ? inventorySnapshot.data() as BugDexInventoryItem : null;
+  const item = dailyRewardItem(entry, existing, now);
+  return { rewardType: "bug", entry, item, isNew: !existing, source: "daily_login", streakDay, daysUntilBetterReward };
+}
+
+export async function claimDailyLoginBug(user: User, preparedDrop?: BugDexDropResult | null): Promise<BugDexDropResult | null> {
+  const day = localDayId();
+  const previousDay = localDayId(addDays(new Date(), -1));
+  const eventId = `daily-login-${day}`;
+  const previousEventId = `daily-login-${previousDay}`;
+  const demoKey = `${user.uid}:${eventId}`;
+
+  if (!isFirebaseConfigured) {
+    if (demoEvents.has(demoKey)) return null;
+    const streakDay = preparedDrop?.streakDay ?? (demoEvents.has(`${user.uid}:${previousEventId}`) ? (demoDailyStreaks.get(user.uid) ?? 0) + 1 : 1);
+    const entry = preparedDrop?.rewardType === "bug" && preparedDrop.source === "daily_login" ? preparedDrop.entry : pickDailyCommonEntry();
+    const result = await grantDailyReward(user, streakDay, entry);
+    demoEvents.add(demoKey);
     demoDailyStreaks.set(user.uid, streakDay);
-    return grantDailyReward(user, streakDay);
+    return result;
   }
 
   const eventRef = doc(db, "users", user.uid, "bugdexEvents", eventId);
@@ -210,17 +243,22 @@ export async function claimDailyLoginBug(user: User): Promise<BugDexDropResult |
     const streakDay = previousStreak + 1;
     const daysUntilBetterReward = daysUntilNextDailyStreakReward(streakDay);
     const now = new Date().toISOString();
-    const entry = pickDailyCommonEntry();
+    const entry = preparedDrop?.rewardType === "bug" && preparedDrop.source === "daily_login" ? preparedDrop.entry : pickDailyCommonEntry();
     const userRef = doc(db, "users", user.uid);
     const userSnapshot = await transaction.get(userRef);
     const currentUser = userSnapshot.exists() ? userSnapshot.data() as User : user;
-    const updatedUser = shouldAwardBugLamp(streakDay) ? withAwardedBugLamp(currentUser) : undefined;
+    const lampUser = shouldAwardBugLamp(streakDay) ? withAwardedBugLamp(currentUser) : { ...currentUser, bugLampCount: currentUser.bugLampCount ?? 0 };
+    const totalPoints = Math.max(0, lampUser.totalPoints + dailyLoginXp);
+    const updatedUser = {
+      ...lampUser,
+      totalPoints,
+      title: titleForPoints(totalPoints)
+    };
+    updatedUser.badges = badgesForUser(updatedUser);
     const inventoryRef = doc(db, "users", user.uid, "bugdex", entry.id);
     const inventorySnapshot = await transaction.get(inventoryRef);
     const existing = inventorySnapshot.exists() ? inventorySnapshot.data() as BugDexInventoryItem : null;
-    const item: BugDexInventoryItem = existing
-      ? { ...existing, count: existing.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, "daily_login"])) }
-      : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: ["daily_login"] };
+    const item = dailyRewardItem(entry, existing, now);
 
     transaction.set(inventoryRef, item);
     transaction.set(eventRef, {
@@ -228,12 +266,17 @@ export async function claimDailyLoginBug(user: User): Promise<BugDexDropResult |
       source: "daily_login",
       rewardType: "bug",
       rewardValue: entry.id,
-      bugLampAwarded: Boolean(updatedUser),
+      bugLampAwarded: shouldAwardBugLamp(streakDay),
       streakDay,
       localDay: day,
       createdAt: now
     });
-    if (updatedUser) transaction.update(userRef, { bugLampCount: updatedUser.bugLampCount });
+    transaction.update(userRef, {
+      badges: updatedUser.badges,
+      bugLampCount: updatedUser.bugLampCount ?? 0,
+      title: updatedUser.title,
+      totalPoints: updatedUser.totalPoints
+    });
     return { rewardType: "bug", entry, item, isNew: !existing, source: "daily_login", streakDay, daysUntilBetterReward, updatedUser };
   });
 }
@@ -423,11 +466,29 @@ export async function combineDifferentBugDexUpgrade(user: User, bugIds: string[]
   });
 }
 
-async function grantDailyReward(user: User, streakDay: number): Promise<BugDexDropResult> {
+async function grantDailyReward(user: User, streakDay: number, entry = pickDailyCommonEntry()): Promise<BugDexDropResult> {
   const daysUntilBetterReward = daysUntilNextDailyStreakReward(streakDay);
-  const result = await grantSpecificBug(user, pickDailyCommonEntry(), "daily_login");
-  const updatedUser = shouldAwardBugLamp(streakDay) ? withAwardedBugLamp(user) : undefined;
+  const result = await grantSpecificBug(user, entry, "daily_login");
+  const lampUser = shouldAwardBugLamp(streakDay) ? withAwardedBugLamp(user) : { ...user, bugLampCount: user.bugLampCount ?? 0 };
+  const totalPoints = Math.max(0, lampUser.totalPoints + dailyLoginXp);
+  const updatedUser = { ...lampUser, totalPoints, title: titleForPoints(totalPoints) };
+  updatedUser.badges = badgesForUser(updatedUser);
   return { ...result, streakDay, daysUntilBetterReward, updatedUser };
+}
+
+function previewDailyReward(user: User, streakDay: number): BugDexDropResult {
+  const daysUntilBetterReward = daysUntilNextDailyStreakReward(streakDay);
+  const entry = pickDailyCommonEntry();
+  const inventory = demoInventory.get(user.uid) ?? new Map<string, BugDexInventoryItem>();
+  const existing = inventory.get(entry.id) ?? null;
+  const item = dailyRewardItem(entry, existing, new Date().toISOString());
+  return { rewardType: "bug", entry, item, isNew: !existing, source: "daily_login", streakDay, daysUntilBetterReward };
+}
+
+function dailyRewardItem(entry: BugDexEntry, existing: BugDexInventoryItem | null, now: string): BugDexInventoryItem {
+  return existing
+    ? { ...existing, count: existing.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, "daily_login"])) }
+    : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: ["daily_login"] };
 }
 
 async function grantSpecificBug(user: User, entry: BugDexEntry, source: BugDexDropSource): Promise<BugDexDropResult> {

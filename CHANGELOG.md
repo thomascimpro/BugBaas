@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.19
+
+- Feature train 2.1 blijft in release notes zichtbaar: Bug Smash Duel, training, helper bugs, Mythic specials, XP/reward-balans en Android install/signing horen samen uitgelegd te worden.
+- Home toont geen losse Health Connect/helptekst meer onder de km-progressie.
+- Bug Smash Duel helper-aanvallen gebruiken nu HD sprite-effecten en elke Mythic special heeft een eigen herkenbare animatie.
+- Release- en balance-procedures zijn vastgelegd in Markdown, inclusief XP per actie, BugDex dropkansen en release note beleid.
+
 ## 2.1.18
 
 - Nieuwe legacy APK met verhoogde Android versionCode, zodat toestellen de update boven 2.1.17 accepteren.

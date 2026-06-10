@@ -4,6 +4,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { BugArtImage } from "../components/BugArtImage";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugDexUnlockModal } from "../components/BugDexUnlockModal";
+import { MythicRarityFrame } from "../components/MythicRarityFrame";
 import { TradeAnimationModal } from "../components/TradeAnimationModal";
 import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineBugDexDuplicates, combineDifferentBugDexUpgrade, combineRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory } from "../services/bugDexService";
 import { activeBugSquadBonusList, maxActiveBugSquadSize, sanitizeActiveBugSquad, BugSquadBonusCategory } from "../services/bugSquadService";
@@ -451,16 +452,18 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             const routeUsedToday = upgradeRarity ? upgradeRouteUsedToday(upgradeRarity) : false;
             const hasEnoughToCombine = unlocked && Number.isFinite(requiredCount) && inventoryItem.count >= requiredCount;
             const canCombine = hasEnoughToCombine && !routeUsedToday;
+            const isMythic = unlocked && entry.rarity === "Mythisch";
             return (
-              <View key={entry.id} style={[styles.card, !unlocked && styles.lockedCard, { borderColor: unlocked ? color : "#cbd8d1" }]}>
+              <View key={entry.id} style={[styles.card, !unlocked && styles.lockedCard, isMythic && styles.mythicCard, { borderColor: unlocked ? color : "#cbd8d1" }]}>
                 <View style={styles.cardTop}>
                   <View style={[styles.numberPill, { backgroundColor: unlocked ? color : "#87958e" }]}>
                     <Text style={styles.numberText}>{String(index + 1).padStart(2, "0")}</Text>
                   </View>
                   <Text style={[styles.rarity, { color: unlocked ? color : "#87958e" }]}>{unlocked ? rarityLabel(entry.rarity, t) : "???"}</Text>
                 </View>
-                <View style={[styles.bugWrap, !unlocked && styles.lockedBugWrap]}>
-                  {unlocked ? <BugArtImage bugId={entry.id} size={70} /> : <Text style={styles.lockedMark}>?</Text>}
+                <View style={[styles.bugWrap, !unlocked && styles.lockedBugWrap, isMythic && styles.mythicBugWrap]}>
+                  {isMythic && <MythicRarityFrame size={96} style={styles.cardMythicFrame} />}
+                  {unlocked ? <BugArtImage bugId={entry.id} size={70} style={isMythic && styles.cardMythicBug} /> : <Text style={styles.lockedMark}>?</Text>}
                 </View>
                 <View style={styles.nameRow}>
                   <Text style={[styles.name, !unlocked && styles.lockedName]} numberOfLines={1}>{unlocked ? bugDexEntryName(entry, t) : t("bugdex.unknown")}</Text>
@@ -496,7 +499,10 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
           <Text style={styles.headerMeta}>{unlockedCount}/{totalCount} {t("bugdex.discoveredCount", { count: "", progress }).trim()}</Text>
         </View>
         {headerEntry ? (
-          <BugArtImage bugId={headerEntry.id} size={74} />
+          <View style={styles.headerBugWrap}>
+            {headerEntry.rarity === "Mythisch" && <MythicRarityFrame size={96} style={styles.headerMythicFrame} />}
+            <BugArtImage bugId={headerEntry.id} size={74} style={headerEntry.rarity === "Mythisch" && styles.headerMythicBug} />
+          </View>
         ) : (
           <View style={styles.headerEmptyIcon}>
             <Text style={styles.headerEmptyText}>?</Text>
@@ -523,7 +529,8 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
               <View style={[styles.activeJarMiniLid, entry && { backgroundColor: rarityColors[entry.rarity] }]} />
               <View style={[styles.activeJarSlot, entry && { borderColor: rarityColors[entry.rarity] }]}>
                 <View style={styles.activeJarShine} />
-                {entry ? <BugArtImage bugId={entry.id} size={44} /> : <Text style={styles.activeJarEmpty}>+</Text>}
+                {entry?.rarity === "Mythisch" && <MythicRarityFrame size={58} style={styles.activeJarMythicFrame} />}
+                {entry ? <BugArtImage bugId={entry.id} size={44} style={entry.rarity === "Mythisch" && styles.activeJarMythicBug} /> : <Text style={styles.activeJarEmpty}>+</Text>}
                 <View style={styles.activeJarBase} />
               </View>
             </View>
@@ -546,7 +553,8 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                     <View style={styles.squadJarShine} />
                     {entry ? (
                       <>
-                        <BugArtImage bugId={entry.id} size={54} />
+                        {entry.rarity === "Mythisch" && <MythicRarityFrame size={92} style={styles.squadJarMythicFrame} />}
+                        <BugArtImage bugId={entry.id} size={54} style={entry.rarity === "Mythisch" && styles.squadJarMythicBug} />
                         <Text style={styles.squadSlotName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>
                         {bonus && <Text style={styles.squadSlotBonus}>{squadBonusLabel(bonus.category)}</Text>}
                       </>
@@ -1009,6 +1017,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 10
   },
+  activeJarMythicFrame: {
+    zIndex: 1
+  },
+  activeJarMythicBug: {
+    zIndex: 2
+  },
   activeJarEmpty: {
     color: "#8ca099",
     fontSize: 24,
@@ -1045,6 +1059,18 @@ const styles = StyleSheet.create({
     color: "#dce9df",
     fontSize: 14,
     fontWeight: "900"
+  },
+  headerBugWrap: {
+    alignItems: "center",
+    height: 84,
+    justifyContent: "center",
+    width: 84
+  },
+  headerMythicFrame: {
+    zIndex: 1
+  },
+  headerMythicBug: {
+    zIndex: 2
   },
   headerEmptyIcon: {
     alignItems: "center",
@@ -1324,6 +1350,13 @@ const styles = StyleSheet.create({
     left: 12,
     position: "absolute",
     right: 12
+  },
+  squadJarMythicFrame: {
+    top: 5,
+    zIndex: 1
+  },
+  squadJarMythicBug: {
+    zIndex: 2
   },
   squadSlotName: {
     color: "#102018",
@@ -1857,6 +1890,14 @@ const styles = StyleSheet.create({
   lockedCard: {
     backgroundColor: "#f3f7f2"
   },
+  mythicCard: {
+    backgroundColor: "#fbf5ff",
+    borderWidth: 2,
+    shadowColor: "#7c3aed",
+    shadowOffset: { height: 4, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 9
+  },
   cardTop: {
     alignItems: "center",
     flexDirection: "row",
@@ -1883,6 +1924,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 8,
     minHeight: 62
+  },
+  mythicBugWrap: {
+    minHeight: 92
+  },
+  cardMythicFrame: {
+    zIndex: 1
+  },
+  cardMythicBug: {
+    zIndex: 2
   },
   lockedBugWrap: {
     backgroundColor: "#e8efe9",

@@ -21,8 +21,9 @@ import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
 import { presenceLabel } from "../services/presenceService";
 import { BugDexRarity, bugDexEntries } from "../services/pointsService";
 import { entryByBugId } from "../services/bugDexService";
+import { duelLossXp, duelWinXp } from "../services/rewardBalanceService";
 import { playBugSound } from "../services/soundService";
-import { listUsers, updateUserBugSquad } from "../services/userService";
+import { applyUserPoints, listUsers, updateUserBugSquad } from "../services/userService";
 import { BugDexInventoryItem, BugSmashDuel, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
@@ -38,12 +39,30 @@ type Props = {
 };
 
 const duelHeroImage = require("../../assets/generated/bug-smash-duel-concept.jpg");
+const duelEffectSprites = {
+  fireball: require("../../assets/generated/duel_effect_fireball_hd.png"),
+  freeze: require("../../assets/generated/duel_effect_iceburst_hd.png"),
+  goo: require("../../assets/generated/duel_effect_goo_hd.png"),
+  lightning: require("../../assets/generated/duel_effect_lightning_hd.png"),
+  shield: require("../../assets/generated/duel_effect_shield_hd.png"),
+  slash: require("../../assets/generated/duel_effect_slash_hd.png")
+};
 const DuelTargetBugArt = React.memo(BugArtImage);
-const duelGameTickMs = 55;
+const duelGameTickMs = 33;
 const maxVisibleDuelTargets = 10;
 
 type HelperImpactKind = "burst" | "shield" | "splash" | "sticky" | "zap";
 type HelperAnimationStyle = "orb" | "pulse" | "slash";
+type MythicSpecialKind = "royal_freeze" | "prism_chain" | "pattern_break" | "candy_slow" | "longneck_scout" | "bloom_blade" | "lantern_signal" | "mirror_guard";
+
+type MythicSpecialSpec = {
+  animationStyle: HelperAnimationStyle;
+  color: string;
+  freezeMs?: number;
+  kind: MythicSpecialKind;
+  label: string;
+  symbol: string;
+};
 
 type HelperImpact = {
   animationStyle: HelperAnimationStyle;
@@ -52,9 +71,11 @@ type HelperImpact = {
   color: string;
   kind: HelperImpactKind;
   label: string;
+  special?: MythicSpecialKind;
   sourceX: number;
   sourceY: number;
   splashPoints: Array<{ id: string; x: number; y: number }>;
+  symbol: string;
   x: number;
   y: number;
 };
@@ -62,8 +83,14 @@ type HelperImpact = {
 type VisibleDuelTarget = {
   bugId: string;
   entry: NonNullable<ReturnType<typeof entryByBugId>>;
+  frozen?: boolean;
   index: number;
   motion: ReturnType<typeof targetMotion>;
+};
+
+type FrozenTarget = {
+  motion: ReturnType<typeof targetMotion>;
+  until: number;
 };
 
 const rarityColors: Record<BugDexRarity, string> = {
@@ -98,6 +125,68 @@ const raritySortOrder: Record<BugDexRarity, number> = {
   Gewoon: 4
 };
 
+const mythicSpecials: Record<string, MythicSpecialSpec> = {
+  "koningin-alexandravlinder": {
+    animationStyle: "pulse",
+    color: "#60a5fa",
+    freezeMs: 900,
+    kind: "royal_freeze",
+    label: "Royal Freeze",
+    symbol: "FRZ"
+  },
+  "zonsondergangsmot": {
+    animationStyle: "orb",
+    color: "#f97316",
+    kind: "prism_chain",
+    label: "Prism Chain",
+    symbol: "PRM"
+  },
+  "picasso-wants": {
+    animationStyle: "pulse",
+    color: "#22c55e",
+    kind: "pattern_break",
+    label: "Pattern Break",
+    symbol: "ART"
+  },
+  "roze-esdoornmot": {
+    animationStyle: "orb",
+    color: "#f472b6",
+    freezeMs: 650,
+    kind: "candy_slow",
+    label: "Candy Slow",
+    symbol: "SLOW"
+  },
+  "giraffekevertje": {
+    animationStyle: "orb",
+    color: "#facc15",
+    kind: "longneck_scout",
+    label: "Longneck Scout",
+    symbol: "SCAN"
+  },
+  "doornbloembidsprinkhaan": {
+    animationStyle: "slash",
+    color: "#fb7185",
+    kind: "bloom_blade",
+    label: "Bloom Blade",
+    symbol: "CUT"
+  },
+  "lantaarndrager": {
+    animationStyle: "pulse",
+    color: "#fde047",
+    kind: "lantern_signal",
+    label: "Lantern Signal",
+    symbol: "LAMP"
+  },
+  "glorieuze-scarabee": {
+    animationStyle: "pulse",
+    color: "#38bdf8",
+    freezeMs: 500,
+    kind: "mirror_guard",
+    label: "Mirror Guard",
+    symbol: "MIR"
+  }
+};
+
 export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, onBack, onDuelAccepted, onDuelRequest, onRewardDrop, onUserUpdated }: Props) {
   const { t } = useI18n();
   const [users, setUsers] = useState<User[]>([]);
@@ -128,6 +217,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const hitFeedbackValues = useRef(new Map<string, Animated.Value>()).current;
   const helperCooldownAtRef = useRef<Record<string, number>>({});
   const helperImpactIdRef = useRef(0);
+  const frozenTargetsRef = useRef<Record<string, FrozenTarget>>({});
+  const targetTimeOffsetsRef = useRef<Record<string, number>>({});
   const lastCatchAtRef = useRef(0);
   const lastHitSoundAtRef = useRef(0);
   const assist = useMemo(() => bugSmashDuelBalanceForUser({ activeBugSquad: activeSquadIds }), [activeSquadIds]);
@@ -155,6 +246,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     hitCountsRef.current = {};
     hitFeedbackValues.clear();
     helperCooldownAtRef.current = {};
+    frozenTargetsRef.current = {};
+    targetTimeOffsetsRef.current = {};
     lastCatchAtRef.current = 0;
     lastHitSoundAtRef.current = 0;
     setScore(0);
@@ -353,10 +446,14 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     setBusy(true);
     setError("");
     try {
-      const canClaim = await claimBugSmashDuelReward(user, activeDuel.id);
-      if (!canClaim) return;
-      const drop = await grantBugDexReward(user, "duel_win");
-      onRewardDrop?.(drop);
+      const result = await claimBugSmashDuelReward(user, activeDuel.id);
+      if (!result) return;
+      const updatedUser = await applyUserPoints(user.uid, result === "win" ? duelWinXp : duelLossXp, 0);
+      if (updatedUser) onUserUpdated?.(updatedUser);
+      if (result === "win") {
+        const drop = await grantBugDexReward(updatedUser ?? user, "duel_win");
+        onRewardDrop?.(drop);
+      }
       await refreshDuels();
     } catch {
       setError(t("duel.rewardFailed"));
@@ -401,7 +498,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   function runHelperTowers(duel: BugSmashDuel, timestamp: number) {
     if (!activeSquadBonuses.length || !isRunning(duel, timestamp)) return;
-    const renderedTargets = collectRenderedTargets(duel, timestamp, caughtBugIdsRef.current, assist);
+    const renderedTargets = collectRenderedTargets(duel, timestamp, caughtBugIdsRef.current, assist, frozenTargetsRef.current, targetTimeOffsetsRef.current);
     if (!renderedTargets.length) return;
 
     activeSquadBonuses.forEach((bonus, helperIndex) => {
@@ -414,16 +511,14 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       if (timestamp < readyAt) return;
       const helperTargets = renderedTargets.filter((item) => item.motion.progress <= helperMaxTargetProgress(bonus));
       if (!helperTargets.length) return;
-      const target = selectHelperTarget(helperTargets, bonus, hitCountsRef.current, timestamp);
+      const target = selectHelperTarget(helperTargets, bonus, hitCountsRef.current, timestamp, spec.special);
       if (!target) return;
 
       helperCooldownAtRef.current[bonus.bugId] = timestamp + spec.cooldownMs + helperIndex * 260;
-      const targetHits = helperHitsForTarget(bonus, target, hitCountsRef.current, assist);
-      const splashTargets = spec.splashTargets > 0
-        ? helperTargets
-          .filter((item) => item.bugId !== target.bugId && distanceBetweenTargets(item, target) <= spec.splashRadius)
-          .slice(0, spec.splashTargets)
-        : [];
+      const targetHits = helperHitsForTarget(bonus, target, hitCountsRef.current, assist, spec.special);
+      const splashTargets = helperSplashTargetsForSpecial(spec, helperTargets, target);
+      const freezeTargets = helperFreezeTargetsForSpecial(spec.special, target, splashTargets);
+      if (spec.special?.freezeMs && freezeTargets.length) freezeDuelTargets(freezeTargets, timestamp, spec.special.freezeMs);
       const source = helperTowerSourcePosition(helperIndex, activeSquadBonuses.length);
 
       addHelperImpact(
@@ -432,15 +527,16 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         target.motion.y,
         spec.color,
         spec.kind,
-        helperImpactLabel(spec.kind, targetHits, t),
-        helperAnimationStyleForIndex(helperIndex),
+        helperImpactLabel(spec.kind, targetHits, t, spec.special),
+        spec.special?.animationStyle ?? helperAnimationStyleForIndex(helperIndex),
         source,
-        splashTargets.map((item) => ({ id: item.bugId, x: item.motion.x, y: item.motion.y }))
+        splashTargets.map((item) => ({ id: item.bugId, x: item.motion.x, y: item.motion.y })),
+        spec.special
       );
       for (let hit = 0; hit < targetHits; hit += 1) applyBugHit(target.bugId, "helper");
 
       splashTargets.forEach((item) => {
-        const splashHits = helperSplashHitsForTarget(bonus, item);
+        const splashHits = helperSplashHitsForTarget(bonus, item, spec.special);
         for (let hit = 0; hit < splashHits; hit += 1) applyBugHit(item.bugId, "helper");
       });
     });
@@ -455,13 +551,25 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     label: string,
     animationStyle: HelperAnimationStyle,
     source: { x: number; y: number },
-    splashPoints: Array<{ id: string; x: number; y: number }>
+    splashPoints: Array<{ id: string; x: number; y: number }>,
+    special?: MythicSpecialSpec
   ) {
     const id = `helper-${helperImpactIdRef.current++}`;
-    setHelperImpacts((current) => [...current.slice(-8), { animationStyle, id, bugId, color, kind, label, sourceX: source.x, sourceY: source.y, splashPoints, x, y }]);
+    setHelperImpacts((current) => [...current.slice(-8), { animationStyle, id, bugId, color, kind, label, sourceX: source.x, sourceY: source.y, special: special?.kind, splashPoints, symbol: special?.symbol ?? helperImpactSymbol(kind), x, y }]);
     setTimeout(() => {
       setHelperImpacts((current) => current.filter((item) => item.id !== id));
     }, 720);
+  }
+
+  function freezeDuelTargets(targets: VisibleDuelTarget[], timestamp: number, durationMs: number) {
+    for (const target of targets) {
+      if (caughtBugIdsRef.current.includes(target.bugId)) continue;
+      const currentFreeze = frozenTargetsRef.current[target.bugId];
+      const until = Math.max(currentFreeze?.until ?? 0, timestamp + durationMs);
+      const extraPause = Math.max(0, until - Math.max(currentFreeze?.until ?? timestamp, timestamp));
+      targetTimeOffsetsRef.current[target.bugId] = (targetTimeOffsetsRef.current[target.bugId] ?? 0) + extraPause;
+      frozenTargetsRef.current[target.bugId] = { motion: target.motion, until };
+    }
   }
 
   function startAcceptedDuel() {
@@ -547,7 +655,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             <Text style={styles.countdown}>{countdown}</Text>
           ) : isRunning(gameDuel, now) ? (
             <>
-              {renderTargets(gameDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, hitBug)}
+              {renderTargets(gameDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug)}
               {renderHelperImpacts(helperImpacts)}
               {renderHelperTowers(activeSquadBonuses, helperCooldownAtRef.current, now, t)}
             </>
@@ -672,7 +780,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                   <Text style={styles.countdown}>{countdown}</Text>
                 ) : isRunning(playableDuel, now) ? (
                   <>
-                    {renderTargets(playableDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, hitBug)}
+                    {renderTargets(playableDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug)}
                     {renderHelperImpacts(helperImpacts)}
                     {renderHelperTowers(activeSquadBonuses, helperCooldownAtRef.current, now, t)}
                   </>
@@ -688,9 +796,9 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               <Text style={styles.resultTitle}>{resultLabel(activeDuel, user, t)}</Text>
               <Text style={styles.resultLine}>{activeDuel.fromUserName}: {activeDuel.scores?.[activeDuel.fromUserId]?.score ?? 0}</Text>
               <Text style={styles.resultLine}>{activeDuel.toUserName}: {activeDuel.scores?.[activeDuel.toUserId]?.score ?? 0}</Text>
-              {activeDuel.winnerId === user.uid && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid) && (
+              {activeDuel.winnerId && isDuelParticipant(activeDuel, user) && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid) && (
                 <Pressable disabled={busy} style={sharedStyles.button} onPress={claimReward}>
-                  <Text style={sharedStyles.buttonText}>{busy ? "..." : t("duel.claimReward")}</Text>
+                  <Text style={sharedStyles.buttonText}>{busy ? "..." : activeDuel.winnerId === user.uid ? t("duel.claimReward") : t("duel.claimXp")}</Text>
                 </Pressable>
               )}
             </View>
@@ -846,7 +954,7 @@ function renderHelperTowers(bonuses: ReturnType<typeof activeBugSquadBonusList>,
             <View style={styles.helperChargeTrack}>
               <View style={[styles.helperChargeFill, { backgroundColor: spec.color, width: `${Math.round(charge * 100)}%` }]} />
             </View>
-            <Text style={styles.helperTowerText} numberOfLines={1}>{helperKindLabel(spec.kind, t)}</Text>
+            <Text style={[styles.helperTowerText, spec.special && { color: spec.color }]} numberOfLines={1}>{spec.special?.symbol ?? helperKindLabel(spec.kind, t)}</Text>
           </View>
         );
       })}
@@ -865,10 +973,13 @@ function renderTargets(
   hitCounts: Record<string, number>,
   assist: BugSmashDuelBalance,
   hitFeedbackValues: Map<string, Animated.Value>,
+  frozenTargets: Record<string, FrozenTarget>,
+  targetTimeOffsets: Record<string, number>,
   onHit: (bugId: string) => void
 ) {
-  return collectRenderedTargets(duel, timestamp, caughtBugIds, assist)
+  return collectRenderedTargets(duel, timestamp, caughtBugIds, assist, frozenTargets, targetTimeOffsets)
     .map(({ bugId, entry, index, motion }) => {
+    const frozen = Boolean(frozenTargets[bugId] && timestamp < frozenTargets[bugId].until);
     const requiredTaps = requiredTapsForTarget(entry.rarity, assist, index);
     const hits = hitCounts[bugId] ?? 0;
     const feedback = hitFeedbackValues.get(bugId);
@@ -878,6 +989,7 @@ function renderTargets(
         key={bugId}
         style={[
           styles.target,
+          frozen && styles.targetFrozen,
           {
             borderColor: rarityColors[entry.rarity],
             height: targetSize,
@@ -890,6 +1002,11 @@ function renderTargets(
         onPress={() => onHit(bugId)}
       >
         {feedback && <BugSwatterHit bugSize={44} feedback={feedback} style={styles.targetSwatter} />}
+        {frozen && (
+          <View pointerEvents="none" style={styles.targetFreezeBadge}>
+            <Text style={styles.targetFreezeText}>TIME</Text>
+          </View>
+        )}
         <DuelTargetBugArt bugId={bugId} size={38} />
         <View style={styles.hitTrack}>
           <View style={[styles.hitFill, { backgroundColor: rarityColors[entry.rarity], width: `${Math.min(100, (hits / requiredTaps) * 100)}%` }]} />
@@ -899,38 +1016,57 @@ function renderTargets(
   });
 }
 
-function collectVisibleTargets(duel: BugSmashDuel, timestamp: number, caughtBugIds: string[], assist: BugSmashDuelBalance): VisibleDuelTarget[] {
+function collectVisibleTargets(
+  duel: BugSmashDuel,
+  timestamp: number,
+  caughtBugIds: string[],
+  assist: BugSmashDuelBalance,
+  frozenTargets: Record<string, FrozenTarget> = {},
+  targetTimeOffsets: Record<string, number> = {}
+): VisibleDuelTarget[] {
   const startAt = duel.startAt ? Date.parse(duel.startAt) : timestamp;
   const elapsed = timestamp - startAt;
   return duel.bugIds.flatMap((bugId, index) => {
     if (caughtBugIds.includes(bugId)) return [];
     const entry = entryByBugId(bugId);
     if (!entry) return [];
-    const motion = targetMotion(index, duel.seed, elapsed, entry.rarity, assist);
+    const frozenTarget = frozenTargets[bugId];
+    const frozen = Boolean(frozenTarget && timestamp < frozenTarget.until);
+    const motion = frozen && frozenTarget
+      ? frozenTarget.motion
+      : targetMotion(index, duel.seed, elapsed - (targetTimeOffsets[bugId] ?? 0), entry.rarity, assist);
     if (!motion.visible) return [];
-    return [{ bugId, entry, index, motion }];
+    return [{ bugId, entry, frozen, index, motion }];
   });
 }
 
-function collectRenderedTargets(duel: BugSmashDuel, timestamp: number, caughtBugIds: string[], assist: BugSmashDuelBalance): VisibleDuelTarget[] {
-  return collectVisibleTargets(duel, timestamp, caughtBugIds, assist)
+function collectRenderedTargets(
+  duel: BugSmashDuel,
+  timestamp: number,
+  caughtBugIds: string[],
+  assist: BugSmashDuelBalance,
+  frozenTargets: Record<string, FrozenTarget> = {},
+  targetTimeOffsets: Record<string, number> = {}
+): VisibleDuelTarget[] {
+  return collectVisibleTargets(duel, timestamp, caughtBugIds, assist, frozenTargets, targetTimeOffsets)
     .sort((a, b) => targetPriority(b.entry.rarity, b.motion.progress) - targetPriority(a.entry.rarity, a.motion.progress))
     .slice(0, maxVisibleDuelTargets);
 }
 
-function selectHelperTarget(targets: VisibleDuelTarget[], bonus: ReturnType<typeof activeBugSquadBonusList>[number], hitCounts: Record<string, number>, timestamp: number) {
-  const ranked = [...targets].sort((a, b) => helperTargetScore(b, bonus, hitCounts, timestamp) - helperTargetScore(a, bonus, hitCounts, timestamp));
+function selectHelperTarget(targets: VisibleDuelTarget[], bonus: ReturnType<typeof activeBugSquadBonusList>[number], hitCounts: Record<string, number>, timestamp: number, special?: MythicSpecialSpec) {
+  const ranked = [...targets].sort((a, b) => helperTargetScore(b, bonus, hitCounts, timestamp, special) - helperTargetScore(a, bonus, hitCounts, timestamp, special));
   return ranked[0];
 }
 
-function helperTargetScore(target: VisibleDuelTarget, bonus: ReturnType<typeof activeBugSquadBonusList>[number], hitCounts: Record<string, number>, timestamp: number) {
+function helperTargetScore(target: VisibleDuelTarget, bonus: ReturnType<typeof activeBugSquadBonusList>[number], hitCounts: Record<string, number>, timestamp: number, special?: MythicSpecialSpec) {
   const required = baseTapsByRarity[target.entry.rarity];
   const hits = hitCounts[target.bugId] ?? 0;
   const almostCaught = hits >= Math.max(1, required - 1) ? 3 : 0;
   const urgency = target.motion.progress > 0.75 ? 2 : target.motion.progress > 0.55 ? 1 : 0;
   const rarityValue = scoreByRarity[target.entry.rarity] * helperRarityPreference(bonus.category);
+  const specialValue = helperSpecialTargetScore(target, required, hits, special);
   const jitter = (stableHash(`${bonus.bugId}:${target.bugId}:${Math.floor(timestamp / 1800)}`) % 100) / 1000;
-  return rarityValue + urgency + almostCaught + jitter;
+  return rarityValue + urgency + almostCaught + specialValue + jitter;
 }
 
 function helperRarityPreference(category: BugSquadBonusCategory) {
@@ -939,13 +1075,26 @@ function helperRarityPreference(category: BugSquadBonusCategory) {
   return 0.75;
 }
 
+function helperSpecialTargetScore(target: VisibleDuelTarget, required: number, hits: number, special?: MythicSpecialSpec) {
+  if (!special) return 0;
+  const targetRank = helperRarityRank(target.entry.rarity);
+  const remaining = required - hits;
+  if (special.kind === "longneck_scout") return targetRank * 1.1;
+  if (special.kind === "bloom_blade") return remaining <= 3 ? 3 : targetRank >= 2 ? 1 : 0;
+  if (special.kind === "mirror_guard") return target.motion.progress > 0.7 ? 4 : 0;
+  if (special.kind === "lantern_signal") return target.motion.progress > 0.55 ? 1.5 : 0;
+  if (special.kind === "pattern_break") return targetRank >= 2 ? 2 : 0;
+  if (special.kind === "royal_freeze" || special.kind === "candy_slow") return target.motion.progress > 0.52 ? 1.4 : 0;
+  return 0.6;
+}
+
 function distanceBetweenTargets(first: VisibleDuelTarget, second: VisibleDuelTarget) {
   const dx = first.motion.x - second.motion.x;
   const dy = first.motion.y - second.motion.y;
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function helperHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusList>[number], target: VisibleDuelTarget, hitCounts: Record<string, number>, assist: BugSmashDuelBalance) {
+function helperHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusList>[number], target: VisibleDuelTarget, hitCounts: Record<string, number>, assist: BugSmashDuelBalance, special?: MythicSpecialSpec) {
   const required = requiredTapsForTarget(target.entry.rarity, assist, target.index);
   const remaining = Math.max(1, required - (hitCounts[target.bugId] ?? 0));
   const helperRank = helperRarityRank(bonus.rarity);
@@ -954,30 +1103,80 @@ function helperHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusList>[n
   const baseDamage = helperBaseHitsForRarity(bonus.rarity);
   const resistance = Math.max(0, Math.floor(targetRank / 2));
   const tierAdvantage = helperRank >= targetRank + 2 ? 1 : 0;
+  const premiumHelperBonus = helperRank >= 2 && targetRank > 0 && targetRank <= helperRank ? 1 : 0;
+  const specialBonus = helperSpecialBonusHits(special, target, remaining);
   const urgentShieldHit = kind === "shield" && target.motion.progress > 0.68 ? 1 : 0;
-  const damage = Math.max(1, baseDamage - resistance + tierAdvantage + urgentShieldHit);
+  const damage = Math.max(1, baseDamage - resistance + tierAdvantage + premiumHelperBonus + specialBonus + urgentShieldHit);
   return Math.min(remaining, damage);
 }
 
-function helperSplashHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusList>[number], target: VisibleDuelTarget) {
+function helperSpecialBonusHits(special: MythicSpecialSpec | undefined, target: VisibleDuelTarget, remaining: number) {
+  if (!special) return 0;
+  const targetRank = helperRarityRank(target.entry.rarity);
+  if (special.kind === "bloom_blade") return remaining <= 3 ? 2 : 1;
+  if (special.kind === "pattern_break" && targetRank >= 2) return 1;
+  if (special.kind === "longneck_scout" && targetRank >= 2) return 1;
+  if (special.kind === "mirror_guard" && target.motion.progress > 0.7) return 1;
+  return 0;
+}
+
+function helperSplashTargetsForSpecial(
+  spec: ReturnType<typeof helperSpecForBonus>,
+  helperTargets: VisibleDuelTarget[],
+  target: VisibleDuelTarget
+) {
+  const candidates = helperTargets.filter((item) => item.bugId !== target.bugId);
+  if (!spec.special) {
+    return spec.splashTargets > 0
+      ? candidates.filter((item) => distanceBetweenTargets(item, target) <= spec.splashRadius).slice(0, spec.splashTargets)
+      : [];
+  }
+  if (spec.special.kind === "prism_chain") {
+    return candidates
+      .filter((item) => distanceBetweenTargets(item, target) <= spec.splashRadius + 8)
+      .slice(0, 2);
+  }
+  if (spec.special.kind === "lantern_signal") {
+    return candidates
+      .sort((a, b) => targetPriority(b.entry.rarity, b.motion.progress) - targetPriority(a.entry.rarity, a.motion.progress))
+      .slice(0, 2);
+  }
+  if (spec.special.kind === "royal_freeze") {
+    return candidates.filter((item) => distanceBetweenTargets(item, target) <= 28).slice(0, 2);
+  }
+  if (spec.special.kind === "candy_slow") {
+    return candidates.filter((item) => distanceBetweenTargets(item, target) <= 24).slice(0, 1);
+  }
+  return [];
+}
+
+function helperFreezeTargetsForSpecial(special: MythicSpecialSpec | undefined, target: VisibleDuelTarget, splashTargets: VisibleDuelTarget[]) {
+  if (!special?.freezeMs) return [];
+  if (special.kind === "mirror_guard") return target.motion.progress > 0.68 ? [target] : [];
+  return [target, ...splashTargets];
+}
+
+function helperSplashHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusList>[number], target: VisibleDuelTarget, special?: MythicSpecialSpec) {
+  if (special?.kind === "prism_chain" || special?.kind === "lantern_signal") return 1;
+  if (special?.kind === "royal_freeze" || special?.kind === "candy_slow") return 0;
   const helperRank = helperRarityRank(bonus.rarity);
   const targetRank = helperRarityRank(target.entry.rarity);
   return helperRank >= 3 && targetRank <= 1 ? 2 : 1;
 }
 
 function helperBaseHitsForRarity(rarity: BugDexRarity) {
-  if (rarity === "Mythisch") return 4;
+  if (rarity === "Mythisch") return 5;
   if (rarity === "Legendarisch") return 3;
   if (rarity === "Episch") return 2;
   return 1;
 }
 
 function helperCooldownMsForRarity(rarity: BugDexRarity) {
-  if (rarity === "Mythisch") return 5000;
-  if (rarity === "Legendarisch") return 5400;
-  if (rarity === "Episch") return 6800;
-  if (rarity === "Zeldzaam") return 7600;
-  return 8400;
+  if (rarity === "Mythisch") return 4600;
+  if (rarity === "Legendarisch") return 5100;
+  if (rarity === "Episch") return 6500;
+  if (rarity === "Zeldzaam") return 7800;
+  return 9000;
 }
 
 function helperInitialCooldownMs(cooldownMs: number, helperIndex: number) {
@@ -1003,13 +1202,19 @@ function helperRarityRank(rarity: BugDexRarity) {
 function helperSpecForBonus(bonus: ReturnType<typeof activeBugSquadBonusList>[number]) {
   const rarityBoost = bonus.rarity === "Mythisch" ? 4 : bonus.rarity === "Legendarisch" ? 3 : bonus.rarity === "Episch" ? 2 : bonus.rarity === "Zeldzaam" ? 1 : 0;
   const kind = helperKindForCategory(bonus.category);
+  const special = mythicSpecialForBug(bonus.bugId);
   return {
-    color: helperColorForKind(kind),
+    color: special?.color ?? helperColorForKind(kind),
     cooldownMs: helperCooldownMsForRarity(bonus.rarity),
     kind,
-    splashRadius: kind === "splash" ? 18 + rarityBoost * 2 : 0,
-    splashTargets: kind === "splash" && rarityBoost >= 2 ? Math.min(2, rarityBoost - 1) : 0
+    splashRadius: kind === "splash" ? 16 + rarityBoost * 4 : 0,
+    splashTargets: kind === "splash" && rarityBoost >= 2 ? Math.min(3, rarityBoost - 1) : 0,
+    special
   };
+}
+
+function mythicSpecialForBug(bugId: string): MythicSpecialSpec | undefined {
+  return mythicSpecials[bugId];
 }
 
 function helperKindForCategory(category: BugSquadBonusCategory): HelperImpactKind {
@@ -1032,9 +1237,62 @@ function helperKindLabel(kind: HelperImpactKind, t: (key: string) => string) {
   return t(`duel.helper.${kind}`);
 }
 
-function helperImpactLabel(kind: HelperImpactKind, hits: number, t: (key: string) => string) {
-  const label = helperKindLabel(kind, t);
+function helperImpactLabel(kind: HelperImpactKind, hits: number, t: (key: string) => string, special?: MythicSpecialSpec) {
+  const label = special?.label ?? helperKindLabel(kind, t);
   return hits > 1 ? `${label} x${hits}` : label;
+}
+
+function helperImpactSymbol(kind: HelperImpactKind) {
+  if (kind === "zap") return "ZAP";
+  if (kind === "sticky") return "STK";
+  if (kind === "shield") return "SH";
+  if (kind === "splash") return "AOE";
+  return "HIT";
+}
+
+type DuelEffectSpriteKey = keyof typeof duelEffectSprites;
+
+function helperSpriteKeyForImpact(impact: HelperImpact): DuelEffectSpriteKey {
+  if (impact.special === "royal_freeze" || impact.special === "candy_slow") return "freeze";
+  if (impact.special === "bloom_blade") return "slash";
+  if (impact.special === "mirror_guard") return "shield";
+  if (impact.special === "pattern_break") return "goo";
+  if (impact.special === "prism_chain" || impact.special === "lantern_signal" || impact.special === "longneck_scout") return "lightning";
+  if (impact.kind === "zap") return "lightning";
+  if (impact.kind === "sticky") return "goo";
+  if (impact.kind === "shield") return "shield";
+  if (impact.kind === "splash") return "fireball";
+  return "fireball";
+}
+
+function helperProjectileStepsForSprite(sprite: DuelEffectSpriteKey) {
+  if (sprite === "shield" || sprite === "freeze") return [0.86];
+  if (sprite === "slash") return [0.58, 0.82];
+  if (sprite === "goo") return [0.34, 0.62, 0.84];
+  return [0.28, 0.54, 0.8];
+}
+
+function helperProjectileCurve(sprite: DuelEffectSpriteKey, step: number, index: number) {
+  if (sprite === "slash" || sprite === "lightning") return 0;
+  if (sprite === "shield" || sprite === "freeze") return -2;
+  return Math.sin(step * Math.PI) * (index % 2 === 0 ? -3.2 : 3.2);
+}
+
+function helperProjectileSize(sprite: DuelEffectSpriteKey) {
+  if (sprite === "slash") return 58;
+  if (sprite === "lightning") return 52;
+  if (sprite === "shield" || sprite === "freeze") return 46;
+  if (sprite === "goo") return 42;
+  return 48;
+}
+
+function helperImpactSpriteSize(sprite: DuelEffectSpriteKey) {
+  if (sprite === "freeze") return 112;
+  if (sprite === "slash") return 108;
+  if (sprite === "shield") return 98;
+  if (sprite === "lightning") return 96;
+  if (sprite === "goo") return 82;
+  return 92;
 }
 
 function helperTowerSourcePosition(index: number, count: number) {
@@ -1086,12 +1344,14 @@ function HelperImpactEffect({ impact }: { impact: HelperImpact }) {
     Animated.timing(pulse, { duration: 680, toValue: 1, useNativeDriver: true }).start();
   }, [pulse]);
 
-  const symbol = impact.kind === "zap" ? "Z" : impact.kind === "sticky" ? "S" : impact.kind === "shield" ? "SH" : impact.kind === "splash" ? "AOE" : "B";
-  const targetScale = impact.animationStyle === "pulse" ? [0.65, 2.35] : impact.kind === "shield" ? [0.72, 2.15] : impact.kind === "splash" ? [0.55, 2.05] : [0.45, 1.8];
   const angle = Math.atan2(impact.y - impact.sourceY, impact.x - impact.sourceX) * 180 / Math.PI;
-  const orbSteps = [0.16, 0.31, 0.47, 0.63, 0.79, 0.9];
-  const slashSteps = [0.3, 0.48, 0.66, 0.84];
-  const pulseSteps = [0.28, 0.5, 0.72, 0.9];
+  const spriteKey = helperSpriteKeyForImpact(impact);
+  const spriteSource = duelEffectSprites[spriteKey];
+  const projectileSteps = helperProjectileStepsForSprite(spriteKey);
+  const projectileSize = helperProjectileSize(spriteKey);
+  const impactSize = helperImpactSpriteSize(spriteKey);
+  const rotatesWithPath = spriteKey === "fireball" || spriteKey === "lightning" || spriteKey === "slash";
+  const mythicRingSteps = impact.special ? [0, 1, 2] : [];
   return (
     <>
       <Animated.View
@@ -1113,46 +1373,33 @@ function HelperImpactEffect({ impact }: { impact: HelperImpact }) {
           }
         ]}
       />
-      {impact.animationStyle === "orb" && orbSteps.map((step, index) => {
-        const curve = Math.sin(step * Math.PI) * (index % 2 === 0 ? -4 : 4);
+      {projectileSteps.map((step, index) => {
+        const curve = helperProjectileCurve(spriteKey, step, index);
         return (
-          <Animated.View
-            key={`${impact.id}:orb:${index}`}
-            pointerEvents="none"
+          <Animated.Image
+            key={`${impact.id}:projectile:${index}`}
+            accessibilityIgnoresInvertColors
+            resizeMode="contain"
+            source={spriteSource}
             style={[
-              styles.helperTrailDot,
-              index % 2 === 0 && styles.helperTrailDotLarge,
+              styles.helperProjectileSprite,
               {
-                backgroundColor: impact.color,
+                height: projectileSize,
                 left: `${impact.sourceX + (impact.x - impact.sourceX) * step}%`,
-                opacity: pulse.interpolate({ inputRange: [0, 0.14 + index * 0.07, 0.82, 1], outputRange: [0, 1, 0.45, 0] }),
+                marginLeft: -projectileSize / 2,
+                marginTop: -projectileSize / 2,
+                opacity: pulse.interpolate({ inputRange: [0, 0.1 + index * 0.08, 0.74, 1], outputRange: [0, 0.85, 0.36, 0] }),
                 top: `${impact.sourceY + (impact.y - impact.sourceY) * step + curve}%`,
-                transform: [{ scale: pulse.interpolate({ inputRange: [0, 0.28, 1], outputRange: [0.55, 1.5, 0.45] }) }]
+                transform: [
+                  { rotate: rotatesWithPath ? `${angle}deg` : "0deg" },
+                  { scale: pulse.interpolate({ inputRange: [0, 0.24, 1], outputRange: [0.42, 1.12, 0.55] }) }
+                ],
+                width: projectileSize
               }
             ]}
           />
         );
       })}
-      {impact.animationStyle === "slash" && slashSteps.map((step, index) => (
-        <Animated.View
-          key={`${impact.id}:slash:${index}`}
-          pointerEvents="none"
-          style={[
-            styles.helperSlashStreak,
-            {
-              backgroundColor: impact.color,
-              left: `${impact.sourceX + (impact.x - impact.sourceX) * step}%`,
-              opacity: pulse.interpolate({ inputRange: [0, 0.12 + index * 0.08, 0.72, 1], outputRange: [0, 0.9, 0.35, 0] }),
-              top: `${impact.sourceY + (impact.y - impact.sourceY) * step}%`,
-              transform: [
-                { rotate: `${angle}deg` },
-                { scaleX: pulse.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0.55, 1.45, 0.75] }) },
-                { scaleY: pulse.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0.8, 1.1, 0.75] }) }
-              ]
-            }
-          ]}
-        />
-      ))}
       {impact.animationStyle === "pulse" && (
         <Animated.View
           pointerEvents="none"
@@ -1168,42 +1415,56 @@ function HelperImpactEffect({ impact }: { impact: HelperImpact }) {
           ]}
         />
       )}
-      {impact.animationStyle === "pulse" && pulseSteps.map((step, index) => (
+      <Animated.Image
+        accessibilityIgnoresInvertColors
+        resizeMode="contain"
+        source={spriteSource}
+        style={[
+          styles.helperImpactSprite,
+            {
+              height: impactSize,
+              left: `${impact.x}%`,
+              marginLeft: -impactSize / 2,
+              marginTop: -impactSize / 2,
+              opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0] }),
+              top: `${impact.y}%`,
+            transform: [
+              { rotate: rotatesWithPath ? `${angle}deg` : "0deg" },
+              { scale: pulse.interpolate({ inputRange: [0, 0.18, 1], outputRange: [0.55, 1.18, 1.85] }) }
+            ],
+            width: impactSize
+          }
+        ]}
+      />
+      {mythicRingSteps.map((ring) => (
         <Animated.View
-          key={`${impact.id}:wave:${index}`}
+          key={`${impact.id}:mythic:${ring}`}
           pointerEvents="none"
           style={[
-            styles.helperWaveDot,
+            styles.helperMythicAura,
+            ring === 1 && styles.helperMythicAuraAlt,
+            ring === 2 && styles.helperMythicAuraSpark,
             {
               borderColor: impact.color,
-              left: `${impact.sourceX + (impact.x - impact.sourceX) * step}%`,
-              opacity: pulse.interpolate({ inputRange: [0, 0.2 + index * 0.07, 0.84, 1], outputRange: [0, 0.82, 0.35, 0] }),
-              top: `${impact.sourceY + (impact.y - impact.sourceY) * step}%`,
-              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.85] }) }]
+              left: `${impact.x}%`,
+              opacity: pulse.interpolate({ inputRange: [0, 0.12 + ring * 0.08, 0.86, 1], outputRange: [0, 0.75, 0.22, 0] }),
+              top: `${impact.y}%`,
+              transform: [
+                { rotate: `${angle + ring * 28}deg` },
+                { scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45 + ring * 0.12, 2.25 + ring * 0.32] }) }
+              ]
             }
           ]}
         />
       ))}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.helperImpact,
-          impact.animationStyle === "orb" && styles.helperImpactOrb,
-          impact.animationStyle === "slash" && styles.helperImpactSlash,
-          impact.animationStyle === "pulse" && styles.helperImpactPulse,
-          impact.kind === "shield" && styles.helperImpactShield,
-          impact.kind === "splash" && styles.helperImpactSplash,
-          {
-            borderColor: impact.color,
-            left: `${impact.x}%`,
-            opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0] }),
-            top: `${impact.y}%`,
-            transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: targetScale }) }]
-          }
-        ]}
-      >
-        <Text style={[styles.helperImpactSymbol, { color: impact.color }]}>{symbol}</Text>
-      </Animated.View>
+      {impact.special && (
+        <MythicSpecialEffect
+          angle={angle}
+          impact={impact}
+          pulse={pulse}
+          spriteSource={spriteSource}
+        />
+      )}
       <Animated.View
         pointerEvents="none"
         style={[
@@ -1220,17 +1481,25 @@ function HelperImpactEffect({ impact }: { impact: HelperImpact }) {
         <Text style={[styles.helperImpactLabelText, { color: impact.color }]}>{impact.label}</Text>
       </Animated.View>
       {impact.splashPoints.map((point) => (
-        <Animated.View
+        <Animated.Image
           key={`${impact.id}:splash:${point.id}`}
-          pointerEvents="none"
+          accessibilityIgnoresInvertColors
+          resizeMode="contain"
+          source={spriteSource}
           style={[
-            styles.helperSplashEcho,
+            styles.helperSplashSprite,
             {
-              borderColor: impact.color,
+              height: Math.round(impactSize * 0.58),
               left: `${point.x}%`,
+              marginLeft: -Math.round(impactSize * 0.58) / 2,
+              marginTop: -Math.round(impactSize * 0.58) / 2,
               opacity: pulse.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, 0.8, 0] }),
               top: `${point.y}%`,
-              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.55] }) }]
+              transform: [
+                { rotate: rotatesWithPath ? `${angle}deg` : "0deg" },
+                { scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.42] }) }
+              ],
+              width: Math.round(impactSize * 0.58)
             }
           ]}
         />
@@ -1255,6 +1524,288 @@ function HelperImpactEffect({ impact }: { impact: HelperImpact }) {
         />
       ))}
     </>
+  );
+}
+
+function MythicSpecialEffect({
+  angle,
+  impact,
+  pulse,
+  spriteSource
+}: {
+  angle: number;
+  impact: HelperImpact;
+  pulse: Animated.Value;
+  spriteSource: ReturnType<typeof require>;
+}) {
+  const pulseOpacity = pulse.interpolate({ inputRange: [0, 0.16, 0.82, 1], outputRange: [0, 0.82, 0.34, 0] });
+  const burstScale = pulse.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0.35, 1, 2.05] });
+  const scanTranslate = pulse.interpolate({ inputRange: [0, 1], outputRange: [-22, 22] });
+
+  if (impact.special === "royal_freeze") {
+    return (
+      <>
+        <Animated.Image
+          accessibilityIgnoresInvertColors
+          resizeMode="contain"
+          source={duelEffectSprites.freeze}
+          style={[styles.mythicFreezeCrown, { left: `${impact.x}%`, opacity: pulseOpacity, top: `${impact.y}%`, transform: [{ rotate: `${angle - 18}deg` }, { scale: burstScale }] }]}
+        />
+        {[0, 1, 2, 3, 4, 5].map((shard) => (
+          <Animated.View
+            key={`${impact.id}:freeze-shard:${shard}`}
+            pointerEvents="none"
+            style={[
+              styles.mythicIceShard,
+              {
+                backgroundColor: shard % 2 === 0 ? "#dbeafe" : "#60a5fa",
+                left: `${impact.x + Math.cos(shard) * 7}%`,
+                opacity: pulseOpacity,
+                top: `${impact.y + Math.sin(shard) * 6}%`,
+                transform: [{ rotate: `${shard * 34}deg` }, { scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.25] }) }]
+              }
+            ]}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (impact.special === "prism_chain") {
+    return (
+      <>
+        {impact.splashPoints.map((point, index) => {
+          const chainAngle = Math.atan2(point.y - impact.y, point.x - impact.x) * 180 / Math.PI;
+          return (
+            <Animated.Image
+              key={`${impact.id}:prism-chain:${point.id}`}
+              accessibilityIgnoresInvertColors
+              resizeMode="contain"
+              source={duelEffectSprites.lightning}
+              style={[
+                styles.mythicChainBolt,
+                {
+                  left: `${impact.x + (point.x - impact.x) * 0.5}%`,
+                  opacity: pulse.interpolate({ inputRange: [0, 0.2 + index * 0.08, 0.82, 1], outputRange: [0, 0.92, 0.42, 0] }),
+                  top: `${impact.y + (point.y - impact.y) * 0.5}%`,
+                  transform: [{ rotate: `${chainAngle}deg` }, { scale: pulse.interpolate({ inputRange: [0, 0.22, 1], outputRange: [0.55, 1.15, 0.72] }) }]
+                }
+              ]}
+            />
+          );
+        })}
+        {[0, 1, 2].map((ring) => (
+          <Animated.View
+            key={`${impact.id}:prism-ring:${ring}`}
+            pointerEvents="none"
+            style={[
+              styles.mythicPrismRing,
+              {
+                borderColor: ring === 0 ? "#22d3ee" : ring === 1 ? "#f472b6" : "#facc15",
+                left: `${impact.x}%`,
+                opacity: pulseOpacity,
+                top: `${impact.y}%`,
+                transform: [{ rotate: `${ring * 38}deg` }, { scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.38 + ring * 0.12, 1.85 + ring * 0.22] }) }]
+              }
+            ]}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (impact.special === "pattern_break") {
+    return (
+      <>
+        {[0, 1, 2, 3, 4].map((tile) => (
+          <Animated.View
+            key={`${impact.id}:pattern-tile:${tile}`}
+            pointerEvents="none"
+            style={[
+              styles.mythicPatternTile,
+              {
+                backgroundColor: ["#22c55e", "#f472b6", "#38bdf8", "#facc15", "#ffffff"][tile],
+                left: `${impact.x + (tile - 2) * 4}%`,
+                opacity: pulseOpacity,
+                top: `${impact.y + (tile % 2 === 0 ? -5 : 5)}%`,
+                transform: [{ rotate: `${tile * 31 + 12}deg` }, { scale: pulse.interpolate({ inputRange: [0, 0.22, 1], outputRange: [0.3, 1.1, 0.62] }) }]
+              }
+            ]}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (impact.special === "candy_slow") {
+    return (
+      <>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.mythicCandySlowRing,
+            {
+              borderColor: "#f9a8d4",
+              left: `${impact.x}%`,
+              opacity: pulseOpacity,
+              top: `${impact.y}%`,
+              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 2.15] }) }]
+            }
+          ]}
+        />
+        {[0, 1, 2, 3].map((dot) => (
+          <Animated.View
+            key={`${impact.id}:candy-dot:${dot}`}
+            pointerEvents="none"
+            style={[
+              styles.mythicCandyDot,
+              {
+                backgroundColor: dot % 2 === 0 ? "#f472b6" : "#fde68a",
+                left: `${impact.x + Math.cos(dot * 1.7) * 8}%`,
+                opacity: pulseOpacity,
+                top: `${impact.y + Math.sin(dot * 1.7) * 7}%`,
+                transform: [{ scale: pulse.interpolate({ inputRange: [0, 0.22, 1], outputRange: [0.35, 1.05, 0.55] }) }]
+              }
+            ]}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (impact.special === "longneck_scout") {
+    return (
+      <>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.mythicScoutReticle,
+            {
+              borderColor: "#facc15",
+              left: `${impact.x}%`,
+              opacity: pulseOpacity,
+              top: `${impact.y}%`,
+              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1.8] }) }]
+            }
+          ]}
+        />
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.mythicScoutScanLine,
+            {
+              backgroundColor: "#facc15",
+              left: `${impact.x}%`,
+              opacity: pulse.interpolate({ inputRange: [0, 0.18, 0.84, 1], outputRange: [0, 0.9, 0.5, 0] }),
+              top: `${impact.y}%`,
+              transform: [{ translateY: scanTranslate }, { rotate: `${angle}deg` }]
+            }
+          ]}
+        />
+      </>
+    );
+  }
+
+  if (impact.special === "bloom_blade") {
+    return (
+      <>
+        {[0, 1, 2].map((slash) => (
+          <Animated.Image
+            key={`${impact.id}:bloom-slash:${slash}`}
+            accessibilityIgnoresInvertColors
+            resizeMode="contain"
+            source={duelEffectSprites.slash}
+            style={[
+              styles.mythicBloomSlash,
+              {
+                left: `${impact.x + (slash - 1) * 3}%`,
+                opacity: pulseOpacity,
+                top: `${impact.y + (slash - 1) * 2}%`,
+                transform: [{ rotate: `${angle + slash * 24 - 24}deg` }, { scale: pulse.interpolate({ inputRange: [0, 0.18, 1], outputRange: [0.45, 1.02, 1.45] }) }]
+              }
+            ]}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (impact.special === "lantern_signal") {
+    return (
+      <>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.mythicLanternBeam,
+            {
+              backgroundColor: "#fde047",
+              left: `${impact.x}%`,
+              opacity: pulse.interpolate({ inputRange: [0, 0.15, 0.7, 1], outputRange: [0, 0.58, 0.28, 0] }),
+              top: `${impact.y}%`,
+              transform: [{ scaleY: pulse.interpolate({ inputRange: [0, 0.22, 1], outputRange: [0.15, 1, 1.45] }) }]
+            }
+          ]}
+        />
+        {[0, 1, 2].map((signal) => (
+          <Animated.View
+            key={`${impact.id}:lantern-signal:${signal}`}
+            pointerEvents="none"
+            style={[
+              styles.mythicLanternSignal,
+              {
+                borderColor: signal === 1 ? "#ffffff" : "#fde047",
+                left: `${impact.x}%`,
+                opacity: pulseOpacity,
+                top: `${impact.y}%`,
+                transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.42 + signal * 0.12, 1.65 + signal * 0.32] }) }]
+              }
+            ]}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (impact.special === "mirror_guard") {
+    return (
+      <>
+        <Animated.Image
+          accessibilityIgnoresInvertColors
+          resizeMode="contain"
+          source={duelEffectSprites.shield}
+          style={[
+            styles.mythicMirrorShield,
+            {
+              left: `${impact.x}%`,
+              opacity: pulseOpacity,
+              top: `${impact.y}%`,
+              transform: [{ scale: pulse.interpolate({ inputRange: [0, 0.18, 1], outputRange: [0.5, 1.08, 1.65] }) }]
+            }
+          ]}
+        />
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.mythicMirrorSweep,
+            {
+              left: `${impact.x}%`,
+              opacity: pulse.interpolate({ inputRange: [0, 0.2, 0.62, 1], outputRange: [0, 0.85, 0.22, 0] }),
+              top: `${impact.y}%`,
+              transform: [{ translateY: scanTranslate }, { rotate: `${angle + 90}deg` }]
+            }
+          ]}
+        />
+      </>
+    );
+  }
+
+  return (
+    <Animated.Image
+      accessibilityIgnoresInvertColors
+      resizeMode="contain"
+      source={spriteSource}
+      style={[styles.mythicFallbackSprite, { left: `${impact.x}%`, opacity: pulseOpacity, top: `${impact.y}%`, transform: [{ rotate: `${angle}deg` }, { scale: burstScale }] }]}
+    />
   );
 }
 
@@ -1328,6 +1879,10 @@ function isRunning(duel: BugSmashDuel, timestamp: number) {
 
 function opponentLabel(duel: BugSmashDuel, user: User) {
   return duel.fromUserId === user.uid ? duel.toUserName : duel.fromUserName;
+}
+
+function isDuelParticipant(duel: BugSmashDuel, user: User) {
+  return duel.fromUserId === user.uid || duel.toUserId === user.uid;
 }
 
 function statusLabel(duel: BugSmashDuel, t: (key: string) => string) {
@@ -1578,6 +2133,18 @@ const styles = StyleSheet.create({
     width: 18,
     zIndex: 10
   },
+  helperImpactSprite: {
+    position: "absolute",
+    zIndex: 9
+  },
+  helperProjectileSprite: {
+    position: "absolute",
+    zIndex: 8
+  },
+  helperSplashSprite: {
+    position: "absolute",
+    zIndex: 8
+  },
   helperImpactOrb: {
     backgroundColor: "rgba(255,255,255,0.1)",
     borderStyle: "dotted",
@@ -1623,6 +2190,172 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(16,32,24,0.75)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3
+  },
+  helperMythicAura: {
+    borderRadius: 14,
+    borderWidth: 2,
+    height: 56,
+    marginLeft: -28,
+    marginTop: -28,
+    position: "absolute",
+    width: 56,
+    zIndex: 7
+  },
+  helperMythicAuraAlt: {
+    borderRadius: 999,
+    height: 64,
+    marginLeft: -32,
+    marginTop: -32,
+    width: 64
+  },
+  helperMythicAuraSpark: {
+    borderRadius: 4,
+    borderWidth: 3,
+    height: 24,
+    marginLeft: -12,
+    marginTop: -12,
+    width: 82
+  },
+  mythicBloomSlash: {
+    height: 118,
+    marginLeft: -59,
+    marginTop: -59,
+    position: "absolute",
+    width: 118,
+    zIndex: 11
+  },
+  mythicCandyDot: {
+    borderRadius: 999,
+    height: 9,
+    marginLeft: -4,
+    marginTop: -4,
+    position: "absolute",
+    width: 9,
+    zIndex: 11
+  },
+  mythicCandySlowRing: {
+    backgroundColor: "rgba(244,114,182,0.12)",
+    borderRadius: 999,
+    borderWidth: 3,
+    height: 58,
+    marginLeft: -29,
+    marginTop: -29,
+    position: "absolute",
+    width: 58,
+    zIndex: 10
+  },
+  mythicChainBolt: {
+    height: 92,
+    marginLeft: -46,
+    marginTop: -46,
+    position: "absolute",
+    width: 92,
+    zIndex: 10
+  },
+  mythicFallbackSprite: {
+    height: 112,
+    marginLeft: -56,
+    marginTop: -56,
+    position: "absolute",
+    width: 112,
+    zIndex: 10
+  },
+  mythicFreezeCrown: {
+    height: 132,
+    marginLeft: -66,
+    marginTop: -66,
+    position: "absolute",
+    width: 132,
+    zIndex: 10
+  },
+  mythicIceShard: {
+    borderRadius: 2,
+    height: 18,
+    marginLeft: -3,
+    marginTop: -9,
+    position: "absolute",
+    width: 6,
+    zIndex: 11
+  },
+  mythicLanternBeam: {
+    borderRadius: 999,
+    height: 150,
+    marginLeft: -13,
+    marginTop: -75,
+    position: "absolute",
+    width: 26,
+    zIndex: 9
+  },
+  mythicLanternSignal: {
+    backgroundColor: "rgba(253,224,71,0.1)",
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 54,
+    marginLeft: -27,
+    marginTop: -27,
+    position: "absolute",
+    width: 54,
+    zIndex: 10
+  },
+  mythicMirrorShield: {
+    height: 118,
+    marginLeft: -59,
+    marginTop: -59,
+    position: "absolute",
+    width: 118,
+    zIndex: 10
+  },
+  mythicMirrorSweep: {
+    backgroundColor: "rgba(255,255,255,0.82)",
+    borderRadius: 999,
+    height: 5,
+    marginLeft: -34,
+    marginTop: -2,
+    position: "absolute",
+    width: 68,
+    zIndex: 12
+  },
+  mythicPatternTile: {
+    borderColor: "rgba(16,32,24,0.26)",
+    borderRadius: 3,
+    borderWidth: 1,
+    height: 16,
+    marginLeft: -8,
+    marginTop: -8,
+    position: "absolute",
+    width: 16,
+    zIndex: 11
+  },
+  mythicPrismRing: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 12,
+    borderWidth: 2,
+    height: 50,
+    marginLeft: -25,
+    marginTop: -25,
+    position: "absolute",
+    width: 50,
+    zIndex: 10
+  },
+  mythicScoutReticle: {
+    backgroundColor: "rgba(250,204,21,0.08)",
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 64,
+    marginLeft: -32,
+    marginTop: -32,
+    position: "absolute",
+    width: 64,
+    zIndex: 10
+  },
+  mythicScoutScanLine: {
+    borderRadius: 999,
+    height: 4,
+    marginLeft: -34,
+    marginTop: -2,
+    position: "absolute",
+    width: 68,
+    zIndex: 11
   },
   helperHint: {
     color: "#7a5f18",
@@ -2211,6 +2944,29 @@ const styles = StyleSheet.create({
     padding: 5,
     position: "absolute",
     width: 62
+  },
+  targetFreezeBadge: {
+    alignItems: "center",
+    backgroundColor: "rgba(96,165,250,0.88)",
+    borderRadius: 999,
+    left: -8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    position: "absolute",
+    top: -9,
+    zIndex: 4
+  },
+  targetFreezeText: {
+    color: "#ffffff",
+    fontSize: 7,
+    fontWeight: "900"
+  },
+  targetFrozen: {
+    backgroundColor: "rgba(239,246,255,0.98)",
+    shadowColor: "#60a5fa",
+    shadowOffset: { height: 0, width: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8
   },
   targetSwatter: {
     left: 0,

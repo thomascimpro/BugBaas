@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { allBugArtIds, BugArtId } from "../services/bugArt";
 import { bugDexEntries } from "../services/pointsService";
+import { foregroundCatchXpByRarity } from "../services/rewardBalanceService";
 import { playBugSound } from "../services/soundService";
 import { BugArtImage } from "./BugArtImage";
 import { BugSwatterHit, playBugSwatterFeedback } from "./BugSwatterHit";
@@ -45,11 +46,11 @@ const movementInput = [0, 0.055, 0.1, 0.16, 0.22, 0.3, 0.37, 0.45, 0.53, 0.61, 0
 const timerSegments = Array.from({ length: 24 }, (_, index) => index);
 
 const raritySettings: Record<SpawnRarity, { motionCycleMs: number; rewardXp: number; requiredTaps: number; size: number; stepBob: number; turn: number; verticalDrift: number; wiggle: number }> = {
-  common: { motionCycleMs: catchDurationMs, rewardXp: 1, requiredTaps: 3, size: 68, stepBob: 4, turn: 12, verticalDrift: 0.1, wiggle: 0.015 },
-  rare: { motionCycleMs: catchDurationMs, rewardXp: 4, requiredTaps: 5, size: 74, stepBob: 5, turn: 17, verticalDrift: 0.16, wiggle: 0.028 },
-  epic: { motionCycleMs: catchDurationMs, rewardXp: 9, requiredTaps: 7, size: 82, stepBob: 6, turn: 22, verticalDrift: 0.24, wiggle: 0.04 },
-  legendary: { motionCycleMs: catchDurationMs, rewardXp: 15, requiredTaps: 9, size: 90, stepBob: 7, turn: 28, verticalDrift: 0.3, wiggle: 0.055 },
-  mythic: { motionCycleMs: catchDurationMs, rewardXp: 22, requiredTaps: 11, size: 96, stepBob: 8, turn: 32, verticalDrift: 0.34, wiggle: 0.065 }
+  common: { motionCycleMs: catchDurationMs, rewardXp: foregroundCatchXpByRarity.common, requiredTaps: 3, size: 68, stepBob: 4, turn: 12, verticalDrift: 0.1, wiggle: 0.015 },
+  rare: { motionCycleMs: catchDurationMs, rewardXp: foregroundCatchXpByRarity.rare, requiredTaps: 5, size: 74, stepBob: 5, turn: 17, verticalDrift: 0.16, wiggle: 0.028 },
+  epic: { motionCycleMs: catchDurationMs, rewardXp: foregroundCatchXpByRarity.epic, requiredTaps: 7, size: 82, stepBob: 6, turn: 22, verticalDrift: 0.24, wiggle: 0.04 },
+  legendary: { motionCycleMs: catchDurationMs, rewardXp: foregroundCatchXpByRarity.legendary, requiredTaps: 9, size: 90, stepBob: 7, turn: 28, verticalDrift: 0.3, wiggle: 0.055 },
+  mythic: { motionCycleMs: catchDurationMs, rewardXp: foregroundCatchXpByRarity.mythic, requiredTaps: 11, size: 96, stepBob: 8, turn: 32, verticalDrift: 0.34, wiggle: 0.065 }
 };
 
 const rarityLabels: Record<SpawnRarity, "Gewoon" | "Zeldzaam" | "Episch" | "Legendarisch" | "Mythisch"> = {
