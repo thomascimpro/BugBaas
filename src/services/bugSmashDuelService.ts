@@ -5,13 +5,21 @@ import { badgesForUser, bugDexEntries, titleForPoints } from "./pointsService";
 import { duelLossXp, duelWinXp } from "./rewardBalanceService";
 
 const demoDuels = new Map<string, BugSmashDuel>();
+const demoDuelRewardEvents = new Set<string>();
 
 export const bugSmashDuelDurationMs = 30000;
 export const bugSmashDuelStartDelayMs = 5000;
-export const bugSmashDuelBugCount = 36;
+export const bugSmashDuelBugCount = 48;
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function localDayId(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function makeId() {
@@ -39,6 +47,14 @@ function pickBugIds(seed: number): string[] {
 
 function duelRef(duelId: string) {
   return doc(db, "bugSmashDuels", duelId);
+}
+
+function duelDailyRewardEventId(opponentId: string, day = localDayId()) {
+  return `duel-daily-${day}-${encodeURIComponent(opponentId)}`;
+}
+
+function duelOpponentId(duel: BugSmashDuel, user: User) {
+  return duel.fromUserId === user.uid ? duel.toUserId : duel.fromUserId;
 }
 
 function isParticipant(duel: BugSmashDuel, user: User) {
@@ -223,12 +239,15 @@ export async function submitBugSmashDuelScore(user: User, duelId: string, score:
   });
 }
 
-export async function claimBugSmashDuelReward(user: User, duelId: string): Promise<{ result: "loss" | "win"; user: User } | null> {
+export async function claimBugSmashDuelReward(user: User, duelId: string): Promise<{ result: "loss" | "win"; rewardGranted: boolean; user: User } | null> {
   if (!isFirebaseConfigured) {
     const duel = demoDuels.get(duelId);
     if (!duel || duel.status !== "completed" || !isParticipant(duel, user) || !duel.winnerId || (duel.rewardClaimedBy ?? []).includes(user.uid)) return null;
     const result = duel.winnerId === user.uid ? "win" : "loss";
-    const totalPoints = Math.max(0, user.totalPoints + (result === "win" ? duelWinXp : duelLossXp));
+    const eventKey = `${user.uid}:${duelDailyRewardEventId(duelOpponentId(duel, user))}`;
+    const rewardGranted = !demoDuelRewardEvents.has(eventKey);
+    if (rewardGranted) demoDuelRewardEvents.add(eventKey);
+    const totalPoints = Math.max(0, user.totalPoints + (rewardGranted ? result === "win" ? duelWinXp : duelLossXp : 0));
     const updatedUser = { ...user, totalPoints, title: titleForPoints(totalPoints) };
     updatedUser.badges = badgesForUser(updatedUser);
     demoDuels.set(duelId, {
@@ -237,7 +256,7 @@ export async function claimBugSmashDuelReward(user: User, duelId: string): Promi
       resultSeenBy: Array.from(new Set([...(duel.resultSeenBy ?? []), user.uid])),
       updatedAt: nowIso()
     });
-    return { result, user: updatedUser };
+    return { result, rewardGranted, user: updatedUser };
   }
 
   return runTransaction(db, async (transaction) => {
@@ -249,8 +268,11 @@ export async function claimBugSmashDuelReward(user: User, duelId: string): Promi
     const duel = snapshot.data() as BugSmashDuel;
     if (duel.status !== "completed" || !isParticipant(duel, user) || !duel.winnerId || (duel.rewardClaimedBy ?? []).includes(user.uid)) return null;
     const result = duel.winnerId === user.uid ? "win" : "loss";
+    const eventRef = doc(db, "users", user.uid, "duelRewardEvents", duelDailyRewardEventId(duelOpponentId(duel, user)));
+    const eventSnapshot = await transaction.get(eventRef);
+    const rewardGranted = !eventSnapshot.exists();
     const currentUser = userSnapshot.data() as User;
-    const totalPoints = Math.max(0, currentUser.totalPoints + (result === "win" ? duelWinXp : duelLossXp));
+    const totalPoints = Math.max(0, currentUser.totalPoints + (rewardGranted ? result === "win" ? duelWinXp : duelLossXp : 0));
     const updatedUser = { ...currentUser, totalPoints, title: titleForPoints(totalPoints) };
     updatedUser.badges = badgesForUser(updatedUser);
     transaction.update(ref, {
@@ -258,12 +280,21 @@ export async function claimBugSmashDuelReward(user: User, duelId: string): Promi
       resultSeenBy: Array.from(new Set([...(duel.resultSeenBy ?? []), user.uid])),
       updatedAt: nowIso()
     });
-    transaction.update(userRef, {
-      badges: updatedUser.badges,
-      title: updatedUser.title,
-      totalPoints: updatedUser.totalPoints
-    });
-    return { result, user: updatedUser };
+    if (rewardGranted) {
+      transaction.set(eventRef, {
+        createdAt: nowIso(),
+        day: localDayId(),
+        duelId,
+        opponentId: duelOpponentId(duel, user),
+        result
+      });
+      transaction.update(userRef, {
+        badges: updatedUser.badges,
+        title: updatedUser.title,
+        totalPoints: updatedUser.totalPoints
+      });
+    }
+    return { result, rewardGranted, user: updatedUser };
   });
 }
 

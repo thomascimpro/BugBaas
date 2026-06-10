@@ -1,5 +1,20 @@
 # Test Results
 
+## 2.2.14 release
+
+- `npm.cmd run typecheck`: geslaagd.
+- `npx.cmd expo config --type public`: geslaagd; versie `2.2.14`, package `nl.cimpro.bugbaas`.
+- `npx.cmd expo install --check`: geslaagd.
+- Logic smoke-check: duel XP constants, daily pair cap en solo powerup hooks aanwezig.
+- `.\android\gradlew.bat -p android :app:clean :app:assembleRelease --no-daemon --console=plain`: geslaagd.
+- APK gekopieerd naar `dist/CimPro-BugBaas-2.2.14.apk`.
+- APK grootte: `44,644,930` bytes.
+- `aapt2 dump badging`: package `nl.cimpro.bugbaas`, versionCode `109`, versionName `2.2.14`.
+- `apksigner verify --print-certs`: geslaagd.
+- Signing cert SHA-256: `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`, gelijk aan `2.2.13`.
+- APK SHA256: `DE3A475FDB2DFD7F7B9F12AB6AC9084D87576B114B70D7EEEB83A63373F4EB09`.
+- `adb devices`: geen device aangesloten; install-smoke niet uitgevoerd.
+
 ## 2.2.4 release
 
 - `npm.cmd run typecheck`: geslaagd.
