@@ -5,7 +5,7 @@ import { BugArtId } from "../services/bugArt";
 import { useI18n } from "../services/i18n";
 import { BugArtImage } from "./BugArtImage";
 
-type NavRoute = "home" | "bugs" | "new" | "bugdex" | "leaderboard";
+type NavRoute = "home" | "bugs" | "duel" | "bugdex" | "leaderboard";
 
 type Props = {
   activeRoute: RouteName;
@@ -15,7 +15,7 @@ type Props = {
 const items: Array<{ route: NavRoute; labelKey: string; bugId: BugArtId }> = [
   { route: "home", labelKey: "nav.home", bugId: "zilvervisje" },
   { route: "bugs", labelKey: "nav.bugs", bugId: "pissebed" },
-  { route: "new", labelKey: "nav.new", bugId: "mier" },
+  { route: "duel", labelKey: "nav.arena", bugId: "neushoornkever" },
   { route: "bugdex", labelKey: "nav.bugdex", bugId: "lieveheersbeestje" },
   { route: "leaderboard", labelKey: "nav.rank", bugId: "goliathkever" }
 ];
@@ -26,7 +26,7 @@ export function BottomNav({ activeRoute, onNavigate }: Props) {
     <View style={styles.wrap}>
       {items.map((item) => {
         const active = activeRoute === item.route;
-        const primary = item.route === "new";
+        const primary = item.route === "duel";
         return (
           <Pressable key={item.route} style={[styles.item, primary && styles.primaryItem, active && styles.activeItem, primary && active && styles.activePrimary]} onPress={() => onNavigate(item.route)}>
             <BugArtImage bugId={item.bugId} size={primary ? 40 : active ? 28 : 24} />

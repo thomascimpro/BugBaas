@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "r
 import type { RouteName } from "../../App";
 import { useI18n } from "../services/i18n";
 
-type TourRoute = "home" | "bugs" | "new" | "bugdex" | "leaderboard" | "settings";
+type TourRoute = "home" | "bugs" | "duel" | "bugdex" | "leaderboard" | "settings";
 
 type Step = {
   route: TourRoute;
@@ -24,7 +24,8 @@ const steps: Step[] = [
   { route: "home", titleKey: "tour.movement", bodyKey: "tour.movementBody", target: "tab" },
   { route: "bugs", titleKey: "tour.bugs", bodyKey: "tour.bugsBody", target: "tab" },
   { route: "bugs", titleKey: "tour.bugDetails", bodyKey: "tour.bugDetailsBody", target: "tab" },
-  { route: "new", titleKey: "tour.new", bodyKey: "tour.newBody", target: "tab" },
+  { route: "bugs", titleKey: "tour.new", bodyKey: "tour.newBody", target: "tab" },
+  { route: "duel", titleKey: "tour.arena", bodyKey: "tour.arenaBody", target: "tab" },
   { route: "bugdex", titleKey: "tour.bugdex", bodyKey: "tour.bugdexBody", target: "tab" },
   { route: "bugdex", titleKey: "tour.bugdexRewards", bodyKey: "tour.bugdexRewardsBody", target: "tab" },
   { route: "bugdex", titleKey: "tour.trade", bodyKey: "tour.tradeBody", target: "tab" },
@@ -33,7 +34,7 @@ const steps: Step[] = [
   { route: "settings", titleKey: "tour.settings", bodyKey: "tour.settingsBody", target: "settings" }
 ];
 
-const tabRoutes: Array<Extract<RouteName, "home" | "bugs" | "new" | "bugdex" | "leaderboard">> = ["home", "bugs", "new", "bugdex", "leaderboard"];
+const tabRoutes: Array<Extract<RouteName, "home" | "bugs" | "duel" | "bugdex" | "leaderboard">> = ["home", "bugs", "duel", "bugdex", "leaderboard"];
 
 export function HelpTourOverlay({ visible, onFinish, onNavigate }: Props) {
   const { t } = useI18n();
@@ -49,9 +50,9 @@ export function HelpTourOverlay({ visible, onFinish, onNavigate }: Props) {
     step.target === "settings"
       ? { height: 52, left: width - 66, top: 6, width: 52 }
       : {
-          height: step.route === "new" ? 92 : 76,
+          height: step.route === "duel" ? 92 : 76,
           left: bottomNavLeft + Math.max(0, tabIndex) * tabWidth + 2,
-          top: height - (step.route === "new" ? 104 : 90),
+          top: height - (step.route === "duel" ? 104 : 90),
           width: tabWidth - 4
         };
 

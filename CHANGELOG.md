@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.4
+
+- Actieve squad-potjes zijn nu ook zichtbaar onderaan de fullscreen arena bij normale 1v1 duels, Training en Solo Campaign.
+- Duel-starttekst verduidelijkt dat beide spelers hun eigen 30 seconden kunnen spelen.
+- Weekly bonus claim is robuuster: XP en BugDex reward worden samen afgehandeld.
+
 ## 2.2.3
 
 - Solo Campaign bosses zijn nu grote eigen boss-bugs met vijf HD designs, langere boss waves en veel meer HP.

@@ -106,22 +106,17 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     val compact = isCompactWidget(manager.getAppWidgetOptions(widgetId))
     val layout = if (compact) R.layout.bug_radar_widget_compact else R.layout.bug_radar_widget
     val views = RemoteViews(context.packageName, layout)
-    views.setViewVisibility(R.id.radarStatus, if (bug == null && !compact) View.VISIBLE else View.GONE)
+    views.setViewVisibility(R.id.radarStatus, View.GONE)
     views.setViewVisibility(R.id.radarBugImage, if (bug == null) View.GONE else View.VISIBLE)
     views.setViewVisibility(R.id.radarLabel, if (bug == null || compact) View.GONE else View.VISIBLE)
     views.setViewVisibility(R.id.radarQueueCount, if (stackCount > 1) View.VISIBLE else View.GONE)
     if (stackCount > 1) {
       views.setTextViewText(R.id.radarQueueCount, "x$stackCount")
     }
-    val tradeCount = requestCount(context, prefTradeRequestCount)
-    val duelCount = requestCount(context, prefDuelRequestCount)
-    val hasRequests = tradeCount > 0 || duelCount > 0
-    views.setViewVisibility(R.id.radarRequestIcon, if (hasRequests) View.VISIBLE else View.GONE)
-    views.setViewVisibility(R.id.radarRequestBadges, if (hasRequests) View.VISIBLE else View.GONE)
-    views.setViewVisibility(R.id.radarTradeBadge, if (tradeCount > 0) View.VISIBLE else View.GONE)
-    views.setViewVisibility(R.id.radarDuelBadge, if (duelCount > 0) View.VISIBLE else View.GONE)
-    views.setTextViewText(R.id.radarTradeBadge, if (compact) "R$tradeCount" else "Trade $tradeCount")
-    views.setTextViewText(R.id.radarDuelBadge, if (compact) "D$duelCount" else "Duel $duelCount")
+    views.setViewVisibility(R.id.radarRequestIcon, View.GONE)
+    views.setViewVisibility(R.id.radarRequestBadges, View.GONE)
+    views.setViewVisibility(R.id.radarTradeBadge, View.GONE)
+    views.setViewVisibility(R.id.radarDuelBadge, View.GONE)
     val auraRes = bug?.let { rarityAuraRes(it.rarity) }
     views.setViewVisibility(R.id.radarRarityAura, if (auraRes == null) View.GONE else View.VISIBLE)
     if (auraRes != null) {

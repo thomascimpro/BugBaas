@@ -1,6 +1,7 @@
 import { doc, getDoc, runTransaction } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
+import { BugDexDropResult, pickBugDexRewardEntry, grantBugDexReward } from "./bugDexService";
 import { badgesForUser, titleForPoints } from "./pointsService";
 import { weeklyMissionBonusXp, weeklyMissionXp } from "./rewardBalanceService";
 
@@ -191,6 +192,85 @@ export async function claimWeeklyMissionBonus(user: User, missions: WeeklyMissio
       totalPoints: updated.totalPoints
     });
     return updated;
+  });
+}
+
+export async function claimWeeklyMissionBonusWithReward(user: User, missions: WeeklyMission[]): Promise<{ drop: BugDexDropResult; user: User } | null> {
+  if (!weeklyMissionSetComplete(missions)) return null;
+  const bonusId = weeklyMissionBonusId(missions);
+  const claimKey = `${user.uid}:${bonusId}`;
+  const now = new Date().toISOString();
+
+  if (!isFirebaseConfigured) {
+    if (demoWeeklyClaims.has(claimKey)) return null;
+    const totalPoints = Math.max(0, user.totalPoints + weeklyMissionBonusXp);
+    const updated = { ...user, totalPoints, title: titleForPoints(totalPoints) };
+    updated.badges = badgesForUser(updated);
+    const drop = await grantBugDexReward(updated, "weekly_mission");
+    demoWeeklyClaims.add(claimKey);
+    return { drop, user: updated };
+  }
+
+  const userRef = doc(db, "users", user.uid);
+  const claimRef = doc(db, "users", user.uid, "weeklyMissionClaims", bonusId);
+  const rewardEntry = pickBugDexRewardEntry(user, "weekly_mission");
+  const rewardRef = doc(db, "users", user.uid, "bugdex", rewardEntry.id);
+
+  return runTransaction(db, async (transaction) => {
+    const userSnapshot = await transaction.get(userRef);
+    const claimSnapshot = await transaction.get(claimRef);
+    const rewardSnapshot = await transaction.get(rewardRef);
+    if (!userSnapshot.exists()) return null;
+
+    const existingClaim = claimSnapshot.exists() ? claimSnapshot.data() : null;
+    if (existingClaim?.rewardBugId) return null;
+
+    const current = userSnapshot.data() as User;
+    const shouldAwardXp = !existingClaim;
+    const totalPoints = shouldAwardXp ? Math.max(0, current.totalPoints + weeklyMissionBonusXp) : current.totalPoints;
+    const updated = { ...current, totalPoints, title: titleForPoints(totalPoints) };
+    updated.badges = badgesForUser(updated);
+
+    const existingReward = rewardSnapshot.exists() ? rewardSnapshot.data() as BugDexInventoryItem : null;
+    const item: BugDexInventoryItem = existingReward
+      ? {
+          ...existingReward,
+          count: existingReward.count + 1,
+          lastUnlockedAt: now,
+          sources: Array.from(new Set([...existingReward.sources, "weekly_mission"]))
+        }
+      : {
+          bugId: rewardEntry.id,
+          count: 1,
+          firstUnlockedAt: now,
+          lastUnlockedAt: now,
+          rarity: rewardEntry.rarity,
+          sources: ["weekly_mission"]
+        };
+
+    transaction.set(claimRef, {
+      id: bonusId,
+      missionIds: missions.map((mission) => mission.id),
+      rewardBugId: rewardEntry.id,
+      rewardGrantedAt: now,
+      rewardRarity: rewardEntry.rarity,
+      rewardType: "bugdex",
+      rewardXp: existingClaim?.rewardXp ?? weeklyMissionBonusXp,
+      claimedAt: existingClaim?.claimedAt ?? now
+    }, { merge: true });
+    transaction.set(rewardRef, item);
+    if (shouldAwardXp) {
+      transaction.update(userRef, {
+        badges: updated.badges,
+        title: updated.title,
+        totalPoints: updated.totalPoints
+      });
+    }
+
+    return {
+      drop: { rewardType: "bug", entry: rewardEntry, item, isNew: !existingReward, source: "weekly_mission" },
+      user: updated
+    };
   });
 }
 
