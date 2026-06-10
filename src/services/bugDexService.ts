@@ -18,6 +18,8 @@ export type BugDexDropSource =
   | "weekly_mission"
   | "weekly_mission_common"
   | "weekly_mission_rare"
+  | "solo_boss_common"
+  | "solo_boss_rare"
   | "solo_campaign_clear"
   | "duel_win"
   | "combine";
@@ -63,6 +65,8 @@ const dropChances: Record<BugDexDropSource, number> = {
   weekly_mission: 1,
   weekly_mission_common: 1,
   weekly_mission_rare: 1,
+  solo_boss_common: 1,
+  solo_boss_rare: 1,
   solo_campaign_clear: 1,
   duel_win: 1,
   combine: 1
@@ -80,6 +84,8 @@ const rarityWeights: Record<BugDexDropSource, Array<[BugDexRarity, number]>> = {
   weekly_mission: [["Zeldzaam", 54], ["Episch", 36], ["Legendarisch", 9.6], ["Mythisch", 0.4]],
   weekly_mission_common: [["Gewoon", 100]],
   weekly_mission_rare: [["Zeldzaam", 100]],
+  solo_boss_common: [["Gewoon", 100]],
+  solo_boss_rare: [["Zeldzaam", 100]],
   solo_campaign_clear: [["Zeldzaam", 100]],
   duel_win: [["Gewoon", 68], ["Zeldzaam", 24], ["Episch", 6.5], ["Legendarisch", 1.1], ["Mythisch", 0.4]],
   combine: [["Zeldzaam", 100]]
