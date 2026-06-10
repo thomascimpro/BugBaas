@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.23
+
+- Duel toont na jouw score nu een wacht-op-resultaat popup als de andere speler nog moet spelen, en toont de uitslag als popup zodra beide scores geregistreerd zijn.
+- Weekly bonus claim geeft nu ook XP tijdens de claim, zodat de weekly reward XP zichtbaar en opgeslagen wordt.
+- Weekly mission XP is verlaagd van 15 naar 10 per missie; de complete weekly bonus geeft +10 XP naast de BugDex reward.
+
 ## 2.1.22
 
 - Sticky helpers geven nu een korte slow/pauze en doen iets duidelijker hit-damage.

@@ -148,10 +148,11 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     if (weeklyBonusClaiming || weeklyBonusClaimed || !weeklyMissionSetComplete(missions)) return;
     setWeeklyBonusClaiming(true);
     try {
-      const canClaim = await claimWeeklyMissionBonus(user, missions);
-      if (!canClaim) return;
-      setWeeklyBonusClaimed(true);
+      const updated = await claimWeeklyMissionBonus(user, missions);
+      if (!updated) return;
+      onUserUpdated?.(updated);
       onRewardDrop?.(await grantBugDexReward(user, "weekly_mission"));
+      setWeeklyBonusClaimed(true);
     } finally {
       setWeeklyBonusClaiming(false);
     }

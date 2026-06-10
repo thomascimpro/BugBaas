@@ -14,7 +14,8 @@ Huidige waarden:
 | Duel verliezen | 5 |
 | Duel winnen | 10 |
 | Movement radar bug | 3 per bug |
-| Weekly mission claim | 15 |
+| Weekly mission claim | 10 |
+| Weekly all-3 bonus claim | 10 + BugDex reward |
 | Foreground catch common | 1 |
 | Foreground catch rare | 3 |
 | Foreground catch epic | 6 |
@@ -24,7 +25,7 @@ Huidige waarden:
 Procedure:
 
 1. Pas alleen `rewardBalanceService.ts` aan.
-2. Controleer alle callsites met `rg "duelWinXp|weeklyMissionXp|foregroundCatchXpByRarity|movementRadarXpPerBug|dailyLoginXp" src`.
+2. Controleer alle callsites met `rg "duelWinXp|weeklyMissionXp|weeklyMissionBonusXp|foregroundCatchXpByRarity|movementRadarXpPerBug|dailyLoginXp" src`.
 3. Houd spamgevoelige acties laag: duel loss/win, foreground catch en repeatable movement.
 4. Geef weekly/daily XP pas na claim, niet bij openen van modal of voorbereiden van reward.
 5. Voeg een korte `CHANGELOG.md` regel toe als XP verandert.
