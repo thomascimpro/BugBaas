@@ -95,6 +95,72 @@ Procedure:
 4. Mythic specials mogen utility geven zoals freeze, chain of shield, maar geen permanente lock.
 5. Na balance-wijziging altijd training duel handmatig spelen en scoregevoel vergelijken met een squad zonder Mythic.
 
+## Solo Campaign balance
+
+Bronbestanden:
+
+- `src/services/soloCampaignBalance.ts`
+- `scripts/solo_campaign_balance.mjs`
+
+Huidige structuur:
+
+- 5 levels.
+- 20 waves totaal.
+- 4 waves per level.
+- Elke 4e wave is een boss wave.
+- Elke wave duurt 30 seconden en gebruikt dezelfde duel-regels als training.
+- Solo geeft geen rewards; het is bedoeld als oefen/game-mode.
+
+Target score:
+
+```ts
+8 + level * 2 + waveInLevel * 2 + Math.floor((level - 1) * waveInLevel * 0.55) + bossBonus
+```
+
+Boss bonus:
+
+```ts
+boss ? 5 + level : 0
+```
+
+BugBot score blijft net onder de target:
+
+- Normal wave: `targetScore - 2`
+- Boss wave: `targetScore - 1`
+
+Doel per profiel:
+
+| Profiel | Verwachting |
+| --- | --- |
+| Beginner zonder squad | Training leren; campaign gates meestal niet halen. |
+| Gemiddeld met lage squad | Eerste normale waves halen, boss wave 1 soms halen. |
+| Skilled met epic squad | Meerdere boss gates halen, late levels worden spannend. |
+| Skilled met mythic squad | Campaign kan gehaald worden, maar eindboss is niet gratis. |
+
+Balanscheck:
+
+```powershell
+node scripts\solo_campaign_balance.mjs
+```
+
+Laatste simulatie-uitkomst voor boss gates:
+
+| Boss wave | Target | Average low squad | Skilled epic squad | Skilled mythic squad |
+| --- | ---: | ---: | ---: | ---: |
+| 4 | 24 | 11% | 100% | 100% |
+| 8 | 29 | 0% | 89% | 100% |
+| 12 | 34 | 0% | 63% | 100% |
+| 16 | 39 | 0% | 28% | 89% |
+| 20 | 44 | 0% | 0% | 63% |
+
+Procedure:
+
+1. Pas `soloCampaignBalance.ts` aan.
+2. Houd `scripts/solo_campaign_balance.mjs` gelijk aan dezelfde targetformule.
+3. Run de simulator en controleer dat winrate duidelijk stijgt met betere techniek/squad.
+4. Boss wave 20 mag zwaar zijn, maar skilled mythic moet rond 50-70% blijven.
+5. Update deze tabel en `CHANGELOG.md` bij elke balance-wijziging.
+
 ## Release check bij balance
 
 Voor elke release met balance-wijziging:
