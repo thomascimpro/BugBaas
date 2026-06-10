@@ -208,7 +208,9 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [hitCounts, setHitCounts] = useState<Record<string, number>>({});
   const [caughtBugIds, setCaughtBugIds] = useState<string[]>([]);
   const [helperImpacts, setHelperImpacts] = useState<HelperImpact[]>([]);
-  const [requesterStartAtByDuelId, setRequesterStartAtByDuelId] = useState<Record<string, string>>({});
+  const [localStartAtByDuelId, setLocalStartAtByDuelId] = useState<Record<string, string>>({});
+  const [acknowledgedWaitingDuelIds, setAcknowledgedWaitingDuelIds] = useState<Set<string>>(new Set());
+  const [dismissedResultDuelIds, setDismissedResultDuelIds] = useState<Set<string>>(new Set());
   const submittedRef = useRef(false);
   const scoreRef = useRef(0);
   const caughtBugIdsRef = useRef<string[]>([]);
@@ -313,19 +315,23 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     hitCountsRef.current = hitCounts;
   }, [hitCounts]);
 
-  const activeRequesterStartAt = activeDuel ? requesterStartAtByDuelId[activeDuel.id] : "";
-  const requesterNeedsManualStart = Boolean(activeDuel?.status === "accepted" && activeDuel.fromUserId === user.uid && !activeRequesterStartAt);
-  const playableDuel = activeDuel?.status === "accepted" && activeRequesterStartAt
-    ? { ...activeDuel, startAt: activeRequesterStartAt }
+  const activeLocalStartAt = activeDuel ? localStartAtByDuelId[activeDuel.id] : "";
+  const activeDuelOwnScore = activeDuel?.scores?.[user.uid];
+  const acceptedDuelExpired = Boolean(activeDuel?.status === "accepted" && activeDuel.startAt && Date.parse(activeDuel.startAt) + activeDuel.durationMs <= now);
+  const requesterNeedsManualStart = Boolean(activeDuel?.status === "accepted" && activeDuel.fromUserId === user.uid && !activeLocalStartAt);
+  const missedAutoStartNeedsManualStart = Boolean(activeDuel?.status === "accepted" && !activeDuelOwnScore && !activeLocalStartAt && !requesterNeedsManualStart && acceptedDuelExpired);
+  const playerNeedsManualStart = requesterNeedsManualStart || missedAutoStartNeedsManualStart;
+  const playableDuel = activeDuel?.status === "accepted" && activeLocalStartAt
+    ? { ...activeDuel, startAt: activeLocalStartAt }
     : activeDuel;
 
   useEffect(() => {
     const runningDuel = trainingDuel ?? activeDuel;
-    if (!runningDuel || runningDuel.status !== "accepted" || (!trainingDuel && requesterNeedsManualStart)) return () => undefined;
+    if (!runningDuel || runningDuel.status !== "accepted" || (!trainingDuel && playerNeedsManualStart)) return () => undefined;
     const interval = setInterval(() => {
       const timestamp = Date.now();
       setNow(timestamp);
-      const effectiveStartAt = trainingDuel ? runningDuel.startAt : activeRequesterStartAt || runningDuel.startAt;
+      const effectiveStartAt = trainingDuel ? runningDuel.startAt : activeLocalStartAt || runningDuel.startAt;
       const startAt = effectiveStartAt ? Date.parse(effectiveStartAt) : timestamp;
       const endAt = startAt + runningDuel.durationMs;
       if (timestamp >= endAt) {
@@ -343,7 +349,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       runHelperTowers(runningDuel, timestamp);
     }, duelGameTickMs);
     return () => clearInterval(interval);
-  }, [activeDuel?.id, activeDuel?.status, activeDuel?.startAt, activeDuel?.durationMs, trainingDuel?.id, trainingDuel?.startAt, trainingDuel?.durationMs, activeRequesterStartAt, requesterNeedsManualStart, assist, t, user]);
+  }, [activeDuel?.id, activeDuel?.status, activeDuel?.startAt, activeDuel?.durationMs, trainingDuel?.id, trainingDuel?.startAt, trainingDuel?.durationMs, activeLocalStartAt, playerNeedsManualStart, assist, t, user]);
 
   async function refreshDuels() {
     setDuels(await listBugSmashDuels(user));
@@ -578,7 +584,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     if (!activeDuel) return;
     resetRunState();
     setNow(Date.now());
-    setRequesterStartAtByDuelId((current) => ({
+    setLocalStartAtByDuelId((current) => ({
       ...current,
       [activeDuel.id]: new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString()
     }));
@@ -628,12 +634,15 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const activeScore = activeDuel?.scores?.[user.uid];
   const opponentId = activeDuel ? activeDuel.fromUserId === user.uid ? activeDuel.toUserId : activeDuel.fromUserId : "";
   const opponentScore = opponentId ? activeDuel?.scores?.[opponentId] : undefined;
+  const awaitingOpponentResult = Boolean(activeDuel?.status === "accepted" && activeScore && !opponentScore);
+  const showWaitingResultModal = Boolean(activeDuel && awaitingOpponentResult && !acknowledgedWaitingDuelIds.has(activeDuel.id));
+  const showResultModal = Boolean(activeDuel?.status === "completed" && isDuelParticipant(activeDuel, user) && !dismissedResultDuelIds.has(activeDuel.id));
   const gameDuel = trainingDuel ?? playableDuel;
   const countdown = gameDuel?.status === "accepted" && gameDuel.startAt ? Math.max(0, Math.ceil((Date.parse(gameDuel.startAt) - now) / 1000)) : 0;
   const remainingSeconds = gameDuel?.status === "accepted" && gameDuel.startAt ? Math.max(0, Math.ceil((Date.parse(gameDuel.startAt) + gameDuel.durationMs - now) / 1000)) : 0;
   const activeDuelScore = activeScore?.score ?? (submittedRef.current ? score + duelBonusScore(score, assist) : score);
   const incomingPendingDuel = activeDuel?.status === "pending" && activeDuel.toUserId === user.uid;
-  const fullscreenGame = Boolean(trainingDuel) || playableDuel?.status === "accepted" && !requesterNeedsManualStart;
+  const fullscreenGame = Boolean(trainingDuel) || playableDuel?.status === "accepted" && !playerNeedsManualStart && !awaitingOpponentResult;
   const gameScore = trainingDuel && submittedRef.current ? score + duelBonusScore(score, assist) : trainingDuel ? score : activeDuelScore;
 
   if (fullscreenGame && gameDuel) {
@@ -736,7 +745,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               <Text style={styles.cardTitle}>{incomingPendingDuel ? t("duel.incomingTitle", { name: activeDuel.fromUserName }) : opponentLabel(activeDuel, user)}</Text>
               <Text style={styles.statusText}>{incomingPendingDuel ? t("duel.incomingStatus") : statusLabel(activeDuel, t)}</Text>
             </View>
-            {activeDuel.status === "accepted" ? <Text style={styles.timerText}>{remainingSeconds}s</Text> : <Text style={styles.pendingBadge}>{t("duel.pendingBadge")}</Text>}
+            {activeDuel.status === "accepted" && !awaitingOpponentResult ? <Text style={styles.timerText}>{remainingSeconds}s</Text> : <Text style={styles.pendingBadge}>{t("duel.pendingBadge")}</Text>}
           </View>
 
           {activeDuel.status === "pending" && activeDuel.toUserId === user.uid && (
@@ -761,7 +770,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             </View>
           )}
 
-          {activeDuel.status === "accepted" && requesterNeedsManualStart && (
+          {activeDuel.status === "accepted" && playerNeedsManualStart && (
             <View style={styles.startPanel}>
               <Text style={styles.startTitle}>{t("duel.readyTitle")}</Text>
               <Text style={styles.startBody}>{t("duel.readyBody", { name: opponentLabel(activeDuel, user) })}</Text>
@@ -771,7 +780,15 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             </View>
           )}
 
-          {activeDuel.status === "accepted" && !requesterNeedsManualStart && playableDuel && (
+          {awaitingOpponentResult && (
+            <View style={styles.waitingPanel}>
+              <Text style={styles.resultTitle}>{t("duel.waitingResultTitle")}</Text>
+              <Text style={styles.noticeText}>{t("duel.waitingResultBody", { name: opponentLabel(activeDuel, user) })}</Text>
+              <Text style={styles.resultLine}>{t("duel.yourScore", { score: activeDuelScore })}</Text>
+            </View>
+          )}
+
+          {activeDuel.status === "accepted" && !playerNeedsManualStart && !awaitingOpponentResult && playableDuel && (
             <>
               <View style={styles.scoreRow}>
                 <Text style={styles.scoreText}>{t("duel.yourScore", { score: activeDuelScore })}</Text>
@@ -878,7 +895,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           </View>
         </View>
       </Modal>
-      {activeDuel?.status === "accepted" && requesterNeedsManualStart && (
+      {activeDuel?.status === "accepted" && playerNeedsManualStart && (
         <Modal animationType="fade" transparent visible onRequestClose={startAcceptedDuel}>
           <View style={styles.startModalBackdrop}>
             <View style={styles.startModalCard}>
@@ -887,6 +904,47 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               <Pressable style={sharedStyles.button} onPress={startAcceptedDuel}>
                 <Text style={sharedStyles.buttonText}>{t("duel.startNow")}</Text>
               </Pressable>
+            </View>
+          </View>
+        </Modal>
+      )}
+      {activeDuel && (
+        <Modal animationType="fade" transparent visible={showWaitingResultModal} onRequestClose={() => setAcknowledgedWaitingDuelIds((current) => new Set([...current, activeDuel.id]))}>
+          <View style={styles.startModalBackdrop}>
+            <View style={styles.startModalCard}>
+              <Text style={styles.startTitle}>{t("duel.waitingResultTitle")}</Text>
+              <Text style={styles.startBody}>{t("duel.waitingResultBody", { name: opponentLabel(activeDuel, user) })}</Text>
+              <Text style={styles.resultLine}>{t("duel.yourScore", { score: activeDuelScore })}</Text>
+              <Pressable style={sharedStyles.button} onPress={() => setAcknowledgedWaitingDuelIds((current) => new Set([...current, activeDuel.id]))}>
+                <Text style={sharedStyles.buttonText}>{t("common.ok")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      )}
+      {activeDuel?.status === "completed" && (
+        <Modal animationType="fade" transparent visible={showResultModal} onRequestClose={() => setDismissedResultDuelIds((current) => new Set([...current, activeDuel.id]))}>
+          <View style={styles.startModalBackdrop}>
+            <View style={styles.startModalCard}>
+              <Text style={styles.startTitle}>{t("duel.resultReadyTitle")}</Text>
+              <Text style={styles.startBody}>{resultLabel(activeDuel, user, t)}</Text>
+              <Text style={styles.resultLine}>{activeDuel.fromUserName}: {activeDuel.scores?.[activeDuel.fromUserId]?.score ?? 0}</Text>
+              <Text style={styles.resultLine}>{activeDuel.toUserName}: {activeDuel.scores?.[activeDuel.toUserId]?.score ?? 0}</Text>
+              <Text style={styles.noticeText}>{t("duel.resultReadyBody")}</Text>
+              {activeDuel.winnerId && isDuelParticipant(activeDuel, user) && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid) ? (
+                <Pressable disabled={busy} style={sharedStyles.button} onPress={claimReward}>
+                  <Text style={sharedStyles.buttonText}>{busy ? "..." : activeDuel.winnerId === user.uid ? t("duel.claimReward") : t("duel.claimXp")}</Text>
+                </Pressable>
+              ) : (
+                <Pressable style={sharedStyles.button} onPress={() => setDismissedResultDuelIds((current) => new Set([...current, activeDuel.id]))}>
+                  <Text style={sharedStyles.buttonText}>{t("common.ok")}</Text>
+                </Pressable>
+              )}
+              {activeDuel.winnerId && isDuelParticipant(activeDuel, user) && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid) && (
+                <Pressable style={sharedStyles.secondaryButton} onPress={() => setDismissedResultDuelIds((current) => new Set([...current, activeDuel.id]))}>
+                  <Text style={sharedStyles.secondaryButtonText}>{t("common.ok")}</Text>
+                </Pressable>
+              )}
             </View>
           </View>
         </Modal>

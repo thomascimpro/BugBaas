@@ -2,7 +2,7 @@ import { doc, getDoc, runTransaction } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
 import { badgesForUser, titleForPoints } from "./pointsService";
-import { weeklyMissionXp } from "./rewardBalanceService";
+import { weeklyMissionBonusXp, weeklyMissionXp } from "./rewardBalanceService";
 
 export type WeeklyMission = {
   id: string;
@@ -120,7 +120,7 @@ export function weeklyMissionSet(user: User, bugs: BugReport[], options: { duels
       title: template.title,
       target: template.target,
       progress,
-      reward: template.reward
+      reward: `+${weeklyMissionXp} XP`
     };
   });
 }
@@ -153,29 +153,43 @@ export async function isWeeklyMissionBonusClaimed(user: User, missions: WeeklyMi
   return (await getDoc(doc(db, "users", user.uid, "weeklyMissionClaims", bonusId))).exists();
 }
 
-export async function claimWeeklyMissionBonus(user: User, missions: WeeklyMission[]): Promise<boolean> {
-  if (!weeklyMissionSetComplete(missions)) return false;
+export async function claimWeeklyMissionBonus(user: User, missions: WeeklyMission[]): Promise<User | null> {
+  if (!weeklyMissionSetComplete(missions)) return null;
   const bonusId = weeklyMissionBonusId(missions);
   const claimKey = `${user.uid}:${bonusId}`;
   const now = new Date().toISOString();
 
   if (!isFirebaseConfigured) {
-    if (demoWeeklyClaims.has(claimKey)) return false;
+    if (demoWeeklyClaims.has(claimKey)) return null;
     demoWeeklyClaims.add(claimKey);
-    return true;
+    const totalPoints = Math.max(0, user.totalPoints + weeklyMissionBonusXp);
+    const updated = { ...user, totalPoints, title: titleForPoints(totalPoints) };
+    updated.badges = badgesForUser(updated);
+    return updated;
   }
 
+  const userRef = doc(db, "users", user.uid);
   const claimRef = doc(db, "users", user.uid, "weeklyMissionClaims", bonusId);
   return runTransaction(db, async (transaction) => {
-    const claimSnapshot = await transaction.get(claimRef);
-    if (claimSnapshot.exists()) return false;
+    const [userSnapshot, claimSnapshot] = await Promise.all([transaction.get(userRef), transaction.get(claimRef)]);
+    if (!userSnapshot.exists() || claimSnapshot.exists()) return null;
+    const current = userSnapshot.data() as User;
+    const totalPoints = Math.max(0, current.totalPoints + weeklyMissionBonusXp);
+    const updated = { ...current, totalPoints, title: titleForPoints(totalPoints) };
+    updated.badges = badgesForUser(updated);
     transaction.set(claimRef, {
       id: bonusId,
       missionIds: missions.map((mission) => mission.id),
       rewardType: "bugdex",
+      rewardXp: weeklyMissionBonusXp,
       claimedAt: now
     });
-    return true;
+    transaction.update(userRef, {
+      badges: updated.badges,
+      title: updated.title,
+      totalPoints: updated.totalPoints
+    });
+    return updated;
   });
 }
 
