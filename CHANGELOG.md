@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.14
+
+- Bug Squad helpers werken weer tijdens duel preplay en doen weer consequent damage per cooldown.
+- Duel targets blijven tot vlak voor 0 seconden spawnen en de target pool is verhoogd, zodat snelle spelers/helpers de arena niet vroeg leegmaken.
+- Solo Campaign powerups zijn actiever gebalanceerd: Lamp Focus geeft een kleine tapreductie plus periodieke lamp-hit; Bug Bomb is een handmatige beperkte AOE tijdens de wave.
+- Duel XP blijft 10 XP voor winst en 5 XP voor verlies, maar telt nu maximaal 1x per dag per tegenstander; extra duels mogen wel gespeeld worden zonder extra reward.
+- Actieve duel-blokkade toont hoeveel bugs jij in dat lopende duel hebt gepakt.
+
 ## 2.2.13
 
 - Duel waiting hang gefixt: na je eigen ronde wordt de lokale score direct gebruikt om het wacht-op-andere-speler scherm te tonen.
