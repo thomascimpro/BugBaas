@@ -45,6 +45,13 @@ const squadJarImage = require("../../assets/generated/bug-squad-empty-jar-hd.png
 const soloCampaignImage = require("../../assets/generated/solo-duel-campaign-hd.jpg");
 const soloPowerupLampImage = require("../../assets/generated/solo-powerup-lamp-hd.jpg");
 const soloPowerupBombImage = require("../../assets/generated/solo-powerup-bomb-hd.jpg");
+const soloBossImages = {
+  1: require("../../assets/generated/solo-boss-stag-hd.png"),
+  2: require("../../assets/generated/solo-boss-mantis-hd.png"),
+  3: require("../../assets/generated/solo-boss-scarab-hd.png"),
+  4: require("../../assets/generated/solo-boss-hornet-hd.png"),
+  5: require("../../assets/generated/solo-boss-atlas-hd.png")
+};
 const duelEffectSprites = {
   fireball: require("../../assets/generated/duel_effect_fireball_hd.png"),
   freeze: require("../../assets/generated/duel_effect_iceburst_hd.png"),
@@ -240,6 +247,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const lastCatchAtRef = useRef(0);
   const lastHitSoundAtRef = useRef(0);
   const soloBossRewardedRef = useRef(new Set<string>());
+  const soloCampaignClearRewardedRef = useRef(new Set<string>());
   const assist = useMemo(() => bugSmashDuelBalanceForUser({ activeBugSquad: activeSquadIds }), [activeSquadIds]);
   const opponents = useMemo(() => {
     const items = users.filter((item) => item.uid !== user.uid);
@@ -506,7 +514,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     const entry = entryByBugId(bugId);
     if (!entry || caughtBugIdsRef.current.includes(bugId)) return;
     const targetIndex = runningDuel.bugIds.indexOf(bugId);
-    const requiredTaps = requiredTapsForTarget(entry.rarity, assist, targetIndex, soloTapMultiplier);
+    const bossLevel = soloBossLevelForTarget(runningDuel, targetIndex, soloCampaign);
+    const requiredTaps = requiredTapsForTarget(entry.rarity, assist, targetIndex, soloTapMultiplier, bossLevel);
     const currentHits = hitCountsRef.current;
     const nextHits = (currentHits[bugId] ?? 0) + 1;
     hitCountsRef.current = { ...currentHits, [bugId]: nextHits };
@@ -525,14 +534,14 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     comboRef.current = catchAt - lastCatchAtRef.current <= assist.comboGraceMs ? comboRef.current + 1 : 1;
     lastCatchAtRef.current = catchAt;
     caughtBugIdsRef.current = caughtBugIdsRef.current.includes(bugId) ? caughtBugIdsRef.current : [...caughtBugIdsRef.current, bugId];
-    scoreRef.current += scoreByRarity[entry.rarity] + duelCatchBonusPoints(entry.rarity, bugId, assist) + duelComboBonusPoint(comboRef.current);
+    scoreRef.current += scoreByRarity[entry.rarity] + soloBossScoreBonus(bossLevel) + duelCatchBonusPoints(entry.rarity, bugId, assist) + duelComboBonusPoint(comboRef.current);
     setCaughtBugIds(caughtBugIdsRef.current);
     setScore(scoreRef.current);
   }
 
   function runHelperTowers(duel: BugSmashDuel, timestamp: number) {
     if (!activeSquadBonuses.length || !isRunning(duel, timestamp)) return;
-    const renderedTargets = collectRenderedTargets(duel, timestamp, caughtBugIdsRef.current, assist, frozenTargetsRef.current, targetTimeOffsetsRef.current);
+    const renderedTargets = collectRenderedTargets(duel, timestamp, caughtBugIdsRef.current, assist, frozenTargetsRef.current, targetTimeOffsetsRef.current, soloCampaign);
     if (!renderedTargets.length) return;
 
     activeSquadBonuses.forEach((bonus, helperIndex) => {
@@ -670,7 +679,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       createdAt: timestamp,
       updatedAt: timestamp,
       startAt: new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString(),
-      durationMs: bugSmashDuelDurationMs,
+      durationMs: config.boss ? bugSmashDuelDurationMs + 15000 : bugSmashDuelDurationMs,
       scores: {},
       rewardClaimedBy: []
     });
@@ -697,12 +706,13 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       setSoloRewardNotice(t("duel.powerupEmpty"));
       return;
     }
-    const targets = collectRenderedTargets(gameDuel, now, caughtBugIdsRef.current, assist, frozenTargetsRef.current, targetTimeOffsetsRef.current).slice(0, 6);
+    const targets = collectRenderedTargets(gameDuel, now, caughtBugIdsRef.current, assist, frozenTargetsRef.current, targetTimeOffsetsRef.current, soloCampaign).slice(0, 6);
     setSoloBombFlash(true);
     setTimeout(() => setSoloBombFlash(false), 620);
     setSoloRewardNotice(t("duel.powerupBombUsed"));
     targets.forEach((target) => {
-      const required = requiredTapsForTarget(target.entry.rarity, assist, target.index, soloTapMultiplier);
+      const bossLevel = soloBossLevelForTarget(gameDuel, target.index, soloCampaign);
+      const required = requiredTapsForTarget(target.entry.rarity, assist, target.index, soloTapMultiplier, bossLevel);
       const hits = hitCountsRef.current[target.bugId] ?? 0;
       for (let hit = hits; hit < required; hit += 1) applyBugHit(target.bugId, "helper", now, gameDuel);
     });
@@ -750,6 +760,19 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     }).catch(() => undefined);
   }, [soloCampaignWon, soloCampaign?.boss, soloCampaign?.level, trainingDuel?.id, user.uid, t]);
 
+  useEffect(() => {
+    if (!soloCampaignComplete || !trainingDuel) return;
+    const rewardKey = trainingDuel.id;
+    if (soloCampaignClearRewardedRef.current.has(rewardKey)) return;
+    soloCampaignClearRewardedRef.current.add(rewardKey);
+    void grantBugDexReward(user, "solo_campaign_clear").then((drop) => {
+      onRewardDrop?.(drop);
+      setSoloRewardNotice(t("duel.soloCampaignClearReward"));
+    }).catch(() => {
+      setSoloRewardNotice(t("duel.soloCampaignClearRewardUsed"));
+    });
+  }, [onRewardDrop, soloCampaignComplete, trainingDuel?.id, user, t]);
+
   if (fullscreenGame && gameDuel) {
     return (
       <View style={styles.fullscreenGame}>
@@ -783,7 +806,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             <Text style={styles.countdown}>{countdown}</Text>
           ) : isRunning(gameDuel, now) ? (
             <>
-              {renderTargets(gameDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug)}
+              {renderTargets(gameDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug, soloCampaign)}
               {renderHelperImpacts(helperImpacts)}
               {renderHelperTowers(activeSquadBonuses, helperCooldownAtRef.current, now, t)}
               {soloBombFlash && (
@@ -805,7 +828,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                   <Text style={styles.soloRewardText}>{soloRewardNotice}</Text>
                 </View>
               ) : null}
-              <Pressable style={sharedStyles.button} onPress={soloCampaign ? () => startSoloCampaign(soloCampaignComplete ? 1 : soloCampaignWon ? soloCampaign.wave + 1 : soloCampaign.wave) : startTraining}>
+              <Pressable style={sharedStyles.button} onPress={soloCampaign ? () => startSoloCampaign(soloCampaignComplete ? 1 : soloCampaignWon ? soloCampaign.wave + 1 : 1) : startTraining}>
                 <Text style={sharedStyles.buttonText}>{soloCampaign ? soloCampaignComplete ? t("duel.soloRestart") : soloCampaignWon ? t("duel.soloNextWave") : t("duel.soloRetry") : t("duel.trainingRetry")}</Text>
               </Pressable>
               <Pressable style={sharedStyles.secondaryButton} onPress={stopTraining}>
@@ -1237,21 +1260,24 @@ function renderTargets(
   hitFeedbackValues: Map<string, Animated.Value>,
   frozenTargets: Record<string, FrozenTarget>,
   targetTimeOffsets: Record<string, number>,
-  onHit: (bugId: string) => void
+  onHit: (bugId: string) => void,
+  soloCampaign?: SoloCampaignConfig | null
 ) {
-  return collectRenderedTargets(duel, timestamp, caughtBugIds, assist, frozenTargets, targetTimeOffsets)
+  return collectRenderedTargets(duel, timestamp, caughtBugIds, assist, frozenTargets, targetTimeOffsets, soloCampaign)
     .map(({ bugId, entry, index, motion }) => {
     const frozen = Boolean(frozenTargets[bugId] && timestamp < frozenTargets[bugId].until);
-    const requiredTaps = requiredTapsForTarget(entry.rarity, assist, index);
+    const bossLevel = soloBossLevelForTarget(duel, index, soloCampaign);
+    const requiredTaps = requiredTapsForTarget(entry.rarity, assist, index, 1, bossLevel);
     const hits = hitCounts[bugId] ?? 0;
     const feedback = hitFeedbackValues.get(bugId);
-    const targetSize = Math.round(46 * assist.hitboxMultiplier * targetHitboxMultiplierForRarity(entry.rarity));
-    const bugArtSize = Math.min(46, Math.round(38 * targetHitboxMultiplierForRarity(entry.rarity)));
+    const targetSize = bossLevel ? 112 + bossLevel * 7 : Math.round(46 * assist.hitboxMultiplier * targetHitboxMultiplierForRarity(entry.rarity));
+    const bugArtSize = bossLevel ? targetSize - 12 : Math.min(46, Math.round(38 * targetHitboxMultiplierForRarity(entry.rarity)));
     return (
       <Pressable
         key={bugId}
         style={[
           styles.target,
+          bossLevel > 0 && styles.bossTarget,
           frozen && styles.targetFrozen,
           {
             borderColor: rarityColors[entry.rarity],
@@ -1270,7 +1296,14 @@ function renderTargets(
             <Text style={styles.targetFreezeText}>TIME</Text>
           </View>
         )}
-        <DuelTargetBugArt bugId={bugId} size={bugArtSize} />
+        {bossLevel > 0 ? (
+          <>
+            <Image accessibilityIgnoresInvertColors resizeMode="contain" source={soloBossImageForLevel(bossLevel)} style={{ height: bugArtSize, width: bugArtSize }} />
+            <Text style={styles.bossTargetLabel}>BOSS L{bossLevel}</Text>
+          </>
+        ) : (
+          <DuelTargetBugArt bugId={bugId} size={bugArtSize} />
+        )}
         <View style={styles.hitTrack}>
           <View style={[styles.hitFill, { backgroundColor: rarityColors[entry.rarity], width: `${Math.min(100, (hits / requiredTaps) * 100)}%` }]} />
         </View>
@@ -1285,7 +1318,8 @@ function collectVisibleTargets(
   caughtBugIds: string[],
   assist: BugSmashDuelBalance,
   frozenTargets: Record<string, FrozenTarget> = {},
-  targetTimeOffsets: Record<string, number> = {}
+  targetTimeOffsets: Record<string, number> = {},
+  soloCampaign?: SoloCampaignConfig | null
 ): VisibleDuelTarget[] {
   const startAt = duel.startAt ? Date.parse(duel.startAt) : timestamp;
   const elapsed = timestamp - startAt;
@@ -1293,11 +1327,12 @@ function collectVisibleTargets(
     if (caughtBugIds.includes(bugId)) return [];
     const entry = entryByBugId(bugId);
     if (!entry) return [];
+    const bossLevel = soloBossLevelForTarget(duel, index, soloCampaign);
     const frozenTarget = frozenTargets[bugId];
     const frozen = Boolean(frozenTarget && timestamp < frozenTarget.until);
     const motion = frozen && frozenTarget
       ? frozenTarget.motion
-      : targetMotion(index, duel.seed, elapsed - (targetTimeOffsets[bugId] ?? 0), entry.rarity, assist);
+      : targetMotion(index, duel.seed, elapsed - (targetTimeOffsets[bugId] ?? 0), entry.rarity, assist, bossLevel);
     if (!motion.visible) return [];
     return [{ bugId, entry, frozen, index, motion }];
   });
@@ -1309,10 +1344,11 @@ function collectRenderedTargets(
   caughtBugIds: string[],
   assist: BugSmashDuelBalance,
   frozenTargets: Record<string, FrozenTarget> = {},
-  targetTimeOffsets: Record<string, number> = {}
+  targetTimeOffsets: Record<string, number> = {},
+  soloCampaign?: SoloCampaignConfig | null
 ): VisibleDuelTarget[] {
-  return collectVisibleTargets(duel, timestamp, caughtBugIds, assist, frozenTargets, targetTimeOffsets)
-    .sort((a, b) => targetPriority(b.entry.rarity, b.motion.progress) - targetPriority(a.entry.rarity, a.motion.progress))
+  return collectVisibleTargets(duel, timestamp, caughtBugIds, assist, frozenTargets, targetTimeOffsets, soloCampaign)
+    .sort((a, b) => targetPriority(b.entry.rarity, b.motion.progress, soloBossLevelForTarget(duel, b.index, soloCampaign)) - targetPriority(a.entry.rarity, a.motion.progress, soloBossLevelForTarget(duel, a.index, soloCampaign)))
     .slice(0, maxVisibleDuelTargets);
 }
 
@@ -2094,20 +2130,26 @@ function MythicSpecialEffect({
   );
 }
 
-function targetPriority(rarity: BugDexRarity, progress: number) {
+function targetPriority(rarity: BugDexRarity, progress: number, bossLevel = 0) {
   const rarityValue = scoreByRarity[rarity];
   const urgency = progress > 0.72 ? 2 : progress > 0.48 ? 1 : 0;
-  return rarityValue + urgency;
+  return rarityValue + urgency + bossLevel * 20;
 }
 
-function targetMotion(index: number, seed: number, elapsedMs: number, rarity: BugDexRarity, assist: BugSmashDuelBalance) {
+function targetMotion(index: number, seed: number, elapsedMs: number, rarity: BugDexRarity, assist: BugSmashDuelBalance, bossLevel = 0) {
   const lane = (index * 37 + seed) % 82;
   const wave = (index % 5) + 2;
   const rarityLifetime = rarity === "Gewoon" ? 3900 : rarity === "Zeldzaam" ? 5000 : rarity === "Episch" ? 6200 : rarity === "Legendarisch" ? 7400 : 8600;
-  const duration = rarityLifetime * assist.speedMultiplier;
-  const spawnStart = index * 780 * assist.targetSpacingMultiplier + ((seed + index * 173) % 420);
+  const duration = rarityLifetime * assist.speedMultiplier * (bossLevel > 0 ? 2.8 + bossLevel * 0.25 : 1);
+  const spawnStart = bossLevel > 0 ? 260 : index * 780 * assist.targetSpacingMultiplier + ((seed + index * 173) % 420);
   const progress = (elapsedMs - spawnStart) / duration;
   if (progress < 0 || progress > 1) return { visible: false, progress, x: 0, y: 0, rotate: 0 };
+  if (bossLevel > 0) {
+    const x = 5 + progress * 78;
+    const y = Math.max(5, Math.min(70, 26 + bossLevel * 5 + Math.sin(progress * Math.PI * 3 + seed) * 9));
+    const rotate = Math.sin(progress * Math.PI * 2) * 5;
+    return { visible: true, progress, x, y, rotate };
+  }
   const direction = index % 2 === 0 ? 1 : -1;
   const x = direction === 1 ? -12 + progress * 114 : 100 - progress * 114;
   const crawl = Math.sin(progress * Math.PI * wave + index) * 10 + Math.sin(progress * Math.PI * 7 + seed) * 2;
@@ -2116,9 +2158,27 @@ function targetMotion(index: number, seed: number, elapsedMs: number, rarity: Bu
   return { visible: true, progress, x, y, rotate };
 }
 
-function requiredTapsForTarget(rarity: BugDexRarity, assist: BugSmashDuelBalance, targetIndex: number, multiplier = 1) {
-  const focusReduction = targetIndex >= 0 && targetIndex < assist.focusEasyHits ? 1 : 0;
-  return Math.max(1, Math.ceil((baseTapsByRarity[rarity] - focusReduction) * multiplier));
+function requiredTapsForTarget(rarity: BugDexRarity, assist: BugSmashDuelBalance, targetIndex: number, multiplier = 1, bossLevel = 0) {
+  const focusReduction = bossLevel > 0 ? 0 : targetIndex >= 0 && targetIndex < assist.focusEasyHits ? 1 : 0;
+  return Math.max(1, Math.ceil((baseTapsByRarity[rarity] - focusReduction) * multiplier * soloBossTapMultiplier(bossLevel)));
+}
+
+function soloBossLevelForTarget(duel: BugSmashDuel, targetIndex: number, soloCampaign?: SoloCampaignConfig | null) {
+  if (!soloCampaign?.boss || duel.toUserId !== "bugbot" || targetIndex !== 0) return 0;
+  return Math.max(1, Math.min(soloCampaignMaxLevel, soloCampaign.level));
+}
+
+function soloBossTapMultiplier(level: number) {
+  return level > 0 ? 4 + level * 1.5 : 1;
+}
+
+function soloBossScoreBonus(level: number) {
+  return level > 0 ? 10 + level * 5 : 0;
+}
+
+function soloBossImageForLevel(level: number) {
+  const safeLevel = Math.max(1, Math.min(soloCampaignMaxLevel, level)) as keyof typeof soloBossImages;
+  return soloBossImages[safeLevel];
 }
 
 function duelCatchBonusPoints(rarity: BugDexRarity, bugId: string, assist: BugSmashDuelBalance) {
@@ -3606,6 +3666,26 @@ const styles = StyleSheet.create({
     padding: 5,
     position: "absolute",
     width: 62
+  },
+  bossTarget: {
+    backgroundColor: "rgba(16,32,24,0.9)",
+    borderRadius: 12,
+    borderWidth: 3,
+    shadowColor: "#d7bd57",
+    shadowOffset: { height: 0, width: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12
+  },
+  bossTargetLabel: {
+    backgroundColor: "#d7bd57",
+    borderRadius: 6,
+    color: "#102018",
+    fontSize: 8,
+    fontWeight: "900",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    position: "absolute",
+    top: -10
   },
   targetFreezeBadge: {
     alignItems: "center",

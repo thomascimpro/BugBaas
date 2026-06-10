@@ -43,6 +43,7 @@ const nativeModule = NativeModules.BugBaasNative as {
   getMovementRadarProgress?: (movementBoost: number) => Promise<MovementRadarProgress>;
   getQueuedRadarBugIds?: () => Promise<BugArtId[]>;
   requestHealthPermissions?: () => Promise<boolean>;
+  setRadarRequestCounts?: (tradeCount: number, duelCount: number) => Promise<boolean>;
 } | undefined;
 
 const walkingMetersPerRadarBug = 1500;
@@ -80,6 +81,11 @@ export async function getQueuedRadarBugIds(): Promise<BugArtId[]> {
 export async function claimQueuedRadarBugs(): Promise<BugArtId[]> {
   if (Platform.OS !== "android" || !nativeModule?.claimQueuedRadarBugs) return [];
   return nativeModule.claimQueuedRadarBugs();
+}
+
+export async function setRadarRequestCounts(tradeCount: number, duelCount: number): Promise<void> {
+  if (Platform.OS !== "android" || !nativeModule?.setRadarRequestCounts) return;
+  await nativeModule.setRadarRequestCounts(Math.max(0, tradeCount), Math.max(0, duelCount));
 }
 
 export async function getMovementRadarProgress(_uid: string, movementBoost = 0): Promise<MovementRadarProgress> {

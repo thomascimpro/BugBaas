@@ -16,6 +16,7 @@ export type BugDexDropSource =
   | "profile_view"
   | "bug_splat"
   | "weekly_mission"
+  | "solo_campaign_clear"
   | "duel_win"
   | "combine";
 
@@ -58,6 +59,7 @@ const dropChances: Record<BugDexDropSource, number> = {
   profile_view: 0.08,
   bug_splat: 0.35,
   weekly_mission: 1,
+  solo_campaign_clear: 1,
   duel_win: 1,
   combine: 1
 };
@@ -72,6 +74,7 @@ const rarityWeights: Record<BugDexDropSource, Array<[BugDexRarity, number]>> = {
   profile_view: [["Gewoon", 88], ["Zeldzaam", 12]],
   bug_splat: [["Gewoon", 65.1], ["Zeldzaam", 25], ["Episch", 7.5], ["Legendarisch", 2], ["Mythisch", 0.4]],
   weekly_mission: [["Zeldzaam", 54], ["Episch", 36], ["Legendarisch", 9.6], ["Mythisch", 0.4]],
+  solo_campaign_clear: [["Zeldzaam", 100]],
   duel_win: [["Gewoon", 68], ["Zeldzaam", 24], ["Episch", 6.5], ["Legendarisch", 1.1], ["Mythisch", 0.4]],
   combine: [["Zeldzaam", 100]]
 };
@@ -493,8 +496,10 @@ function dailyRewardItem(entry: BugDexEntry, existing: BugDexInventoryItem | nul
 
 async function grantSpecificBug(user: User, entry: BugDexEntry, source: BugDexDropSource): Promise<BugDexDropResult> {
   const now = new Date().toISOString();
+  const dailyEventId = dailyLimitedRewardEventId(source);
 
   if (!isFirebaseConfigured) {
+    if (dailyEventId && demoEvents.has(`${user.uid}:${dailyEventId}`)) throw new Error("Daily reward already claimed.");
     const inventory = demoInventory.get(user.uid) ?? new Map<string, BugDexInventoryItem>();
     const existing = inventory.get(entry.id);
     const item = existing
@@ -502,19 +507,29 @@ async function grantSpecificBug(user: User, entry: BugDexEntry, source: BugDexDr
       : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
     inventory.set(entry.id, item);
     demoInventory.set(user.uid, inventory);
+    if (dailyEventId) demoEvents.add(`${user.uid}:${dailyEventId}`);
     return { rewardType: "bug", entry, item, isNew: !existing, source };
   }
 
   const ref = doc(db, "users", user.uid, "bugdex", entry.id);
+  const eventRef = dailyEventId ? doc(db, "users", user.uid, "bugdexEvents", dailyEventId) : null;
   return runTransaction(db, async (transaction) => {
+    const eventSnapshot = eventRef ? await transaction.get(eventRef) : null;
+    if (eventSnapshot?.exists()) throw new Error("Daily reward already claimed.");
     const snapshot = await transaction.get(ref);
     const existing = snapshot.exists() ? snapshot.data() as BugDexInventoryItem : null;
     const item: BugDexInventoryItem = existing
       ? { ...existing, count: existing.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
       : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
     transaction.set(ref, item);
+    if (eventRef && dailyEventId) transaction.set(eventRef, { id: dailyEventId, source, createdAt: now });
     return { rewardType: "bug", entry, item, isNew: !existing, source };
   });
+}
+
+function dailyLimitedRewardEventId(source: BugDexDropSource): string | null {
+  if (source !== "solo_campaign_clear") return null;
+  return `${source}-${localDayId()}`;
 }
 
 function pickDailyCommonEntry(): BugDexEntry {

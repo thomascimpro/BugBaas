@@ -7,6 +7,7 @@
 - GitHub Release `v0.1.0` met APK: klaar.
 - GitHub Release `v2.2.1`: voorbereid met embedded release image bovenaan de release notes en APK `CimPro-BugBaas-2.2.1.apk`.
 - GitHub Release `v2.2.2`: klaar te publiceren met BugDex-revert, rustig squad-potje, betere Solo Campaign targets en kleinere APK.
+- GitHub Release `v2.2.3`: klaar met boss HD-art, campaign-clear reward, weekly-claim fix, BugDex periodefilter en radar-widget request badges.
 - Bug melden concept/herstel en screenshot verwijderen: klaar.
 - Bug CRUD V1: aanmaken, tonen en status wijzigen klaar.
 - Upvotes op bugmeldingen: klaar.

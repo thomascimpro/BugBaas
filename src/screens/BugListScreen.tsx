@@ -16,6 +16,12 @@ const reportFilters: Array<{ value: ReportType | "all"; labelKey: string }> = [
   { value: "idea", labelKey: "filter.idea" }
 ];
 const projectFilters = ["TBox", "TConnect", "SkySpark", "Infinite", "VTScada", "Alert", "Anders"];
+const timeFilters = [
+  { value: "all", labelKey: "buglist.periodAll" },
+  { value: "today", labelKey: "buglist.periodToday" },
+  { value: "thisWeek", labelKey: "buglist.periodThisWeek" }
+] as const;
+type TimeFilter = typeof timeFilters[number]["value"];
 const reportTypeLabels: Record<ReportType, string> = {
   bug: "bug",
   tip: "tip",
@@ -35,15 +41,18 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
   const [typeFilter, setTypeFilter] = useState<ReportType | "all">("all");
   const [projectFilter, setProjectFilter] = useState<string | undefined>();
   const [projectOpen, setProjectOpen] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
+  const [timeOpen, setTimeOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [reports, setReports] = useState<BugReport[]>([]);
   const [loading, setLoading] = useState(true);
   const normalizedSearch = normalizeSearch(searchQuery);
-  const hasActiveFilters = Boolean(filter || projectFilter || typeFilter !== "all" || normalizedSearch);
+  const hasActiveFilters = Boolean(filter || projectFilter || timeFilter !== "all" || typeFilter !== "all" || normalizedSearch);
   const visibleReports = reports.filter((report) => {
     const reportType = report.reportType ?? "bug";
     if (typeFilter !== "all" && reportType !== typeFilter) return false;
     if (projectFilter && report.project !== projectFilter) return false;
+    if (!reportMatchesTimeFilter(report.createdAt, timeFilter)) return false;
     if (filter && reportType === "bug" && report.status !== filter) return false;
     if (filter && reportType !== "bug") return false;
     if (normalizedSearch && !reportMatchesSearch(report, normalizedSearch)) return false;
@@ -65,6 +74,8 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
     setTypeFilter("all");
     setProjectFilter(undefined);
     setProjectOpen(false);
+    setTimeFilter("all");
+    setTimeOpen(false);
     setSearchQuery("");
   }
 
@@ -143,6 +154,31 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
         </View>
       )}
 
+      <Pressable style={styles.projectButton} onPress={() => setTimeOpen((current) => !current)}>
+        <Text style={[styles.projectButtonText, timeFilter === "all" && styles.projectButtonPlaceholder]}>
+          {t("buglist.period", { value: t(timeFilters.find((item) => item.value === timeFilter)?.labelKey ?? "buglist.periodAll") })}
+        </Text>
+      </Pressable>
+      {timeOpen && (
+        <View style={styles.projectMenu}>
+          {timeFilters.map((item) => {
+            const active = timeFilter === item.value;
+            return (
+              <Pressable
+                key={item.value}
+                style={[styles.projectOption, active && styles.projectOptionActive]}
+                onPress={() => {
+                  setTimeFilter(item.value);
+                  setTimeOpen(false);
+                }}
+              >
+                <Text style={[styles.projectOptionText, active && styles.projectOptionTextActive]}>{t(item.labelKey)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
       {(typeFilter === "all" || typeFilter === "bug") && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filters}>
           <Pressable style={[styles.statusPill, !filter && styles.statusPillActive]} onPress={() => setFilter(undefined)}>
@@ -200,6 +236,24 @@ function reportMatchesSearch(report: BugReport, query: string): boolean {
     reportTypeLabels[reportType]
   ].join(" ").toLowerCase();
   return haystack.includes(query);
+}
+
+function reportMatchesTimeFilter(createdAt: string, filter: TimeFilter): boolean {
+  if (filter === "all") return true;
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  if (filter === "today") return date.toDateString() === now.toDateString();
+  const weekStart = startOfWeek(now);
+  return date >= weekStart && date <= now;
+}
+
+function startOfWeek(date: Date): Date {
+  const next = new Date(date);
+  const day = (next.getDay() + 6) % 7;
+  next.setHours(0, 0, 0, 0);
+  next.setDate(next.getDate() - day);
+  return next;
 }
 
 const styles = StyleSheet.create({
