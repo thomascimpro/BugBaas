@@ -33,9 +33,10 @@ import { allBugArtIds, BugArtId } from "./src/services/bugArt";
 import { CharacterId } from "./src/services/characterService";
 import { bugDexEntryName, LanguageProvider, rarityLabel, useI18n } from "./src/services/i18n";
 import { listBugs } from "./src/services/bugService";
-import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, grantBugDexReward, rollBugDexDrop, rollSpecificBugDexDrop } from "./src/services/bugDexService";
+import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, grantBugDexReward, prepareDailyLoginBug, rollBugDexDrop, rollSpecificBugDexDrop } from "./src/services/bugDexService";
 import { badgeDefinitions, getTierForPoints, type BadgeDefinition, type UserTier } from "./src/services/pointsService";
 import { claimMovementRadarBonuses } from "./src/services/movementRadarService";
+import { movementRadarXpPerBug } from "./src/services/rewardBalanceService";
 import { checkLatestVersion, VersionNotice } from "./src/services/versionService";
 import {
   defaultNotificationSettings,
@@ -173,6 +174,7 @@ function AppContent() {
   const [duelOpponent, setDuelOpponent] = useState<User | null>(null);
   const [openDuelId, setOpenDuelId] = useState("");
   const [bugDexDrop, setBugDexDrop] = useState<BugDexDropResult | null>(null);
+  const [bugDexClaiming, setBugDexClaiming] = useState(false);
   const [rankUpTier, setRankUpTier] = useState<UserTier | null>(null);
   const [badgeUnlock, setBadgeUnlock] = useState<BadgeDefinition | null>(null);
   const [bugDexDropQueue, setBugDexDropQueue] = useState<BugDexDropResult[]>([]);
@@ -414,7 +416,11 @@ function AppContent() {
     if (!user || user.nameSet !== true || !helpGateChecked || helpVisible || changelogVersion || badgeUnlock || bugDexDrop || notification || splatBonusVisible || versionNotice) return;
     if (dailyLoginClaimedForUsers.current.has(user.uid)) return;
     dailyLoginClaimedForUsers.current.add(user.uid);
-    void maybeShowBugDexDrop(claimDailyLoginBug(user));
+    void prepareDailyLoginBug(user).then((drop) => {
+      if (drop) showBugDexDrop(drop);
+    }).catch(() => {
+      dailyLoginClaimedForUsers.current.delete(user.uid);
+    });
   }, [badgeUnlock, bugDexDrop, changelogVersion, helpGateChecked, helpVisible, notification, splatBonusVisible, user?.nameSet, user?.uid, versionNotice]);
 
   useEffect(() => {
@@ -560,7 +566,20 @@ function AppContent() {
     });
   }
 
-  function closeBugDexDrop() {
+  async function closeBugDexDrop() {
+    if (bugDexDrop?.source === "daily_login") {
+      const currentUser = userRef.current;
+      if (!currentUser || bugDexClaiming) return;
+      setBugDexClaiming(true);
+      try {
+        const claimedDrop = await claimDailyLoginBug(currentUser, bugDexDrop);
+        if (claimedDrop?.updatedUser) setUser(claimedDrop.updatedUser);
+      } catch {
+        return;
+      } finally {
+        setBugDexClaiming(false);
+      }
+    }
     const [nextDrop, ...remaining] = bugDexDropQueue;
     setBugDexDrop(nextDrop ?? null);
     setBugDexDropQueue(remaining);
@@ -575,6 +594,15 @@ function AppContent() {
     const currentUser = userRef.current;
     if (!currentUser || bugIds.length === 0) return;
     let nextUser = currentUser;
+    try {
+      const xpUser = await applyUserPoints(currentUser.uid, bugIds.length * movementRadarXpPerBug, 0);
+      if (xpUser) {
+        nextUser = xpUser;
+        setUser(xpUser);
+      }
+    } catch {
+      // Movement XP is additive; radar BugDex rewards should still be shown.
+    }
     for (const bugId of bugIds) {
       try {
         const drop = await rollSpecificBugDexDrop(nextUser, bugId, "bug_splat", 1);
@@ -639,6 +667,7 @@ function AppContent() {
     try {
       const result = await claimMovementRadarBonuses(currentUser.uid, movementBoostForUser(currentUser));
       await registerMovementKilometers(result.estimatedKm);
+      if (result.bugIds.length > 0) await showClaimedRadarBugs(result.bugIds);
       if (result.awarded > 0 && notificationSettingsRef.current.movement) {
         await showMovementRewardNotification(result.awarded);
       }
@@ -814,6 +843,11 @@ function AppContent() {
             onOpenBugSmashDuel={() => openBugSmashDuel()}
             onOpenBugDexWorkshop={openBugDexTrades}
             onMovementRegistered={registerMovementKilometers}
+            onRewardDrop={(drop) => {
+              if (drop.updatedUser) setUser(drop.updatedUser);
+              showBugDexDrop(drop);
+            }}
+            onUserUpdated={setUser}
           />
         )}
         {route === "bugs" && (
@@ -933,7 +967,7 @@ function AppContent() {
       />
       <RankUpModal tier={rankUpTier} onClose={() => setRankUpTier(null)} />
       <BadgeUnlockModal badge={badgeUnlock} onClose={closeBadgeUnlock} />
-      <BugDexUnlockModal drop={bugDexDrop} onClose={closeBugDexDrop} />
+      <BugDexUnlockModal drop={bugDexDrop} busy={bugDexClaiming} onClose={closeBugDexDrop} />
       <DisplayNameModal user={user} visible={Boolean(user && user.nameSet !== true)} onSave={handleDisplayNameSave} />
       <HelpTourOverlay visible={helpVisible && user.nameSet === true} onFinish={finishHelpTour} onNavigate={navigateHelp} />
       <ChangelogModal version={changelogVersion} onClose={closeChangelog} />

@@ -103,6 +103,46 @@ Voeg bovenaan `CHANGELOG.md` een nieuwe sectie toe:
 - Eventuele gameplay/UI wijzigingen.
 ```
 
+## Release notes beleid
+
+Gebruik bij GitHub Releases altijd twee lagen:
+
+1. Feature train summary: wat is nieuw sinds de minor feature release, bijvoorbeeld `2.1`.
+2. Patch delta: wat is specifiek gefixt of toegevoegd in deze patch, bijvoorbeeld `2.1.19`.
+
+Waarom: collega's die direct `2.1.19` downloaden moeten nog steeds zien wat de grote `2.1` feature was. Een patchrelease mag dus nooit alleen "bugfix" notes tonen als de gebruiker mogelijk vanaf een oudere minor of 1.x komt.
+
+Template voor GitHub release notes:
+
+```markdown
+## Feature release 2.1: Bug Smash Duel en Bug Squad helpers
+
+- Grote feature 1.
+- Grote feature 2.
+- Grote feature 3.
+
+## Patch 2.1.19
+
+- Specifieke wijziging in deze patch.
+- Bugfix of Android-release detail.
+
+## Installatie
+
+- APK: `CimPro-BugBaas-2.1.19.apk`
+- Package: `nl.cimpro.bugbaas`
+- VersionCode: `90`
+- SHA256: `...`
+```
+
+Regels:
+
+- De titel blijft de exacte versie: `CimPro BugBaas 2.1.19`.
+- De eerste sectie noemt de feature train, niet alleen de patch.
+- Neem bij `2.1.x` minimaal Bug Smash Duel, training, helper bugs, Mythic specials, reward/XP-balans en Android install/signing mee als die relevant zijn.
+- Zet pure bugfixes onder `Patch x.y.z`.
+- Noteer altijd APK-bestandsnaam, package, versionCode en SHA256.
+- Houd `CHANGELOG.md` chronologisch, maar GitHub release notes mogen feature train + patch combineren.
+
 ## Checks
 
 ```powershell

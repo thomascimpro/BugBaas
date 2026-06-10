@@ -2,14 +2,15 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { StatusBadge } from "../components/StatusBadge";
-import { addBugComment, deleteOwnBug, listBugComments, toggleBugUpvote, updateBugStatus } from "../services/bugService";
-import { statusLabel, useI18n } from "../services/i18n";
+import { addBugComment, deleteOwnBug, listBugComments, toggleBugUpvote, updateBugStatus, updateOwnBug } from "../services/bugService";
+import { severityLabel, statusLabel, useI18n } from "../services/i18n";
 import { getUserById } from "../services/userService";
 import { upvotePointValue } from "../services/userService";
 import { BugComment, BugReport, BugStatus, ReportType, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
-const statuses: BugStatus[] = ["Bevestigd", "In behandeling", "Gefixt", "Afgekeurd", "Dubbel"];
+const statuses: BugStatus[] = ["Bevestigd", "In behandeling", "Gefixt"];
+const severities: BugReport["severity"][] = ["Laag", "Normaal", "Hoog", "Kritiek"];
 const reactions = ["🐞", "🪲", "🐛", "💥", "🔥", "🎉"];
 const reportTypeMeta: Record<ReportType, { labelKey: string; color: string; background: string }> = {
   bug: { labelKey: "report.badge.bug", color: "#b83227", background: "#fff1ef" },
@@ -33,11 +34,18 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
   const [busy, setBusy] = useState(false);
   const [voteBusy, setVoteBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [commentBusy, setCommentBusy] = useState(false);
   const [comments, setComments] = useState<BugComment[]>([]);
   const [commentText, setCommentText] = useState("");
   const [selectedReaction, setSelectedReaction] = useState("🐞");
   const [error, setError] = useState("");
+  const [editTitle, setEditTitle] = useState(bug.title);
+  const [editProject, setEditProject] = useState(bug.project);
+  const [editSeverity, setEditSeverity] = useState(bug.severity);
+  const [editDescription, setEditDescription] = useState(bug.description);
+  const [editSteps, setEditSteps] = useState(bug.steps);
   const reportType = bug.reportType ?? "bug";
   const isBug = reportType === "bug";
   const typeMeta = reportTypeMeta[reportType];
@@ -51,6 +59,14 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
       setError(nextError instanceof Error ? nextError.message : t("detail.loadCommentsFailed"));
     });
   }, [bug.id]);
+
+  useEffect(() => {
+    setEditTitle(bug.title);
+    setEditProject(bug.project);
+    setEditSeverity(bug.severity);
+    setEditDescription(bug.description);
+    setEditSteps(bug.steps);
+  }, [bug.description, bug.project, bug.severity, bug.steps, bug.title]);
 
   async function changeStatus(status: BugStatus) {
     if (!canUpdateStatus) return;
@@ -74,6 +90,27 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
       setError(nextError instanceof Error ? nextError.message : t("detail.upvoteFailed"));
     } finally {
       setVoteBusy(false);
+    }
+  }
+
+  async function saveEdit() {
+    if (user.uid !== bug.reporterId) return;
+    setEditBusy(true);
+    setError("");
+    try {
+      const updated = await updateOwnBug(bug, user, {
+        description: editDescription,
+        project: editProject,
+        severity: editSeverity,
+        steps: editSteps,
+        title: editTitle
+      });
+      onBugChanged(updated);
+      setEditing(false);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : t("detail.editFailed"));
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -135,6 +172,44 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
           </>
         )}
       </View>
+      {user.uid === bug.reporterId && !editing && (
+        <Pressable style={sharedStyles.secondaryButton} onPress={() => setEditing(true)}>
+          <Text style={sharedStyles.secondaryButtonText}>{t("detail.editReport")}</Text>
+        </Pressable>
+      )}
+      {user.uid === bug.reporterId && editing && (
+        <View style={styles.editCard}>
+          <Text style={styles.sectionTitle}>{t("detail.editReport")}</Text>
+          <Text style={sharedStyles.label}>{t("new.reportTitle")}</Text>
+          <TextInput style={sharedStyles.input} value={editTitle} onChangeText={setEditTitle} />
+          <Text style={sharedStyles.label}>{t("new.system")}</Text>
+          <TextInput style={sharedStyles.input} value={editProject} onChangeText={setEditProject} />
+          {isBug && (
+            <>
+              <Text style={sharedStyles.label}>{t("new.urgency")}</Text>
+              <View style={sharedStyles.row}>
+                {severities.map((severity) => (
+                  <Pressable key={severity} style={editSeverity === severity ? sharedStyles.button : sharedStyles.secondaryButton} onPress={() => setEditSeverity(severity)}>
+                    <Text style={editSeverity === severity ? sharedStyles.buttonText : sharedStyles.secondaryButtonText}>{severityLabel(severity, t)}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+          <Text style={sharedStyles.label}>{t("new.description")}</Text>
+          <TextInput multiline style={[sharedStyles.input, styles.editInput]} value={editDescription} onChangeText={setEditDescription} />
+          <Text style={sharedStyles.label}>{isBug ? t("new.reproSteps") : t("new.extraInfo")}</Text>
+          <TextInput multiline style={[sharedStyles.input, styles.editInput]} value={editSteps} onChangeText={setEditSteps} />
+          <View style={sharedStyles.row}>
+            <Pressable style={sharedStyles.button} disabled={editBusy} onPress={saveEdit}>
+              {editBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("common.save")}</Text>}
+            </Pressable>
+            <Pressable style={sharedStyles.secondaryButton} disabled={editBusy} onPress={() => setEditing(false)}>
+              <Text style={sharedStyles.secondaryButtonText}>{t("common.cancel")}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
       <View style={styles.upvotePanel}>
         <View style={styles.upvoteStat}>
           <Text style={styles.upvoteValue}>{upvoteCount}</Text>
@@ -210,9 +285,6 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
           <Pressable style={sharedStyles.button} onPress={() => changeStatus("Gefixt")}>
             <Text style={sharedStyles.buttonText}>{t("detail.markFixed")}</Text>
           </Pressable>
-          <Pressable style={sharedStyles.dangerButton} onPress={() => changeStatus("Dubbel")}>
-            <Text style={sharedStyles.buttonText}>{t("detail.markDuplicate")}</Text>
-          </Pressable>
           <Pressable style={styles.deleteButton} disabled={deleteBusy} onPress={confirmDelete}>
             {deleteBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("detail.deleteReport")}</Text>}
           </Pressable>
@@ -234,6 +306,17 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
 const styles = StyleSheet.create({
   content: {
     paddingBottom: 160
+  },
+  editCard: {
+    backgroundColor: "#fdfefb",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 14,
+    padding: 12
+  },
+  editInput: {
+    minHeight: 90
   },
   commentsCard: {
     backgroundColor: "#fdfefb",

@@ -7,7 +7,7 @@ import { statusLabel, useI18n } from "../services/i18n";
 import { BugReport, BugStatus, ReportType } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
-const statuses: BugStatus[] = ["Nieuw", "Bevestigd", "In behandeling", "Gefixt", "Afgekeurd", "Dubbel"];
+const statuses: BugStatus[] = ["Nieuw", "Bevestigd", "In behandeling", "Gefixt"];
 const reportFilters: Array<{ value: ReportType | "all"; labelKey: string }> = [
   { value: "all", labelKey: "filter.all" },
   { value: "bug", labelKey: "filter.bugs" },

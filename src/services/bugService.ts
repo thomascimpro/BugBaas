@@ -128,6 +128,77 @@ export async function updateBugStatus(bug: BugReport, status: BugStatus): Promis
   return updated;
 }
 
+export async function updateOwnBug(
+  bug: BugReport,
+  user: User,
+  changes: Pick<BugReport, "description" | "project" | "severity" | "steps" | "title">
+): Promise<BugReport> {
+  const current = normalizeBug(bug);
+  if (current.reporterId !== user.uid) throw new Error("Je kunt alleen je eigen melding wijzigen.");
+
+  const nextSeverity = (current.reportType ?? "bug") === "bug" ? changes.severity : "Laag";
+  const nextPoints = calculateReportPoints(current.reportType ?? "bug", nextSeverity, current.status);
+  const updated = {
+    ...current,
+    description: changes.description.trim(),
+    project: changes.project.trim(),
+    severity: nextSeverity,
+    steps: changes.steps.trim(),
+    title: changes.title.trim(),
+    points: nextPoints,
+    updatedAt: new Date().toISOString()
+  };
+  if (!updated.title || !updated.project || !updated.description) throw new Error("Titel, systeem/project en beschrijving zijn verplicht.");
+
+  if (!isFirebaseConfigured) {
+    const index = demoBugs.findIndex((item) => item.id === current.id);
+    if (index >= 0) demoBugs[index] = updated;
+    await applyUserPoints(user.uid, nextPoints - current.points, 0);
+    return updated;
+  }
+
+  const bugRef = doc(db, "bugs", current.id);
+  const userRef = doc(db, "users", user.uid);
+  return runTransaction(db, async (transaction) => {
+    const [bugSnapshot, userSnapshot] = await Promise.all([transaction.get(bugRef), transaction.get(userRef)]);
+    if (!bugSnapshot.exists()) throw new Error("Melding niet gevonden.");
+    if (!userSnapshot.exists()) throw new Error("Gebruiker niet gevonden.");
+    const fresh = normalizeBug(bugSnapshot.data() as BugReport, bugSnapshot.id);
+    if (fresh.reporterId !== user.uid) throw new Error("Je kunt alleen je eigen melding wijzigen.");
+    const freshSeverity = (fresh.reportType ?? "bug") === "bug" ? changes.severity : "Laag";
+    const freshPoints = calculateReportPoints(fresh.reportType ?? "bug", freshSeverity, fresh.status);
+    const next = {
+      ...fresh,
+      description: changes.description.trim(),
+      project: changes.project.trim(),
+      severity: freshSeverity,
+      steps: changes.steps.trim(),
+      title: changes.title.trim(),
+      points: freshPoints,
+      updatedAt: new Date().toISOString()
+    };
+    const currentUser = userSnapshot.data() as User;
+    const totalPoints = Math.max(0, currentUser.totalPoints + freshPoints - fresh.points);
+    const updatedUser = { ...currentUser, totalPoints, title: titleForPoints(totalPoints) };
+    updatedUser.badges = badgesForUser(updatedUser);
+    transaction.update(bugRef, {
+      description: next.description,
+      points: next.points,
+      project: next.project,
+      severity: next.severity,
+      steps: next.steps,
+      title: next.title,
+      updatedAt: next.updatedAt
+    });
+    transaction.update(userRef, {
+      badges: updatedUser.badges,
+      title: updatedUser.title,
+      totalPoints
+    });
+    return next;
+  });
+}
+
 export async function toggleBugUpvote(bug: BugReport, user: User): Promise<BugReport> {
   const current = normalizeBug(bug);
   if (current.reporterId === user.uid) throw new Error("Je kunt je eigen bug niet upvoten.");
