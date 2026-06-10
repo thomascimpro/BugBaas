@@ -1,5 +1,16 @@
 # Test Results
 
+## 2.2.1 release
+
+- `npm.cmd run typecheck`: geslaagd.
+- `.\android\gradlew.bat -p android :app:assembleRelease --no-daemon --console=plain`: geslaagd.
+- APK gekopieerd naar `dist/CimPro-BugBaas-2.2.1.apk`.
+- `aapt2 dump badging`: package `nl.cimpro.bugbaas`, versionCode `96`, versionName `2.2.1`.
+- `apksigner verify --print-certs`: geslaagd.
+- Signing cert SHA-256 is gelijk aan `2.2.0`: `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA256: `90A32935737EE76AC36576C24C224744BEA593830AB54895383EF5472937B2B1`.
+- Geen toestelinstall uitgevoerd in deze release-run.
+
 Datum: 2026-06-02
 
 ## Gepland
