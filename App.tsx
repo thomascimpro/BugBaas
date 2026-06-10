@@ -52,8 +52,10 @@ import {
   showBugDexUnlockNotification,
   showMovementRewardNotification,
   showPhoneNotification,
+  subscribeRequestNotificationCounts,
   subscribeUserNotifications
 } from "./src/services/notificationService";
+import { setRadarRequestCounts } from "./src/services/movementRadarService";
 
 export type RouteName = "home" | "bugs" | "new" | "detail" | "leaderboard" | "profile" | "userProfile" | "bugdex" | "settings" | "duel";
 
@@ -72,6 +74,11 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.2.3": [
+    { key: "changelog.2.2.3.bosses", image: require("./assets/generated/solo-boss-atlas-hd.png"), tone: "purple" },
+    { key: "changelog.2.2.3.rewards", image: require("./assets/generated/solo-boss-stag-hd.png"), tone: "gold" },
+    { key: "changelog.2.2.3.widget", image: require("./assets/generated/bug-radar-request-signal-hd.png"), tone: "green" }
+  ],
   "2.2.2": [
     { key: "changelog.2.2.2.jars", image: require("./assets/generated/bug-squad-empty-jar-hd.png"), tone: "green" },
     { key: "changelog.2.2.2.targets", image: require("./assets/generated/solo-duel-campaign-hd.jpg"), tone: "purple" },
@@ -449,6 +456,16 @@ function AppContent() {
       void showPhoneNotification(nextNotification).catch(() => undefined);
     });
   }, [notificationSettings, user]);
+
+  useEffect(() => {
+    if (!user) {
+      void setRadarRequestCounts(0, 0).catch(() => undefined);
+      return () => undefined;
+    }
+    return subscribeRequestNotificationCounts(user, (counts) => {
+      void setRadarRequestCounts(counts.trade, counts.duel).catch(() => undefined);
+    });
+  }, [user]);
 
   useEffect(() => {
     function handleResponse(response: Notifications.NotificationResponse) {

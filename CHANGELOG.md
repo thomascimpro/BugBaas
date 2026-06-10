@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.3
+
+- Solo Campaign bosses zijn nu grote eigen boss-bugs met vijf HD designs, langere boss waves en veel meer HP.
+- Verliezen in Solo Campaign start weer bij wave 1; campaign clear geeft 1x per dag een zeldzame BugDex reward.
+- Weekly bonus claim geeft zichtbare foutmelding en gebruikt de geüpdatete user voor de BugDex reward.
+- Bugs bekijken heeft een periode-dropdown: Alles, Vandaag en Deze week.
+- Bug Radar widget toont open ruil- en duelverzoeken met een nieuwe HD request-visual.
+
 ## 2.2.2
 
 - BugDex toont weer gewone bug-afbeeldingen in plaats van potjes.

@@ -171,7 +171,8 @@ export async function claimWeeklyMissionBonus(user: User, missions: WeeklyMissio
   const userRef = doc(db, "users", user.uid);
   const claimRef = doc(db, "users", user.uid, "weeklyMissionClaims", bonusId);
   return runTransaction(db, async (transaction) => {
-    const [userSnapshot, claimSnapshot] = await Promise.all([transaction.get(userRef), transaction.get(claimRef)]);
+    const userSnapshot = await transaction.get(userRef);
+    const claimSnapshot = await transaction.get(claimRef);
     if (!userSnapshot.exists() || claimSnapshot.exists()) return null;
     const current = userSnapshot.data() as User;
     const totalPoints = Math.max(0, current.totalPoints + weeklyMissionBonusXp);
@@ -210,7 +211,8 @@ export async function claimWeeklyMissionXp(user: User, mission: WeeklyMission): 
   const userRef = doc(db, "users", user.uid);
   const claimRef = doc(db, "users", user.uid, "weeklyMissionClaims", mission.id);
   return runTransaction(db, async (transaction) => {
-    const [userSnapshot, claimSnapshot] = await Promise.all([transaction.get(userRef), transaction.get(claimRef)]);
+    const userSnapshot = await transaction.get(userRef);
+    const claimSnapshot = await transaction.get(claimRef);
     if (!userSnapshot.exists() || claimSnapshot.exists()) return null;
     const current = userSnapshot.data() as User;
     const totalPoints = Math.max(0, current.totalPoints + weeklyMissionXp);

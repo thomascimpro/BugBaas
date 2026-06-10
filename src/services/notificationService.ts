@@ -146,6 +146,31 @@ export function subscribeUserNotifications(
   });
 }
 
+export function subscribeRequestNotificationCounts(
+  user: User,
+  onCounts: (counts: { duel: number; trade: number }) => void
+): () => void {
+  if (!isFirebaseConfigured) {
+    const notifications = demoNotifications.get(user.uid) ?? [];
+    onCounts(countRequestNotifications(notifications));
+    return () => undefined;
+  }
+
+  const notificationsQuery = query(collection(db, "users", user.uid, "notifications"), orderBy("createdAt", "desc"), limit(50));
+  return onSnapshot(notificationsQuery, (snapshot) => {
+    onCounts(countRequestNotifications(snapshot.docs.map((item) => item.data() as AppNotification)));
+  });
+}
+
+function countRequestNotifications(notifications: AppNotification[]) {
+  return notifications.reduce((counts, notification) => {
+    if (notification.read) return counts;
+    if (notification.type === "trade") counts.trade += 1;
+    if (notification.type === "duel") counts.duel += 1;
+    return counts;
+  }, { duel: 0, trade: 0 });
+}
+
 async function createNotification(userId: string, notification: Omit<AppNotification, "id" | "read" | "createdAt">): Promise<AppNotification> {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const item: AppNotification = { ...notification, id, read: false, createdAt: nowIso() };

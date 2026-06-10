@@ -14,3 +14,6 @@
 - Nummer 1 in leaderboard krijgt Opperbugmeister-label, los van normale puntentier.
 - BugDex toont losse bug-art; potjes zijn alleen voor de actieve squad onder Duel/Solo Campaign.
 - Solo Campaign targets zijn vaste level/wave gates; level 1 start hoger en boss-waves vragen duidelijk meer score.
+- Solo Campaign bosses gebruiken eigen HD boss-art en custom target scaling in de bestaande native game view; geen extra chart/game-library toegevoegd.
+- Campaign clear reward gebruikt `solo_campaign_clear` als dagelijkse BugDex source met gegarandeerd Zeldzaam, zodat het max 1x per dag claimbaar blijft.
+- Bug Radar widget toont request-status als compacte native badges in plaats van extra schermen of notificatiekaarten.

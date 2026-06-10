@@ -113,6 +113,15 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     if (stackCount > 1) {
       views.setTextViewText(R.id.radarQueueCount, "x$stackCount")
     }
+    val tradeCount = requestCount(context, prefTradeRequestCount)
+    val duelCount = requestCount(context, prefDuelRequestCount)
+    val hasRequests = tradeCount > 0 || duelCount > 0
+    views.setViewVisibility(R.id.radarRequestIcon, if (hasRequests) View.VISIBLE else View.GONE)
+    views.setViewVisibility(R.id.radarRequestBadges, if (hasRequests) View.VISIBLE else View.GONE)
+    views.setViewVisibility(R.id.radarTradeBadge, if (tradeCount > 0) View.VISIBLE else View.GONE)
+    views.setViewVisibility(R.id.radarDuelBadge, if (duelCount > 0) View.VISIBLE else View.GONE)
+    views.setTextViewText(R.id.radarTradeBadge, if (compact) "R$tradeCount" else "Trade $tradeCount")
+    views.setTextViewText(R.id.radarDuelBadge, if (compact) "D$duelCount" else "Duel $duelCount")
     val auraRes = bug?.let { rarityAuraRes(it.rarity) }
     views.setViewVisibility(R.id.radarRarityAura, if (auraRes == null) View.GONE else View.VISIBLE)
     if (auraRes != null) {
@@ -334,6 +343,8 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     private const val prefCount = "signal_count"
     private const val prefDay = "signal_day"
     private const val prefLastSignalAt = "last_signal_at"
+    private const val prefTradeRequestCount = "trade_request_count"
+    private const val prefDuelRequestCount = "duel_request_count"
     private const val signalLookaheadDays = 14
     private const val signalRequestCode = 4242
     private const val weekendRollChancePercent = 35
@@ -361,6 +372,15 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
       return bugIds
     }
 
+    fun setRequestCounts(context: Context, tradeCount: Int, duelCount: Int) {
+      context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        .edit()
+        .putInt(prefTradeRequestCount, maxOf(0, tradeCount))
+        .putInt(prefDuelRequestCount, maxOf(0, duelCount))
+        .apply()
+      BugRadarWidgetProvider().updateAllWidgets(context)
+    }
+
     fun pickRandomRadarBugIds(count: Int): List<String> {
       return List(maxOf(0, count)) { pickCompanionRadarBug().id }
     }
@@ -369,6 +389,10 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
       val rarity = pickCompanionRarity()
       val candidates = radarBugs.filter { it.rarity == rarity }
       return candidates.randomOrNull() ?: radarBugs.random()
+    }
+
+    private fun requestCount(context: Context, key: String): Int {
+      return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE).getInt(key, 0)
     }
 
     private fun pickCompanionRarity(): String {

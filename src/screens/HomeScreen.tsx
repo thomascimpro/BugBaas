@@ -58,6 +58,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [claimingMissionId, setClaimingMissionId] = useState("");
   const [weeklyBonusClaimed, setWeeklyBonusClaimed] = useState(false);
   const [weeklyBonusClaiming, setWeeklyBonusClaiming] = useState(false);
+  const [weeklyBonusError, setWeeklyBonusError] = useState("");
   const [showAllTiers, setShowAllTiers] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const leaders = users.slice(0, 3);
@@ -148,12 +149,18 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   async function handleWeeklyBonusClaim() {
     if (weeklyBonusClaiming || weeklyBonusClaimed || !weeklyMissionSetComplete(missions)) return;
     setWeeklyBonusClaiming(true);
+    setWeeklyBonusError("");
     try {
       const updated = await claimWeeklyMissionBonus(user, missions);
-      if (!updated) return;
+      if (!updated) {
+        setWeeklyBonusClaimed(await isWeeklyMissionBonusClaimed(user, missions));
+        return;
+      }
       onUserUpdated?.(updated);
-      onRewardDrop?.(await grantBugDexReward(user, "weekly_mission"));
+      onRewardDrop?.(await grantBugDexReward(updated, "weekly_mission"));
       setWeeklyBonusClaimed(true);
+    } catch {
+      setWeeklyBonusError(t("home.weeklyBonusFailed"));
     } finally {
       setWeeklyBonusClaiming(false);
     }
@@ -409,6 +416,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
           {weeklyMissionSetComplete(missions) && weeklyBonusClaimed && (
             <Text style={styles.missionReward}>{t("home.claimedWeeklyBugDex")}</Text>
           )}
+          {weeklyBonusError ? <Text style={styles.missionError}>{weeklyBonusError}</Text> : null}
         </View>
       </View>
       <Pressable style={[styles.workshopCard, styles.soloDuelCard]} onPress={onOpenBugSmashDuel ?? (() => onNavigate("duel"))}>
@@ -1054,6 +1062,12 @@ const styles = StyleSheet.create({
   },
   missionReward: {
     color: "#15724f",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 6
+  },
+  missionError: {
+    color: "#b9382f",
     fontSize: 11,
     fontWeight: "900",
     marginTop: 6

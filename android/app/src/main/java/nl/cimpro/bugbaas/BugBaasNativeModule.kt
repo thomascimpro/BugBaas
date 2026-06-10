@@ -236,6 +236,12 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
   }
 
   @ReactMethod
+  fun setRadarRequestCounts(tradeCount: Int, duelCount: Int, promise: Promise) {
+    BugRadarWidgetProvider.setRequestCounts(reactContext, tradeCount, duelCount)
+    promise.resolve(true)
+  }
+
+  @ReactMethod
   fun getMovementRadarProgress(movementBoost: Double, promise: Promise) {
     scope.launch {
       val progress = MovementRadarNative.progress(reactContext, movementBoost)

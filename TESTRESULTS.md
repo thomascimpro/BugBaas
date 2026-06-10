@@ -1,5 +1,17 @@
 # Test Results
 
+## 2.2.3 release
+
+- `npm.cmd run typecheck`: geslaagd.
+- `.\android\gradlew.bat -p android :app:clean :app:assembleRelease --no-daemon --console=plain`: geslaagd.
+- APK gekopieerd naar `dist/CimPro-BugBaas-2.2.3.apk`.
+- APK grootte: `44,419,406` bytes.
+- `aapt2 dump badging`: package `nl.cimpro.bugbaas`, versionCode `98`, versionName `2.2.3`.
+- `apksigner verify --print-certs`: geslaagd.
+- Signing cert SHA-256: `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA256: `3C87BB04B1E3D3F010067478940EE24971D2F82B7A5C3F8057B76CF53B0155B4`.
+- `adb devices`: geen device aangesloten; OnePlus-install niet uitgevoerd.
+
 ## 2.2.2 release
 
 - `npm.cmd run typecheck`: geslaagd.
