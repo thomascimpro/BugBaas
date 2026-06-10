@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.22
+
+- Sticky helpers geven nu een korte slow/pauze en doen iets duidelijker hit-damage.
+- Shield helpers grijpen eerder in bij bijna ontsnappende bugs, geven een korte guard-pauze en doen meer urgent damage.
+- Helper base damage is licht verhoogd voor Zeldzaam, Episch en Mythisch.
+
 ## 2.1.21
 
 - Bug Smash Duel helpers passen hun hits nu toe met dezelfde actuele tick-tijd als hun target-keuze, zodat helper damage niet meer wordt weggegooid terwijl tap damage wel werkt.

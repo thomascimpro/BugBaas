@@ -80,9 +80,11 @@ Bronbestand: `src/screens/BugSmashDuelScreen.tsx`.
 Huidige uitgangspunten:
 
 - Base taps: Gewoon 2, Zeldzaam 3, Episch 5, Legendarisch 7, Mythisch 9.
-- Helper damage: Gewoon/Zeldzaam 1, Episch 2, Legendarisch 3, Mythisch 5.
+- Helper damage: Gewoon 1, Zeldzaam 2, Episch 3, Legendarisch 3, Mythisch 6.
 - Helper cooldown: Gewoon 9000ms, Zeldzaam 7800ms, Episch 6500ms, Legendarisch 5100ms, Mythisch 4600ms.
 - Helpers starten niet vol; initial charge blijft gedeeltelijk.
+- Sticky geeft een korte slow/pauze en +1 hit als de target nog meer dan 1 hit nodig heeft.
+- Shield geeft bij late targets een korte guard-pauze en +1/+2 urgent hits afhankelijk van hoe ver de target is.
 
 Procedure:
 
