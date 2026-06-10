@@ -46,16 +46,6 @@ const bugMissionPool: MissionTemplate[] = [
     progressFor: (user, { bugs }, weekStart) => bugs.filter((bug) => isBugReport(bug) && bug.reporterId === user.uid && isThisWeek(bug.createdAt, weekStart)).length
   },
   {
-    id: "screenshot-proof",
-    title: "mission.screenshotThree",
-    target: 3,
-    reward: "mission.rewardCommonBug",
-    rewardSource: "weekly_mission_common",
-    rewardType: "bug",
-    rewardXp: 0,
-    progressFor: (user, { bugs }, weekStart) => bugs.filter((bug) => isBugReport(bug) && bug.reporterId === user.uid && isThisWeek(bug.createdAt, weekStart) && !!bug.screenshotDataUrl).length
-  },
-  {
     id: "team-votes",
     title: "mission.upvotesFive",
     target: 5,
@@ -132,11 +122,11 @@ const featureMissionPool: MissionTemplate[] = [
 const movementMission: MissionTemplate = {
   id: "walk-week",
   title: "mission.walkWeek",
-  target: 5,
+  target: 7.5,
   reward: "mission.rewardXp20",
   rewardType: "xp",
   rewardXp: 20,
-  progressFor: (user, _context, weekStart) => user.movementRegisteredWeek === isoWeekId(weekStart) ? Math.floor(user.movementRegisteredWeekKm ?? 0) : 0
+  progressFor: (user, _context, weekStart) => user.movementRegisteredWeek === isoWeekId(weekStart) ? Math.floor(((user.movementRegisteredWeekKm ?? 0) + 0.0001) * 10) / 10 : 0
 };
 
 export function weeklyMissionSet(user: User, bugs: BugReport[], options: { duels?: BugSmashDuel[]; inventory?: BugDexInventoryItem[]; now?: Date } = {}): WeeklyMission[] {

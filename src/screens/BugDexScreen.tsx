@@ -7,7 +7,7 @@ import { BugDexUnlockModal } from "../components/BugDexUnlockModal";
 import { MythicRarityFrame } from "../components/MythicRarityFrame";
 import { TradeAnimationModal } from "../components/TradeAnimationModal";
 import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineBugDexDuplicates, combineDifferentBugDexUpgrade, combineRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory } from "../services/bugDexService";
-import { activeBugSquadBonusList, maxActiveBugSquadSize, sanitizeActiveBugSquad, BugSquadBonusCategory } from "../services/bugSquadService";
+import { activeBugSquadBonusList, bugSquadAttackKindForCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad, BugSquadBonusCategory } from "../services/bugSquadService";
 import { bugDexEntryName, bugDexEntryNote, bugDexEntryTitle, rarityLabel, useI18n } from "../services/i18n";
 import { notifyTradeAccepted, notifyTradeRequest } from "../services/notificationService";
 import { bugDexEntries, BugDexEntry, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
@@ -292,6 +292,10 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   function bugBuffText(bugId: string) {
     const bonus = activeBugSquadBonusList([bugId])[0];
     return bonus ? `${squadBonusLabel(bonus.category)} ${squadBonusValue(bonus.category, bonus.value)}` : "";
+  }
+
+  function bugAttackText(category: BugSquadBonusCategory) {
+    return t("duel.helperAttack", { attack: t(`duel.helper.${bugSquadAttackKindForCategory(category)}`) });
   }
 
   function openTradeWorkshop() {
@@ -594,6 +598,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                   <BugArtImage bugId={item.bugId} size={34} />
                   <Text style={[styles.squadBugChipText, selected && styles.squadBugChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
                   <Text style={[styles.tradeRarityPill, { backgroundColor: rarityColors[entry.rarity] }]}>{rarityLabel(entry.rarity, t)}</Text>
+                  {bonus && <Text style={[styles.squadBugChipAttack, selected && styles.squadBugChipTextActive]}>{bugAttackText(bonus.category)}</Text>}
                   {bonus && <Text style={[styles.squadBugChipMeta, selected && styles.squadBugChipTextActive]}>{`${squadBonusLabel(bonus.category)} ${squadBonusValue(bonus.category, bonus.value)}`}</Text>}
                 </Pressable>
               );
@@ -602,27 +607,20 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
       </View>
       )}
 
-      <Pressable style={styles.workshopFeatureCard} onPress={openTradeWorkshop}>
+      <Pressable
+        style={[styles.workshopFeatureCard, tradeExpanded && styles.workshopFeatureCardActive]}
+        onLayout={(event) => {
+          tradeSectionY.current = event.nativeEvent.layout.y;
+        }}
+        onPress={() => setTradeExpanded((current) => !current)}
+      >
         <Image resizeMode="cover" source={bugDexWorkshopImage} style={styles.workshopFeatureImage} />
         <View style={styles.workshopFeatureBody}>
           <Text style={styles.workshopFeatureTitle}>{t("bugdex.tradeAndUpgrades")}</Text>
           <Text style={styles.workshopFeatureMeta}>{t("bugdex.tradeMeta", { incoming: incomingTrades.length, open: outgoingTrades.length, duplicate: duplicateCount })}</Text>
         </View>
         <View style={styles.workshopFeatureAction}>
-          <Text style={styles.workshopFeatureActionText}>{t("common.open")}</Text>
-        </View>
-      </Pressable>
-
-      <Pressable
-        style={[styles.tradeDropdown, tradeExpanded && styles.tradeDropdownActive]}
-        onLayout={(event) => {
-          tradeSectionY.current = event.nativeEvent.layout.y;
-        }}
-        onPress={() => setTradeExpanded((current) => !current)}
-      >
-        <View>
-          <Text style={[styles.tradeDropdownTitle, tradeExpanded && styles.tradeDropdownTitleActive]}>{t("bugdex.tradeAndUpgrades")}</Text>
-          <Text style={[styles.tradeDropdownMeta, tradeExpanded && styles.tradeDropdownMetaActive]}>{t("bugdex.tradeMeta", { incoming: incomingTrades.length, open: outgoingTrades.length, duplicate: duplicateCount })}</Text>
+          <Text style={styles.workshopFeatureActionText}>{tradeExpanded ? t("common.close") : t("common.open")}</Text>
         </View>
       </Pressable>
 
@@ -920,6 +918,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     overflow: "hidden",
     padding: 10
+  },
+  workshopFeatureCardActive: {
+    backgroundColor: "#fff3cf",
+    borderColor: "#b88a1d"
   },
   workshopFeatureImage: {
     backgroundColor: "#102018",
@@ -1547,6 +1549,13 @@ const styles = StyleSheet.create({
   },
   squadBugChipMeta: {
     color: "#52665d",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 4,
+    textAlign: "center"
+  },
+  squadBugChipAttack: {
+    color: "#102018",
     fontSize: 10,
     fontWeight: "900",
     marginTop: 4,
