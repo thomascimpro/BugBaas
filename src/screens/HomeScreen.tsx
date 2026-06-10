@@ -41,6 +41,7 @@ const rarityColors: Record<BugDexRarity, string> = {
 
 const settingsGearImage = require("../../assets/generated/settings-gear-hd.png");
 const bugSmashDuelImage = require("../../assets/generated/bug-smash-duel-concept.jpg");
+const soloDuelImage = require("../../assets/generated/solo-duel-campaign-hd.png");
 
 export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRadarClaimed, onMovementRegistered, onOpenBugSmashDuel, onOpenBugDexWorkshop, onRewardDrop, onUserUpdated, user, onNavigate }: Props) {
   const { language, setLanguage, t, tr } = useI18n();
@@ -410,23 +411,14 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
           )}
         </View>
       </View>
-      <View style={styles.quickCard}>
-        <Text style={styles.newsTitle}>{t("home.actions")}</Text>
-        <View style={styles.newsGrid}>
-          <View style={styles.updatePill}>
-            <BugArtImage bugId="pissebed" size={32} />
-            <Text style={styles.newsItemTitle}>3 bugs</Text>
-          </View>
-          <View style={styles.updatePill}>
-            <BugArtImage bugId="mestkever" size={32} />
-            <Text style={styles.newsItemTitle}>Fix +15</Text>
-          </View>
-          <Pressable style={styles.updatePill} onPress={() => onNavigate("bugdex")}>
-            <BugArtImage bugId="lieveheersbeestje" size={32} />
-            <Text style={styles.newsItemTitle}>BugDex</Text>
-          </Pressable>
+      <Pressable style={[styles.workshopCard, styles.soloDuelCard]} onPress={onOpenBugSmashDuel ?? (() => onNavigate("duel"))}>
+        <Image source={soloDuelImage} style={styles.workshopImage} />
+        <View style={styles.workshopText}>
+          <Text style={styles.workshopTitle}>{t("home.soloDuelTitle")}</Text>
+          <Text style={styles.workshopBody} numberOfLines={2}>{t("home.soloDuelBody")}</Text>
+          <Text style={styles.workshopCta}>{t("home.soloDuelCta")}</Text>
         </View>
-      </View>
+      </Pressable>
       <Pressable style={[sharedStyles.button, styles.actionButton]} onPress={() => onNavigate("bugs")}>
         <BugArtImage bugId="neushoornkever" size={38} />
         <Text style={sharedStyles.buttonText}>{t("home.viewBugs")}</Text>
@@ -940,6 +932,9 @@ const styles = StyleSheet.create({
   duelCard: {
     borderColor: "#b83227"
   },
+  soloDuelCard: {
+    borderColor: "#38bdf8"
+  },
   workshopImage: {
     borderRadius: 8,
     height: 86,
@@ -1096,37 +1091,6 @@ const styles = StyleSheet.create({
   },
   rankingPoints: {
     color: "#d7bd57",
-    fontWeight: "900"
-  },
-  quickCard: {
-    backgroundColor: "#fdfefb",
-    borderColor: "#d7e1d9",
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 12,
-    padding: 14
-  },
-  newsTitle: {
-    color: "#102018",
-    fontSize: 16,
-    fontWeight: "900",
-    marginBottom: 10
-  },
-  newsGrid: {
-    flexDirection: "row",
-    gap: 8
-  },
-  updatePill: {
-    alignItems: "center",
-    backgroundColor: "#eef4ed",
-    borderRadius: 8,
-    flex: 1,
-    gap: 5,
-    padding: 9
-  },
-  newsItemTitle: {
-    color: "#17211c",
-    fontSize: 12,
     fontWeight: "900"
   },
   actionButton: {

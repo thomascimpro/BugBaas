@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.0
+
+- Duel helper-animaties blokkeren taps niet meer; hogere rarity targets hebben een iets grotere hitbox en Bug Squad potjes gebruiken de HD jar-art.
+- Home vervangt de losse Acties-kaart door Solo Duel met nieuwe HD campaign-art.
+- Bug Smash Duel heeft nu een Solo Campaign: 20 waves tegen BugBot, elke vierde wave een boss wave en oplopende targets/rarities zonder rewards.
+- Solo Campaign balance is vastgelegd en gesimuleerd met beginner, gemiddelde, epic squad en mythic squad profielen.
+- De 2.2.0 changelog-popup toont nieuwe HD release-art voor Solo Campaign.
+
 ## 2.1.23
 
 - Duel toont na jouw score nu een wacht-op-resultaat popup als de andere speler nog moet spelen, en toont de uitslag als popup zodra beide scores geregistreerd zijn.
