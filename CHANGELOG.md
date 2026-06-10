@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.15
+
+- Firestore duel rules zijn gelijkgetrokken met 48 duel bugs, zodat duel aanvragen niet meer op permissies falen.
+- De uitdager mag zijn preplay score nu ook server-side opslaan terwijl het duel nog `pending` is.
+- Lage duel scores onder 30 tonen weer een retry-optie en lokale scores worden automatisch opnieuw gesubmit als de server ze nog niet heeft.
+- Solo Campaign bewaart nu wave en levens in Firestore met lokale fallback, zodat `2/3` levens na update/herstart niet terug naar `3/3` springt.
+
 ## 2.2.14
 
 - Bug Squad helpers werken weer tijdens duel preplay en doen weer consequent damage per cooldown.

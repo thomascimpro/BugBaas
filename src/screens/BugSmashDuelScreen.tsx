@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
 import { BugSwatterHit, playBugSwatterFeedback } from "../components/BugSwatterHit";
@@ -26,6 +25,7 @@ import { BugDexRarity, bugDexEntries } from "../services/pointsService";
 import { entryByBugId } from "../services/bugDexService";
 import { playBugSound } from "../services/soundService";
 import { soloCampaignConfig, soloCampaignBugIds, soloCampaignMaxLevel, soloCampaignMaxWave, type SoloCampaignConfig } from "../services/soloCampaignBalance";
+import { loadSoloCampaignProgress, saveSoloCampaignProgress } from "../services/soloCampaignProgressService";
 import { claimSoloCampaignBossDailyReward } from "../services/soloCampaignRewardService";
 import { activateSoloLampFocus, consumeSoloBugBomb, emptySoloPowerupInventory, grantSoloBossReward, loadSoloPowerupInventory, soloLampFocusActive, soloLampFocusRemainingMinutes, type SoloPowerupInventory } from "../services/soloPowerupService";
 import { listUsers, updateUserBugSquad } from "../services/userService";
@@ -57,7 +57,6 @@ const soloBossImages = {
   4: require("../../assets/generated/solo-boss-hornet-hd.png"),
   5: require("../../assets/generated/solo-boss-atlas-hd.png")
 };
-const soloCampaignProgressPrefix = "bugbaas:soloCampaignWave";
 const soloCampaignStartingLives = 3;
 const duelRetryScoreThreshold = 30;
 const duelEffectSprites = {
@@ -275,7 +274,6 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const soloBossRewardedRef = useRef(new Set<string>());
   const soloCampaignClearRewardedRef = useRef(new Set<string>());
   const assist = useMemo(() => bugSmashDuelBalanceForUser({ activeBugSquad: activeSquadIds }), [activeSquadIds]);
-  const soloCampaignProgressKey = `${soloCampaignProgressPrefix}:${user.uid}`;
   const opponents = useMemo(() => {
     const items = users.filter((item) => item.uid !== user.uid);
     if (initialOpponent && initialOpponent.uid !== user.uid && !items.some((item) => item.uid === initialOpponent.uid)) {
@@ -316,10 +314,12 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     setHelperImpacts([]);
   }
 
-  async function rememberSoloCampaignWave(wave: number) {
+  async function rememberSoloCampaignProgress(wave: number, lives = soloCampaignLives) {
     const nextWave = Math.max(1, Math.min(soloCampaignMaxWave, Math.floor(wave)));
+    const nextLives = Math.max(1, Math.min(soloCampaignStartingLives, Math.floor(lives)));
     setSoloCampaignUnlockedWave(nextWave);
-    await AsyncStorage.setItem(soloCampaignProgressKey, String(nextWave)).catch(() => undefined);
+    setSoloCampaignLives(nextLives);
+    await saveSoloCampaignProgress(user.uid, { lives: nextLives, wave: nextWave }).catch(() => undefined);
   }
 
   useEffect(() => {
@@ -345,17 +345,19 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   useEffect(() => {
     let active = true;
-    void AsyncStorage.getItem(soloCampaignProgressKey).then((value) => {
+    void loadSoloCampaignProgress(user.uid).then((progress) => {
       if (!active) return;
-      const wave = Number(value);
-      setSoloCampaignUnlockedWave(Number.isFinite(wave) ? Math.max(1, Math.min(soloCampaignMaxWave, Math.floor(wave))) : 1);
+      setSoloCampaignUnlockedWave(progress.wave);
+      setSoloCampaignLives(progress.lives);
     }).catch(() => {
-      if (active) setSoloCampaignUnlockedWave(1);
+      if (!active) return;
+      setSoloCampaignUnlockedWave(1);
+      setSoloCampaignLives(soloCampaignStartingLives);
     });
     return () => {
       active = false;
     };
-  }, [soloCampaignProgressKey]);
+  }, [user.uid]);
 
   useEffect(() => {
     let active = true;
@@ -405,6 +407,25 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   useEffect(() => {
     hitCountsRef.current = hitCounts;
   }, [hitCounts]);
+
+  useEffect(() => {
+    if (!activeDuel) return;
+    const localScore = localSubmittedScores[activeDuel.id];
+    if (!localScore || activeDuel.scores?.[user.uid]) return;
+    const retry = setTimeout(() => {
+      void submitBugSmashDuelScore(user, activeDuel.id, localScore.score, localScore.caughtBugIds, localScore.bonusScore)
+        .then((duel) => {
+          setActiveDuel(duel);
+          setRetryingDuelIds((current) => {
+            const next = new Set(current);
+            next.delete(duel.id);
+            return next;
+          });
+        })
+        .catch(() => undefined);
+    }, 1800);
+    return () => clearTimeout(retry);
+  }, [activeDuel?.id, activeDuel?.scores, localSubmittedScores, user]);
 
   const activeLocalStartAt = activeDuel ? localStartAtByDuelId[activeDuel.id] : "";
   const activeDuelOwnScore = activeDuel?.scores?.[user.uid];
@@ -839,7 +860,6 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     const config = soloCampaignConfig(wave);
     resetRunState();
     setSoloRun({ mode: "campaign", ...config });
-    if (wave === 1) setSoloCampaignLives(soloCampaignStartingLives);
     setActiveDuelId("");
     setActiveDuel(null);
     setError("");
@@ -888,24 +908,23 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     const campaign = soloRun?.mode === "campaign" ? soloRun : null;
     if (!campaign) return;
     if (soloCampaignComplete) {
-      void rememberSoloCampaignWave(1);
-      setSoloCampaignLives(soloCampaignStartingLives);
+      void rememberSoloCampaignProgress(1, soloCampaignStartingLives);
       startSoloCampaign(1);
       return;
     }
     if (soloCampaignWon) {
       const nextWave = Math.min(soloCampaignMaxWave, campaign.wave + 1);
-      void rememberSoloCampaignWave(nextWave);
+      void rememberSoloCampaignProgress(nextWave, soloCampaignLives);
       startSoloCampaign(nextWave);
       return;
     }
     if (soloCampaignLives > 1) {
-      setSoloCampaignLives((current) => Math.max(1, current - 1));
+      const nextLives = Math.max(1, soloCampaignLives - 1);
+      void rememberSoloCampaignProgress(campaign.wave, nextLives);
       startSoloCampaign(campaign.wave);
       return;
     }
-    void rememberSoloCampaignWave(1);
-    setSoloCampaignLives(soloCampaignStartingLives);
+    void rememberSoloCampaignProgress(1, soloCampaignStartingLives);
     startSoloCampaign(1);
   }
 
@@ -986,7 +1005,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const ownSubmittedScore = activeScore ?? localSubmittedScore;
   const opponentId = activeDuel ? activeDuel.fromUserId === user.uid ? activeDuel.toUserId : activeDuel.fromUserId : "";
   const opponentScore = opponentId ? activeDuel?.scores?.[opponentId] : undefined;
-  const canRetryOwnDuelScore = Boolean(activeDuel && ownSubmittedScore && !opponentScore && ownSubmittedScore.score < duelRetryScoreThreshold && (activeDuel.status === "pending" || activeDuel.status === "accepted"));
+  const ownRetryScore = ownSubmittedScore?.score ?? (activeDuel && runSubmitted && !opponentScore ? score + duelBonusScore(score, assist) : undefined);
+  const canRetryOwnDuelScore = Boolean(activeDuel && ownRetryScore !== undefined && !opponentScore && ownRetryScore < duelRetryScoreThreshold && (activeDuel.status === "pending" || activeDuel.status === "accepted"));
   const awaitingOpponentResult = Boolean((activeDuel?.status === "pending" || activeDuel?.status === "accepted") && ownSubmittedScore && !opponentScore && !retryingActiveDuel);
   const showWaitingResultModal = Boolean(activeDuel && awaitingOpponentResult && !acknowledgedWaitingDuelIds.has(activeDuel.id));
   const resultRewardPending = Boolean(activeDuel?.winnerId && isDuelParticipant(activeDuel, user) && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid));

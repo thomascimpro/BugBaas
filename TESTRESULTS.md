@@ -1,5 +1,21 @@
 # Test Results
 
+## 2.2.15 release
+
+- `npm.cmd run typecheck`: geslaagd.
+- `npx.cmd expo config --type public`: geslaagd; versie `2.2.15`, package `nl.cimpro.bugbaas`.
+- `npx.cmd expo install --check`: geslaagd.
+- Logic smoke-check: 48 duel bugs in rules, pending preplay submit, duelRewardEvents, solo progress Firestore rules, retry UI, auto-resubmit en legacy wave migratie aanwezig.
+- `firebase.cmd deploy --only firestore:rules --project <firebase-project-id>`: geslaagd.
+- `.\android\gradlew.bat -p android :app:clean :app:assembleRelease --no-daemon --console=plain`: geslaagd.
+- APK gekopieerd naar `dist/CimPro-BugBaas-2.2.15.apk`.
+- APK grootte: `44,647,974` bytes.
+- `aapt2 dump badging`: package `nl.cimpro.bugbaas`, versionCode `110`, versionName `2.2.15`.
+- `apksigner verify --print-certs`: geslaagd.
+- Signing cert SHA-256: `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA256: `6DF6B09AACEDC72156EE3D2E152905B709D7EA6B6A3134E3E4BEF931DE4769B4`.
+- `adb devices`: geen device aangesloten; install-smoke niet uitgevoerd.
+
 ## 2.2.14 release
 
 - `npm.cmd run typecheck`: geslaagd.
