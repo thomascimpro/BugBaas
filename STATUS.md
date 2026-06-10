@@ -5,6 +5,7 @@
 - Google-login werkt via native Google Sign-In in standalone APK.
 - Eerste standalone APK gebouwd en getest op Pixel 8.
 - GitHub Release `v0.1.0` met APK: klaar.
+- GitHub Release `v2.2.1`: voorbereid met embedded release image bovenaan de release notes en APK `CimPro-BugBaas-2.2.1.apk`.
 - Bug melden concept/herstel en screenshot verwijderen: klaar.
 - Bug CRUD V1: aanmaken, tonen en status wijzigen klaar.
 - Upvotes op bugmeldingen: klaar.

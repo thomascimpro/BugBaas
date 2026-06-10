@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
+import { BugJarArt } from "../components/BugJarArt";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugDexUnlockModal } from "../components/BugDexUnlockModal";
 import { MythicRarityFrame } from "../components/MythicRarityFrame";
@@ -462,8 +463,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                   <Text style={[styles.rarity, { color: unlocked ? color : "#87958e" }]}>{unlocked ? rarityLabel(entry.rarity, t) : "???"}</Text>
                 </View>
                 <View style={[styles.bugWrap, !unlocked && styles.lockedBugWrap, isMythic && styles.mythicBugWrap]}>
-                  {isMythic && <MythicRarityFrame size={96} style={styles.cardMythicFrame} />}
-                  {unlocked ? <BugArtImage bugId={entry.id} size={70} style={isMythic && styles.cardMythicBug} /> : <Text style={styles.lockedMark}>?</Text>}
+                  <BugJarArt bugId={entry.id} rarity={entry.rarity} size={104} unlocked={unlocked} />
                 </View>
                 <View style={styles.nameRow}>
                   <Text style={[styles.name, !unlocked && styles.lockedName]} numberOfLines={1}>{unlocked ? bugDexEntryName(entry, t) : t("bugdex.unknown")}</Text>
@@ -500,8 +500,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         </View>
         {headerEntry ? (
           <View style={styles.headerBugWrap}>
-            {headerEntry.rarity === "Mythisch" && <MythicRarityFrame size={96} style={styles.headerMythicFrame} />}
-            <BugArtImage bugId={headerEntry.id} size={74} style={headerEntry.rarity === "Mythisch" && styles.headerMythicBug} />
+            <BugJarArt bugId={headerEntry.id} rarity={headerEntry.rarity} size={92} />
           </View>
         ) : (
           <View style={styles.headerEmptyIcon}>
@@ -526,13 +525,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
           const entry = activeSquadEntries[index];
           return (
             <View key={entry?.id ?? index} style={styles.activeJarMini}>
-              <View style={[styles.activeJarMiniLid, entry && { backgroundColor: rarityColors[entry.rarity] }]} />
-              <View style={[styles.activeJarSlot, entry && { borderColor: rarityColors[entry.rarity] }]}>
-                <View style={styles.activeJarShine} />
-                {entry?.rarity === "Mythisch" && <MythicRarityFrame size={58} style={styles.activeJarMythicFrame} />}
-                {entry ? <BugArtImage bugId={entry.id} size={44} style={entry.rarity === "Mythisch" && styles.activeJarMythicBug} /> : <Text style={styles.activeJarEmpty}>+</Text>}
-                <View style={styles.activeJarBase} />
-              </View>
+              <BugJarArt bugId={entry?.id} rarity={entry?.rarity} size={68} unlocked={Boolean(entry)} />
             </View>
           );
         })}
@@ -548,13 +541,10 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
               const bonus = activeSquadBonuses.find((item) => item.bugId === bugId);
               return (
                 <View key={index} style={styles.squadBugJarWrap}>
-                  <View style={[styles.squadBugJarLid, entry && { backgroundColor: rarityColors[entry.rarity], borderColor: rarityColors[entry.rarity] }]} />
-                  <View style={[styles.squadJarSlot, entry && { borderColor: rarityColors[entry.rarity] }]}>
-                    <View style={styles.squadJarShine} />
+                  <View style={styles.squadJarSlot}>
                     {entry ? (
                       <>
-                        {entry.rarity === "Mythisch" && <MythicRarityFrame size={92} style={styles.squadJarMythicFrame} />}
-                        <BugArtImage bugId={entry.id} size={54} style={entry.rarity === "Mythisch" && styles.squadJarMythicBug} />
+                        <BugJarArt bugId={entry.id} rarity={entry.rarity} size={90} />
                         <Text style={styles.squadSlotName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>
                         {bonus && <Text style={styles.squadSlotBonus}>{squadBonusLabel(bonus.category)}</Text>}
                       </>
@@ -564,7 +554,6 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                         <Text style={styles.squadSlotBonus}>{t("bugdex.squadEmptySlot")}</Text>
                       </>
                     )}
-                    <View style={styles.squadJarBase} />
                   </View>
                 </View>
               );
@@ -1330,16 +1319,12 @@ const styles = StyleSheet.create({
   },
   squadJarSlot: {
     alignItems: "center",
-    backgroundColor: "rgba(220,244,250,0.62)",
-    borderColor: "rgba(16,32,24,0.18)",
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
-    borderRadius: 16,
-    borderWidth: 2,
-    minHeight: 128,
-    overflow: "hidden",
+    backgroundColor: "#edf7f5",
+    borderColor: "#c6d3cc",
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 142,
     padding: 8,
-    paddingTop: 12,
     width: "100%"
   },
   squadJarBase: {
@@ -1923,10 +1908,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
-    minHeight: 62
+    minHeight: 112
   },
   mythicBugWrap: {
-    minHeight: 92
+    minHeight: 112
   },
   cardMythicFrame: {
     zIndex: 1
@@ -1935,11 +1920,7 @@ const styles = StyleSheet.create({
     zIndex: 2
   },
   lockedBugWrap: {
-    backgroundColor: "#e8efe9",
-    borderColor: "#cbd8d1",
-    borderRadius: 8,
-    borderStyle: "dashed",
-    borderWidth: 1
+    opacity: 0.86
   },
   lockedMark: {
     color: "#87958e",

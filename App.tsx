@@ -72,6 +72,11 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.2.1": [
+    { key: "changelog.2.2.1.powerups", image: require("./assets/generated/solo-powerups-hd.png"), tone: "gold" },
+    { key: "changelog.2.2.1.modes", image: require("./assets/generated/bug-smash-duel-concept.jpg"), tone: "purple" },
+    { key: "changelog.2.2.1.jars", image: require("./assets/generated/bug-squad-jar-hd.png"), tone: "green" }
+  ],
   "2.2.0": [
     { key: "changelog.2.2.0.soloCampaign", image: require("./assets/generated/release-2.2.0-solo-campaign-hd.png"), tone: "purple" },
     { key: "changelog.2.2.0.balance", image: require("./assets/generated/solo-duel-campaign-hd.png"), tone: "green" },

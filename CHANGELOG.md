@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.1
+
+- GitHub release notes tonen de release-afbeelding nu bovenaan in de changelogtekst in plaats van als losse image attachment.
+- Solo Campaign heeft boss rewards: Lamp Focus en Bug Bomb zijn solo-only powerups met eigen HD art en compacte inventory in de Solo kaart/HUD.
+- Duel, Training en Solo Campaign zijn visueel duidelijker gesplitst op het startscherm.
+- BugDex bugs en active squad gebruiken nu HD potjes met rarity/tier kleur.
+- Solo Campaign targets zijn verhoogd; level 1 start nu op 60 punten.
+
 ## 2.2.0
 
 - Duel helper-animaties blokkeren taps niet meer; hogere rarity targets hebben een iets grotere hitbox en Bug Squad potjes gebruiken de HD jar-art.
