@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
 import { BugSwatterHit, playBugSwatterFeedback } from "../components/BugSwatterHit";
 import { BugDexDropResult, grantBugDexReward, listBugDexInventory } from "../services/bugDexService";
-import { activeBugSquadBonusList, BugSquadBonusCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
+import { activeBugSquadBonusList, BugSquadAttackKind, bugSquadAttackKindForCategory, BugSquadBonusCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
 import { bugSmashDuelBalanceForUser, BugSmashDuelBalance } from "../services/bugSquadGameBalance";
 import {
   bugSmashDuelBugCount,
@@ -76,7 +77,7 @@ const soloBugBombMaxTargets = 4;
 const soloLampFocusPulseCooldownMs = 4600;
 const soloLampFocusTapMultiplier = 0.85;
 
-type HelperImpactKind = "burst" | "shield" | "splash" | "sticky" | "zap";
+type HelperImpactKind = BugSquadAttackKind;
 type HelperAnimationStyle = "orb" | "pulse" | "slash";
 type MythicSpecialKind = "royal_freeze" | "prism_chain" | "pattern_break" | "candy_slow" | "longneck_scout" | "bloom_blade" | "lantern_signal" | "mirror_guard";
 
@@ -220,6 +221,23 @@ const mythicSpecials: Record<string, MythicSpecialSpec> = {
   }
 };
 
+function acknowledgedWaitingDuelStorageKey(uid: string): string {
+  return `bugbaas:acknowledged-waiting-duels:${uid}`;
+}
+
+async function loadAcknowledgedWaitingDuelIds(uid: string): Promise<Set<string>> {
+  const raw = await AsyncStorage.getItem(acknowledgedWaitingDuelStorageKey(uid));
+  if (!raw) return new Set();
+  const parsed = JSON.parse(raw);
+  return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : []);
+}
+
+async function saveAcknowledgedWaitingDuelId(uid: string, duelId: string): Promise<void> {
+  const current = await loadAcknowledgedWaitingDuelIds(uid);
+  if (current.has(duelId)) return;
+  await AsyncStorage.setItem(acknowledgedWaitingDuelStorageKey(uid), JSON.stringify([...current, duelId]));
+}
+
 export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, onBack, onDuelAccepted, onDuelRequest, onFullscreenChange, onRewardDrop, onUserUpdated }: Props) {
   const { t } = useI18n();
   const [users, setUsers] = useState<User[]>([]);
@@ -254,6 +272,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [localStartAtByDuelId, setLocalStartAtByDuelId] = useState<Record<string, string>>({});
   const [localSubmittedScores, setLocalSubmittedScores] = useState<Record<string, BugSmashDuelScore>>({});
   const [acknowledgedWaitingDuelIds, setAcknowledgedWaitingDuelIds] = useState<Set<string>>(new Set());
+  const [acknowledgedWaitingLoaded, setAcknowledgedWaitingLoaded] = useState(false);
   const [dismissedResultDuelIds, setDismissedResultDuelIds] = useState<Set<string>>(new Set());
   const [retryingDuelIds, setRetryingDuelIds] = useState<Set<string>>(new Set());
   const submittedRef = useRef(false);
@@ -284,6 +303,13 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const activeSquadBonuses = activeBugSquadBonusList(activeSquadIds);
   const selectedOpponentBlocked = selectedOpponentId ? duels.some((duel) => isActiveDuelBetweenUsers(duel, user.uid, selectedOpponentId)) : false;
   const canStartChallenge = Boolean(selectedOpponentId && !selectedOpponentBlocked && !busy);
+  const isAcknowledgedWaitingDuel = (duel: BugSmashDuel) => {
+    const opponentId = duel.fromUserId === user.uid ? duel.toUserId : duel.fromUserId;
+    return acknowledgedWaitingDuelIds.has(duel.id)
+      && (duel.status === "pending" || duel.status === "accepted")
+      && Boolean(duel.scores?.[user.uid])
+      && !duel.scores?.[opponentId];
+  };
   const squadChoiceInventory = [...inventory].filter((item) => item.count > 0).sort((a, b) => {
     const firstEntry = entryByBugId(a.bugId);
     const secondEntry = entryByBugId(b.bugId);
@@ -324,6 +350,22 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   useEffect(() => {
     let active = true;
+    setAcknowledgedWaitingLoaded(false);
+    void loadAcknowledgedWaitingDuelIds(user.uid).then((ids) => {
+      if (!active) return;
+      setAcknowledgedWaitingDuelIds(ids);
+      setAcknowledgedWaitingLoaded(true);
+    }).catch(() => {
+      if (active) setAcknowledgedWaitingLoaded(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user.uid]);
+
+  useEffect(() => {
+    if (!acknowledgedWaitingLoaded) return () => undefined;
+    let active = true;
     void Promise.all([listUsers(), listBugSmashDuels(user), listBugDexInventory(user)]).then(([nextUsers, nextDuels, nextInventory]) => {
       if (!active) return;
       setUsers(nextUsers);
@@ -332,8 +374,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       setActiveSquadIds(sanitizeActiveBugSquad(user.activeBugSquad, nextInventory));
       if (!activeDuelId) {
         const actionableDuel = nextDuels.find((duel) => duel.status === "pending" && duel.toUserId === user.uid)
-          ?? nextDuels.find((duel) => duel.status === "pending" && duel.fromUserId === user.uid && Boolean(duel.scores?.[user.uid]))
-          ?? nextDuels.find((duel) => duel.status === "accepted" && !duel.scores?.[user.uid])
+          ?? nextDuels.find((duel) => duel.status === "pending" && duel.fromUserId === user.uid && Boolean(duel.scores?.[user.uid]) && !isAcknowledgedWaitingDuel(duel))
+          ?? nextDuels.find((duel) => duel.status === "accepted" && !duel.scores?.[user.uid] && !isAcknowledgedWaitingDuel(duel))
           ?? nextDuels.find((duel) => duel.status === "completed" && isDuelParticipant(duel, user) && !duelResultSeenByUser(duel, user));
         if (actionableDuel) setActiveDuelId(actionableDuel.id);
       }
@@ -341,7 +383,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     return () => {
       active = false;
     };
-  }, [user.uid, activeDuelId]);
+  }, [user.uid, activeDuelId, acknowledgedWaitingLoaded, acknowledgedWaitingDuelIds]);
 
   useEffect(() => {
     let active = true;
@@ -416,6 +458,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       void submitBugSmashDuelScore(user, activeDuel.id, localScore.score, localScore.caughtBugIds, localScore.bonusScore)
         .then((duel) => {
           setActiveDuel(duel);
+          void refreshDuels().catch(() => undefined);
           setRetryingDuelIds((current) => {
             const next = new Set(current);
             next.delete(duel.id);
@@ -469,6 +512,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             void submitBugSmashDuelScore(user, runningDuel.id, submittedScore.score, submittedScore.caughtBugIds, submittedScore.bonusScore)
               .then((duel) => {
                 setActiveDuel(duel);
+                void refreshDuels().catch(() => undefined);
                 setRetryingDuelIds((current) => {
                   const next = new Set(current);
                   next.delete(duel.id);
@@ -820,8 +864,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   function closeWaitingResultAndGoHome() {
     if (activeDuel) {
       setAcknowledgedWaitingDuelIds((current) => new Set([...current, activeDuel.id]));
+      void saveAcknowledgedWaitingDuelId(user.uid, activeDuel.id).catch(() => undefined);
     }
-    onBack();
+    setActiveDuelId("");
+    setActiveDuel(null);
+    void refreshDuels().catch(() => undefined);
   }
 
   function startTraining() {
@@ -1415,6 +1462,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                     const entry = entryByBugId(item.bugId);
                     const bonus = activeBugSquadBonusList([item.bugId])[0];
                     if (!entry || !bonus) return null;
+                    const spec = helperSpecForBonus(bonus);
                     const selected = activeSquadIds.includes(item.bugId);
                     const disabled = !selected && activeSquadIds.length >= maxActiveBugSquadSize;
                     return (
@@ -1427,6 +1475,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                         <BugArtImage bugId={item.bugId} size={50} />
                         <Text style={[styles.squadChoiceName, selected && styles.squadChoiceNameActive]} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>
                         <Text style={[styles.rarityPill, { backgroundColor: rarityColors[entry.rarity] }]}>{rarityLabel(entry.rarity, t)}</Text>
+                        <Text style={[styles.squadChoiceAttack, selected && styles.squadChoiceNameActive]} numberOfLines={1}>{t("duel.helperAttack", { attack: helperKindLabel(spec.kind, t) })}</Text>
                         <Text style={[styles.squadChoiceMeta, selected && styles.squadChoiceMetaActive]} numberOfLines={2}>{squadBonusLabel(bonus.category, t)} {squadBonusValue(bonus.category, bonus.value)}</Text>
                         <Text style={[styles.squadSelectedPill, selected && styles.squadSelectedPillActive]}>{selected ? t("duel.active") : "+"}</Text>
                       </Pressable>
@@ -1914,11 +1963,7 @@ function mythicSpecialForBug(bugId: string): MythicSpecialSpec | undefined {
 }
 
 function helperKindForCategory(category: BugSquadBonusCategory): HelperImpactKind {
-  if (category === "catch_assist" || category === "catch_time") return "sticky";
-  if (category === "radar_spawn" || category === "radar_rarity" || category === "xp_boost") return "splash";
-  if (category === "movement_boost" || category === "streak_protection") return "shield";
-  if (category === "focus_boost" || category === "knowledge_boost" || category === "support_boost" || category === "quest_boost") return "zap";
-  return "burst";
+  return bugSquadAttackKindForCategory(category);
 }
 
 function helperColorForKind(kind: HelperImpactKind) {
@@ -4006,6 +4051,13 @@ const styles = StyleSheet.create({
   },
   squadChoiceMetaActive: {
     color: "#dce9df"
+  },
+  squadChoiceAttack: {
+    color: "#102018",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 5,
+    textAlign: "center"
   },
   squadChoiceName: {
     color: "#102018",

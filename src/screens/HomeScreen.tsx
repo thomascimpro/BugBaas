@@ -393,7 +393,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
               <View key={mission.id} style={styles.missionItem}>
                 <View style={styles.missionLine}>
                   <Text style={styles.missionName}>{tr(mission.title)}</Text>
-                  <Text style={[styles.missionCount, done && styles.missionDone]}>{mission.progress}/{mission.target}</Text>
+                  <Text style={[styles.missionCount, done && styles.missionDone]}>{formatMissionValue(mission.progress)}/{formatMissionValue(mission.target)}</Text>
                 </View>
                 <View style={styles.missionTrack}>
                   <View style={[styles.missionFill, { width }]} />
@@ -428,6 +428,10 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
 function formatRemaining(ms: number): string {
   const hours = Math.max(0, Math.ceil(ms / (60 * 60 * 1000)));
   return `${hours}h`;
+}
+
+function formatMissionValue(value: number): string {
+  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
 }
 
 function formatKm(km: number): string {

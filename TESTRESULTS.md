@@ -1,5 +1,20 @@
 # Test Results
 
+## 2.2.16 release
+
+- `npm.cmd run typecheck`: geslaagd.
+- `npx.cmd expo config --type public`: geslaagd; versie `2.2.16`, package `nl.cimpro.bugbaas`.
+- `npx.cmd expo install --check`: geslaagd.
+- Logic smoke-check: helper attack labels in Duel/BugDex, waiting-result ack met Arena-overview, trade/upgrade workshopkaart als enige toggle, weekly 7.5 km en geen screenshot weekly template aanwezig.
+- `.\android\gradlew.bat -p android assembleRelease -PbugbaasLegacyDebugSigning=true`: geslaagd.
+- APK gekopieerd naar `dist/CimPro-BugBaas-2.2.16.apk`.
+- APK grootte: `44,650,094` bytes.
+- `aapt2 dump badging`: package `nl.cimpro.bugbaas`, versionCode `111`, versionName `2.2.16`.
+- `apksigner verify --print-certs`: geslaagd.
+- Signing cert SHA-256: `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA256: `D34BDD811EEF27C2655F2DE357FC398868C4607AD3A2E6830CF108D12DF697D5`.
+- `adb devices`: geen device aangesloten; install-smoke niet uitgevoerd.
+
 ## 2.2.15 release
 
 - `npm.cmd run typecheck`: geslaagd.

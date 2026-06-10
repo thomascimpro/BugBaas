@@ -23,6 +23,7 @@ export type BugSquadBonus = {
 };
 
 export type BugSquadBonusTotals = Record<BugSquadBonusCategory, number>;
+export type BugSquadAttackKind = "burst" | "shield" | "splash" | "sticky" | "zap";
 
 export const maxActiveBugSquadSize = 3;
 
@@ -114,6 +115,14 @@ export function activeBugSquadBonusList(userOrIds?: Pick<User, "activeBugSquad">
     .map((bugId) => bugDexEntryById.get(bugId))
     .filter((entry): entry is BugDexEntry => Boolean(entry))
     .map(bugSquadBonusForEntry);
+}
+
+export function bugSquadAttackKindForCategory(category: BugSquadBonusCategory): BugSquadAttackKind {
+  if (category === "catch_assist" || category === "catch_time") return "sticky";
+  if (category === "radar_spawn" || category === "radar_rarity" || category === "xp_boost") return "splash";
+  if (category === "movement_boost" || category === "streak_protection") return "shield";
+  if (category === "focus_boost" || category === "knowledge_boost" || category === "support_boost" || category === "quest_boost") return "zap";
+  return "burst";
 }
 
 export function bugSquadBonusesForIds(ids: string[]): BugSquadBonusTotals {

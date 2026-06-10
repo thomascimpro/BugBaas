@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.16
+
+- Helper wisselen toont nu expliciet het attack type: Zap, Sticky, AOE, Shield of Burst.
+- Het scherm `Score opgeslagen, wacht op andere speler` kan nu 1x worden weggeklikt zonder naar Home te gaan; Arena blijft bruikbaar en het actieve duel blijft zichtbaar in de lijst.
+- De duellijst ververst na score-submit, zodat actieve duels je eigen gevangen bugs tonen.
+- BugDex toont nog maar 1 ruilen/upgrades ingang: de HD workshopkaart opent/sluit direct het trade/upgrade panel.
+- Weekly movement mission is verhoogd naar 7.5 km met decimalen-progress en screenshot weekly missions zijn verwijderd.
+
 ## 2.2.15
 
 - Firestore duel rules zijn gelijkgetrokken met 48 duel bugs, zodat duel aanvragen niet meer op permissies falen.
