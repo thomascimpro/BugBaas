@@ -6,7 +6,7 @@ import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { TierBadge } from "../components/TierBadge";
 import { listBugs } from "../services/bugService";
 import { BugArtId } from "../services/bugArt";
-import { BugDexDropResult, entryByBugId, grantBugDexReward, listBugDexInventory } from "../services/bugDexService";
+import { BugDexDropResult, entryByBugId, listBugDexInventory } from "../services/bugDexService";
 import { bugLampStatus } from "../services/bugLampService";
 import { maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
 import { listBugSmashDuels } from "../services/bugSmashDuelService";
@@ -14,7 +14,7 @@ import { claimMovementRadarBonusesForApp, claimQueuedRadarBugs, getMovementRadar
 import { bugDexEntries, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { languages, useI18n } from "../services/i18n";
 import { listUsers } from "../services/userService";
-import { claimedWeeklyMissionIds, claimWeeklyMissionBonus, claimWeeklyMissionXp, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
+import { claimedWeeklyMissionIds, claimWeeklyMissionBonusWithReward, claimWeeklyMissionXp, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
 import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
@@ -23,7 +23,6 @@ type Props = {
   onActivateBugLamp?: () => Promise<void>;
   onMovementRadarClaimed?: (bugIds: BugArtId[]) => void;
   onMovementRegistered?: (estimatedKm: number) => Promise<void>;
-  onOpenBugSmashDuel?: () => void;
   onOpenBugDexWorkshop?: () => void;
   onRewardDrop?: (drop: BugDexDropResult) => void;
   onUserUpdated?: (user: User) => void;
@@ -40,10 +39,8 @@ const rarityColors: Record<BugDexRarity, string> = {
 };
 
 const settingsGearImage = require("../../assets/generated/settings-gear-hd.png");
-const bugSmashDuelImage = require("../../assets/generated/bug-smash-duel-concept.jpg");
-const soloDuelImage = require("../../assets/generated/solo-duel-campaign-hd.jpg");
 
-export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRadarClaimed, onMovementRegistered, onOpenBugSmashDuel, onOpenBugDexWorkshop, onRewardDrop, onUserUpdated, user, onNavigate }: Props) {
+export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRadarClaimed, onMovementRegistered, onOpenBugDexWorkshop, onRewardDrop, onUserUpdated, user, onNavigate }: Props) {
   const { language, setLanguage, t, tr } = useI18n();
   const tier = getTierForPoints(user.totalPoints);
   const [users, setUsers] = useState<User[]>([]);
@@ -151,13 +148,13 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     setWeeklyBonusClaiming(true);
     setWeeklyBonusError("");
     try {
-      const updated = await claimWeeklyMissionBonus(user, missions);
-      if (!updated) {
+      const result = await claimWeeklyMissionBonusWithReward(user, missions);
+      if (!result) {
         setWeeklyBonusClaimed(await isWeeklyMissionBonusClaimed(user, missions));
         return;
       }
-      onUserUpdated?.(updated);
-      onRewardDrop?.(await grantBugDexReward(updated, "weekly_mission"));
+      onUserUpdated?.(result.user);
+      onRewardDrop?.(result.drop);
       setWeeklyBonusClaimed(true);
     } catch {
       setWeeklyBonusError(t("home.weeklyBonusFailed"));
@@ -221,9 +218,9 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
         </View>
       </View>
       {movementProgress && (
-          <View style={styles.movementCard}>
-            <View style={styles.movementHeader}>
-              <Text style={styles.movementTitle}>{t("home.movementRadar")}</Text>
+        <View style={styles.movementCard}>
+          <View style={styles.movementHeader}>
+            <Text style={styles.movementTitle}>{t("home.movementRadar")}</Text>
             <View style={styles.movementHeaderActions}>
               <Text style={styles.movementReward}>{t("home.bugsReward", { awarded: movementProgress.awardedToday, max: movementProgress.maxRewards })}</Text>
               {canClaimMovement && (
@@ -368,14 +365,6 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
           <Text style={styles.workshopCta}>{t("home.workshopCta")}</Text>
         </View>
       </Pressable>
-      <Pressable style={[styles.workshopCard, styles.duelCard]} onPress={onOpenBugSmashDuel ?? (() => onNavigate("duel"))}>
-        <Image source={bugSmashDuelImage} style={styles.workshopImage} />
-        <View style={styles.workshopText}>
-          <Text style={styles.workshopTitle}>{t("home.duelTitle")}</Text>
-          <Text style={styles.workshopBody} numberOfLines={2}>{t("home.duelBody")}</Text>
-          <Text style={styles.workshopCta}>{t("home.duelCta")}</Text>
-        </View>
-      </Pressable>
       <View style={styles.missionCard}>
         <View style={styles.missionHeader}>
           <View>
@@ -419,30 +408,18 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
           {weeklyBonusError ? <Text style={styles.missionError}>{weeklyBonusError}</Text> : null}
         </View>
       </View>
-      <Pressable style={[styles.workshopCard, styles.soloDuelCard]} onPress={onOpenBugSmashDuel ?? (() => onNavigate("duel"))}>
-        <Image source={soloDuelImage} style={styles.workshopImage} />
-        <View style={styles.workshopText}>
-          <Text style={styles.workshopTitle}>{t("home.soloDuelTitle")}</Text>
-          <Text style={styles.workshopBody} numberOfLines={2}>{t("home.soloDuelBody")}</Text>
-          <Text style={styles.workshopCta}>{t("home.soloDuelCta")}</Text>
-        </View>
-      </Pressable>
-      <Pressable style={[sharedStyles.button, styles.actionButton]} onPress={() => onNavigate("bugs")}>
-        <BugArtImage bugId="neushoornkever" size={38} />
-        <Text style={sharedStyles.buttonText}>{t("home.viewBugs")}</Text>
-      </Pressable>
     </ScrollView>
   );
-}
-
-function formatKm(km: number): string {
-  if (km >= 10) return String(Math.floor(km));
-  return km.toFixed(1).replace(".0", "");
 }
 
 function formatRemaining(ms: number): string {
   const hours = Math.max(0, Math.ceil(ms / (60 * 60 * 1000)));
   return `${hours}h`;
+}
+
+function formatKm(km: number): string {
+  if (km >= 10) return String(Math.floor(km));
+  return km.toFixed(1).replace(".0", "");
 }
 
 function movementGoalLabel(goal: MovementRadarProgress["goals"][number], t: (key: string) => string): string {
@@ -650,23 +627,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8
   },
-  movementClaimButton: {
-    backgroundColor: "#15724f",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 7
-  },
-  movementClaimButtonDisabled: {
-    opacity: 0.45
-  },
-  movementClaimButtonPressed: {
-    opacity: 0.75
-  },
-  movementClaimText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "900"
-  },
   movementGoals: {
     gap: 7
   },
@@ -698,12 +658,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#15724f",
     height: "100%"
   },
-  movementHelp: {
-    color: "#52665d",
-    fontSize: 11,
-    fontWeight: "800",
-    lineHeight: 15,
-    marginTop: 8
+  movementClaimButton: {
+    backgroundColor: "#15724f",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7
+  },
+  movementClaimButtonDisabled: {
+    opacity: 0.45
+  },
+  movementClaimButtonPressed: {
+    opacity: 0.75
+  },
+  movementClaimText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "900"
   },
   bugLampCard: {
     backgroundColor: "#1f1a2e",
@@ -937,12 +907,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     padding: 10
   },
-  duelCard: {
-    borderColor: "#b83227"
-  },
-  soloDuelCard: {
-    borderColor: "#38bdf8"
-  },
   workshopImage: {
     borderRadius: 8,
     height: 86,
@@ -1107,9 +1071,4 @@ const styles = StyleSheet.create({
     color: "#d7bd57",
     fontWeight: "900"
   },
-  actionButton: {
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "center"
-  }
 });

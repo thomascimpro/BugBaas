@@ -74,6 +74,11 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.2.4": [
+    { key: "changelog.2.2.4.jars", image: require("./assets/generated/bug-squad-empty-jar-hd.png"), tone: "green" },
+    { key: "changelog.2.2.4.duelStart", image: require("./assets/generated/bug-smash-duel-concept.jpg"), tone: "purple" },
+    { key: "changelog.2.2.4.weekly", image: require("./assets/generated/bug-radar-request-signal-hd.png"), tone: "gold" }
+  ],
   "2.2.3": [
     { key: "changelog.2.2.3.bosses", image: require("./assets/generated/solo-boss-atlas-hd.png"), tone: "purple" },
     { key: "changelog.2.2.3.rewards", image: require("./assets/generated/solo-boss-stag-hd.png"), tone: "gold" },
@@ -799,7 +804,7 @@ function AppContent() {
     setRoute("duel");
   }
 
-  function navigateMain(nextRoute: "home" | "bugs" | "new" | "bugdex" | "leaderboard") {
+  function navigateMain(nextRoute: "home" | "bugs" | "duel" | "bugdex" | "leaderboard") {
     setSelectedBug(null);
     setSelectedUser(null);
     setDuelOpponent(null);
@@ -811,7 +816,7 @@ function AppContent() {
     setHelpVisible(true);
   }
 
-  function navigateHelp(routeName: "home" | "bugs" | "new" | "bugdex" | "leaderboard" | "settings") {
+  function navigateHelp(routeName: "home" | "bugs" | "duel" | "bugdex" | "leaderboard" | "settings") {
     setSelectedBug(null);
     setSelectedUser(null);
     setRoute(routeName);
@@ -872,7 +877,6 @@ function AppContent() {
             onActivateBugLamp={handleActivateBugLamp}
             onMovementRadarClaimed={(bugIds) => void showClaimedRadarBugs(bugIds)}
             onNavigate={setRoute}
-            onOpenBugSmashDuel={() => openBugSmashDuel()}
             onOpenBugDexWorkshop={openBugDexTrades}
             onMovementRegistered={registerMovementKilometers}
             onRewardDrop={(drop) => {
@@ -895,7 +899,7 @@ function AppContent() {
         {route === "new" && (
           <NewBugScreen
             user={user}
-            onBack={() => setRoute("home")}
+            onBack={() => setRoute("bugs")}
             onSaved={(bug) => {
               void notifyNewBug(bug, user).catch(() => undefined);
               void refreshUser();
@@ -906,7 +910,7 @@ function AppContent() {
               } else {
                 rewardActivity("comment");
               }
-              setRoute("home");
+              setRoute("bugs");
             }}
           />
         )}
@@ -987,7 +991,7 @@ function AppContent() {
           <SettingsScreen settings={notificationSettings} onBack={() => setRoute("home")} onChange={updateNotificationSettings} onShowHelp={showHelpTour} />
         )}
       </View>
-      {!duelRouteActive && <BottomNav activeRoute={route} onNavigate={navigateMain} />}
+      <BottomNav activeRoute={route} onNavigate={navigateMain} />
       {!duelRouteActive && <InAppNotificationToast notification={notification} onClose={closeNotification} onOpen={openNotification} />}
       <ForegroundCatchBug
         catchAssist={squadBonuses().catch_assist}

@@ -292,8 +292,10 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       setInventory(nextInventory);
       setActiveSquadIds(sanitizeActiveBugSquad(user.activeBugSquad, nextInventory));
       if (!activeDuelId) {
-        const pendingReceived = nextDuels.find((duel) => duel.status === "pending" && duel.toUserId === user.uid);
-        if (pendingReceived) setActiveDuelId(pendingReceived.id);
+        const actionableDuel = nextDuels.find((duel) => duel.status === "pending" && duel.toUserId === user.uid)
+          ?? nextDuels.find((duel) => duel.status === "accepted" && !duel.scores?.[user.uid])
+          ?? nextDuels.find((duel) => duel.status === "completed" && isDuelParticipant(duel, user) && !(duel.rewardClaimedBy ?? []).includes(user.uid));
+        if (actionableDuel) setActiveDuelId(actionableDuel.id);
       }
     }).catch(() => undefined);
     return () => {
@@ -352,10 +354,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   const activeLocalStartAt = activeDuel ? localStartAtByDuelId[activeDuel.id] : "";
   const activeDuelOwnScore = activeDuel?.scores?.[user.uid];
-  const acceptedDuelExpired = Boolean(activeDuel?.status === "accepted" && activeDuel.startAt && Date.parse(activeDuel.startAt) + activeDuel.durationMs <= now);
-  const requesterNeedsManualStart = Boolean(activeDuel?.status === "accepted" && activeDuel.fromUserId === user.uid && !activeLocalStartAt);
-  const missedAutoStartNeedsManualStart = Boolean(activeDuel?.status === "accepted" && !activeDuelOwnScore && !activeLocalStartAt && !requesterNeedsManualStart && acceptedDuelExpired);
-  const playerNeedsManualStart = requesterNeedsManualStart || missedAutoStartNeedsManualStart;
+  const playerNeedsManualStart = Boolean(activeDuel?.status === "accepted" && !activeDuelOwnScore && !activeLocalStartAt);
   const playableDuel = activeDuel?.status === "accepted" && activeLocalStartAt
     ? { ...activeDuel, startAt: activeLocalStartAt }
     : activeDuel;
@@ -840,6 +839,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           )}
         </View>
         <View style={styles.gameFooter}>
+          {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal, { compact: true, interactive: false })}
           <Text style={styles.gameFooterText}>{trainingDuel ? soloCampaign ? t("duel.soloCampaignFooter", { wave: soloCampaign.wave, level: soloCampaign.level, maxWave: soloCampaignMaxWave }) : t("duel.trainingFooter") : "Kies je targets. Hoge rarity kost meer taps, maar scoort veel meer."}</Text>
         </View>
       </View>
@@ -993,7 +993,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           {activeDuel.status === "accepted" && playerNeedsManualStart && (
             <View style={styles.startPanel}>
               <Text style={styles.startTitle}>{t("duel.readyTitle")}</Text>
-              <Text style={styles.startBody}>{t("duel.readyBody", { name: opponentLabel(activeDuel, user) })}</Text>
+              <Text style={styles.startBody}>{t("duel.asyncReadyBody", { name: opponentLabel(activeDuel, user) })}</Text>
               <Pressable style={sharedStyles.button} onPress={startAcceptedDuel}>
                 <Text style={sharedStyles.buttonText}>{t("duel.startNow")}</Text>
               </Pressable>
@@ -1120,7 +1120,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           <View style={styles.startModalBackdrop}>
             <View style={styles.startModalCard}>
               <Text style={styles.startTitle}>{t("duel.readyTitle")}</Text>
-              <Text style={styles.startBody}>{t("duel.readyBody", { name: opponentLabel(activeDuel, user) })}</Text>
+              <Text style={styles.startBody}>{t("duel.asyncReadyBody", { name: opponentLabel(activeDuel, user) })}</Text>
               <Pressable style={sharedStyles.button} onPress={startAcceptedDuel}>
                 <Text style={sharedStyles.buttonText}>{t("duel.startNow")}</Text>
               </Pressable>
@@ -1185,29 +1185,37 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   );
 }
 
-function renderSquadJars(activeSquadIds: string[], bonuses: ReturnType<typeof activeBugSquadBonusList>, t: (key: string, params?: Record<string, string | number>) => string, onOpen: () => void) {
+function renderSquadJars(
+  activeSquadIds: string[],
+  bonuses: ReturnType<typeof activeBugSquadBonusList>,
+  t: (key: string, params?: Record<string, string | number>) => string,
+  onOpen: () => void,
+  options: { compact?: boolean; interactive?: boolean } = {}
+) {
+  const compact = options.compact ?? false;
+  const interactive = options.interactive ?? true;
   return (
-    <View style={styles.squadJars}>
+    <View style={[styles.squadJars, compact && styles.squadJarsCompact]}>
       {Array.from({ length: maxActiveBugSquadSize }).map((_, index) => {
         const bugId = activeSquadIds[index];
         const entry = bugId ? entryByBugId(bugId) : null;
         const bonus = bonuses.find((item) => item.bugId === bugId);
         return (
-          <Pressable key={index} style={styles.squadJarWrap} onPress={onOpen}>
-            <View style={[styles.squadJar, entry && { borderColor: rarityColors[entry.rarity] }]}>
-              <Image accessibilityIgnoresInvertColors resizeMode="contain" source={squadJarImage} style={styles.squadJarImage} />
+          <Pressable key={index} disabled={!interactive} style={styles.squadJarWrap} onPress={onOpen}>
+            <View style={[styles.squadJar, compact && styles.squadJarCompact, entry && { borderColor: rarityColors[entry.rarity] }]}>
+              <Image accessibilityIgnoresInvertColors resizeMode="contain" source={squadJarImage} style={[styles.squadJarImage, compact && styles.squadJarImageCompact]} />
               {entry ? (
                 <>
-                  <View pointerEvents="none" style={styles.squadJarBugWrap}>
-                    <BugArtImage bugId={entry.id} size={50} />
+                  <View pointerEvents="none" style={[styles.squadJarBugWrap, compact && styles.squadJarBugWrapCompact]}>
+                    <BugArtImage bugId={entry.id} size={compact ? 30 : 50} />
                   </View>
-                  <Text style={styles.squadJarName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>
-                  {bonus && <Text style={styles.squadJarBonus} numberOfLines={1}>{squadBonusLabel(bonus.category, t)}</Text>}
+                  {!compact && <Text style={styles.squadJarName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>}
+                  {!compact && bonus && <Text style={styles.squadJarBonus} numberOfLines={1}>{squadBonusLabel(bonus.category, t)}</Text>}
                 </>
               ) : (
                 <>
-                  <Text style={styles.squadJarEmpty}>+</Text>
-                  <Text style={styles.squadJarBonus}>{t("bugdex.squadEmptySlot")}</Text>
+                  <Text style={[styles.squadJarEmpty, compact && styles.squadJarEmptyCompact]}>+</Text>
+                  {!compact && <Text style={styles.squadJarBonus}>{t("bugdex.squadEmptySlot")}</Text>}
                 </>
               )}
             </View>
@@ -3544,6 +3552,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     padding: 6
   },
+  squadJarCompact: {
+    backgroundColor: "rgba(232,246,239,0.3)",
+    height: 54,
+    padding: 3
+  },
   squadJarBugWrap: {
     alignItems: "center",
     justifyContent: "center",
@@ -3553,6 +3566,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 5,
     zIndex: 3
+  },
+  squadJarBugWrapCompact: {
+    marginTop: 2
   },
   squadJarBase: {
     backgroundColor: "rgba(16,32,24,0.18)",
@@ -3577,6 +3593,10 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     zIndex: 4
   },
+  squadJarEmptyCompact: {
+    color: "#d7bd57",
+    fontSize: 20
+  },
   squadJarGlow: {
     backgroundColor: "rgba(215,189,87,0.15)",
     borderRadius: 999,
@@ -3594,6 +3614,13 @@ const styles = StyleSheet.create({
     right: -8,
     top: -4,
     zIndex: 0
+  },
+  squadJarImageCompact: {
+    bottom: -10,
+    left: -12,
+    opacity: 0.82,
+    right: -12,
+    top: -8
   },
   squadJarLid: {
     alignSelf: "center",
@@ -3629,6 +3656,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     marginBottom: 8
+  },
+  squadJarsCompact: {
+    gap: 6,
+    marginBottom: 6
   },
   squadJarWrap: {
     flex: 1
