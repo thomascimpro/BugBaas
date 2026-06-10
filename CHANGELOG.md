@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.18
+
+- Actieve duelkaarten tonen nu jouw opgeslagen score in plaats van het aantal gevangen bugs.
+- Duel score-submit corrigeert `score: 0` automatisch naar een minimale score op basis van gevangen bugs, en herstelt bestaande wachtende 0-score duels zolang de tegenstander nog niet gespeeld heeft.
+- De dubbele passieve helperpotjes zijn uit actieve duels weggehaald; tijdens gameplay blijven alleen de helper towers met timer zichtbaar.
+- Duelspawns zijn verhoogd van 48 naar 56 bugs per duel en blijven per duel-seed gelijk voor beide spelers.
+
 ## 2.2.17
 
 - Duel retry is nu expliciet beschikbaar als jouw opgeslagen run 0 gevangen bugs heeft en de tegenstander nog niet gespeeld heeft.

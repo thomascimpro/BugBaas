@@ -1,5 +1,21 @@
 # Test Results
 
+## 2.2.18 release
+
+- `npm.cmd run typecheck`: geslaagd.
+- `npx.cmd expo config --type public`: geslaagd; versie `2.2.18`, package `nl.cimpro.bugbaas`.
+- `npx.cmd expo install --check`: geslaagd.
+- Logic smoke-check: actieve duelkaart toont score in plaats van gevangen bugs, `score: 0` wordt hersteld vanuit gevangen bugs, dubbele passieve duelhelpers zijn verborgen, en app/rules gebruiken 56 duelbugs per gedeelde seed.
+- `firebase.cmd deploy --only firestore:rules --project thomascimpro-6266f`: geslaagd.
+- `.\android\gradlew.bat -p android assembleRelease -PbugbaasLegacyDebugSigning=true`: geslaagd.
+- APK gekopieerd naar `dist/CimPro-BugBaas-2.2.18.apk`.
+- APK grootte: `44,651,178` bytes.
+- `aapt2 dump badging`: package `nl.cimpro.bugbaas`, versionCode `113`, versionName `2.2.18`.
+- `apksigner verify --print-certs`: geslaagd.
+- Signing cert SHA-256: `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA256: `FB112B971C4D9E5EB3B44A4584EC2B4680B27B0AB1AE8FA3F492FAB165A2955C`.
+- `adb devices`: geen device aangesloten; install-smoke niet uitgevoerd.
+
 ## 2.2.17 release
 
 - `npm.cmd run typecheck`: geslaagd.

@@ -9,7 +9,15 @@ const demoDuelRewardEvents = new Set<string>();
 
 export const bugSmashDuelDurationMs = 30000;
 export const bugSmashDuelStartDelayMs = 5000;
-export const bugSmashDuelBugCount = 48;
+export const bugSmashDuelBugCount = 56;
+
+const scoreByRarity = {
+  Gewoon: 1,
+  Zeldzaam: 2,
+  Episch: 4,
+  Legendarisch: 6,
+  Mythisch: 9
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -193,10 +201,11 @@ export async function submitBugSmashDuelScore(user: User, duelId: string, score:
     if (!isParticipant(duel, user)) throw new Error("Je doet niet mee aan dit duel.");
     const requesterCanPreplay = duel.status === "pending" && duel.fromUserId === user.uid;
     if (!requesterCanPreplay && duel.status !== "accepted" && duel.status !== "completed") throw new Error("Duel is niet actief.");
+    const savedScore = Math.max(score, minimumScoreForCaughtBugIds(caughtBugIds, bonusScore));
     const scores = {
       ...(duel.scores ?? {}),
       [user.uid]: {
-        score,
+        score: savedScore,
         caughtBugIds,
         bonusScore,
         submittedAt: nowIso()
@@ -237,6 +246,16 @@ export async function submitBugSmashDuelScore(user: User, duelId: string, score:
     transaction.update(ref, updated);
     return updated;
   });
+}
+
+function minimumScoreForCaughtBugIds(caughtBugIds: string[], bonusScore: number): number {
+  const entryById = new Map(bugDexEntries.map((entry) => [entry.id, entry]));
+  const baseScore = caughtBugIds.reduce((total, bugId, index) => {
+    const entry = entryById.get(bugId);
+    const catchScore = entry ? scoreByRarity[entry.rarity] : 0;
+    return total + catchScore + ((index + 1) % 5 === 0 ? 1 : 0);
+  }, 0);
+  return Math.max(0, baseScore + Math.max(0, bonusScore));
 }
 
 export async function claimBugSmashDuelReward(user: User, duelId: string): Promise<{ result: "loss" | "win"; rewardGranted: boolean; user: User } | null> {
