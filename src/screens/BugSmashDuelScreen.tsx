@@ -519,6 +519,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       const splashTargets = helperSplashTargetsForSpecial(spec, helperTargets, target);
       const freezeTargets = helperFreezeTargetsForSpecial(spec.special, target, splashTargets);
       if (spec.special?.freezeMs && freezeTargets.length) freezeDuelTargets(freezeTargets, timestamp, spec.special.freezeMs);
+      const controlMs = helperControlMsForKind(spec.kind, bonus.rarity, target.motion.progress);
+      if (!spec.special && controlMs > 0) freezeDuelTargets([target], timestamp, controlMs);
       const source = helperTowerSourcePosition(helperIndex, activeSquadBonuses.length);
 
       addHelperImpact(
@@ -1105,9 +1107,22 @@ function helperHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusList>[n
   const tierAdvantage = helperRank >= targetRank + 2 ? 1 : 0;
   const premiumHelperBonus = helperRank >= 2 && targetRank > 0 && targetRank <= helperRank ? 1 : 0;
   const specialBonus = helperSpecialBonusHits(special, target, remaining);
-  const urgentShieldHit = kind === "shield" && target.motion.progress > 0.68 ? 1 : 0;
-  const damage = Math.max(1, baseDamage - resistance + tierAdvantage + premiumHelperBonus + specialBonus + urgentShieldHit);
+  const kindBonus = special ? 0 : helperKindBonusHits(kind, target, remaining);
+  const damage = Math.max(1, baseDamage - resistance + tierAdvantage + premiumHelperBonus + specialBonus + kindBonus);
   return Math.min(remaining, damage);
+}
+
+function helperKindBonusHits(kind: HelperImpactKind, target: VisibleDuelTarget, remaining: number) {
+  if (kind === "sticky") return remaining > 1 ? 1 : 0;
+  if (kind === "shield") return target.motion.progress > 0.74 ? 2 : target.motion.progress > 0.55 ? 1 : 0;
+  return 0;
+}
+
+function helperControlMsForKind(kind: HelperImpactKind, rarity: BugDexRarity, progress: number) {
+  const rarityBonus = rarity === "Mythisch" ? 260 : rarity === "Legendarisch" ? 210 : rarity === "Episch" ? 150 : rarity === "Zeldzaam" ? 90 : 0;
+  if (kind === "sticky") return 360 + rarityBonus;
+  if (kind === "shield" && progress > 0.52) return 300 + rarityBonus;
+  return 0;
 }
 
 function helperSpecialBonusHits(special: MythicSpecialSpec | undefined, target: VisibleDuelTarget, remaining: number) {
@@ -1165,9 +1180,10 @@ function helperSplashHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusL
 }
 
 function helperBaseHitsForRarity(rarity: BugDexRarity) {
-  if (rarity === "Mythisch") return 5;
+  if (rarity === "Mythisch") return 6;
   if (rarity === "Legendarisch") return 3;
-  if (rarity === "Episch") return 2;
+  if (rarity === "Episch") return 3;
+  if (rarity === "Zeldzaam") return 2;
   return 1;
 }
 
