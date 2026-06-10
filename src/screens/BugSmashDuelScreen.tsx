@@ -221,6 +221,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [activeDuel, setActiveDuel] = useState<BugSmashDuel | null>(null);
   const [trainingDuel, setTrainingDuel] = useState<BugSmashDuel | null>(null);
   const [soloRun, setSoloRun] = useState<SoloRun | null>(null);
+  const [soloWaveCleared, setSoloWaveCleared] = useState(false);
   const [runSubmitted, setRunSubmitted] = useState(false);
   const [arenaMode, setArenaMode] = useState<ArenaMode>("duel");
   const [activeSquadIds, setActiveSquadIds] = useState<string[]>(sanitizeActiveBugSquad(user.activeBugSquad));
@@ -245,6 +246,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [acknowledgedWaitingDuelIds, setAcknowledgedWaitingDuelIds] = useState<Set<string>>(new Set());
   const [dismissedResultDuelIds, setDismissedResultDuelIds] = useState<Set<string>>(new Set());
   const submittedRef = useRef(false);
+  const soloWaveClearedRef = useRef(false);
   const scoreRef = useRef(0);
   const caughtBugIdsRef = useRef<string[]>([]);
   const comboRef = useRef(0);
@@ -279,6 +281,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   function resetRunState() {
     submittedRef.current = false;
+    soloWaveClearedRef.current = false;
     scoreRef.current = 0;
     caughtBugIdsRef.current = [];
     comboRef.current = 0;
@@ -290,6 +293,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     lastCatchAtRef.current = 0;
     lastHitSoundAtRef.current = 0;
     setRunSubmitted(false);
+    setSoloWaveCleared(false);
     setScore(0);
     setCaughtBugIds([]);
     setHitCounts({});
@@ -403,6 +407,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       const endAt = startAt + runningDuel.durationMs;
       if (timestamp >= endAt) {
         if (!submittedRef.current) {
+          const finalScore = scoreRef.current + duelBonusScore(scoreRef.current, assist);
+          if (trainingDuel && soloRun?.mode === "campaign" && finalScore >= soloRun.targetScore) {
+            soloWaveClearedRef.current = true;
+            setSoloWaveCleared(true);
+          }
           submittedRef.current = true;
           setRunSubmitted(true);
           if (!trainingDuel) {
@@ -600,6 +609,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     setCaughtBugIds(caughtBugIdsRef.current);
     setScore(scoreRef.current);
     if (runningDuel.toUserId === "bugbot" && soloCampaign && scoreRef.current + duelBonusScore(scoreRef.current, assist) >= soloCampaign.targetScore) {
+      soloWaveClearedRef.current = true;
+      setSoloWaveCleared(true);
       submittedRef.current = true;
       setRunSubmitted(true);
     }
@@ -851,7 +862,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const soloCampaign = soloRun?.mode === "campaign" ? soloRun : null;
   const soloProgress = gameDuel?.startAt ? Math.max(0, Math.min(1, (now - Date.parse(gameDuel.startAt)) / gameDuel.durationMs)) : 0;
   const soloPcScore = soloCampaign ? Math.min(soloCampaign.pcScore, Math.round(soloCampaign.pcScore * soloProgress)) : 0;
-  const soloCampaignWon = Boolean(soloCampaign && submittedRef.current && gameScore >= soloCampaign.targetScore && gameScore >= soloCampaign.pcScore);
+  const soloCampaignWon = Boolean(soloCampaign && submittedRef.current && (soloWaveCleared || soloWaveClearedRef.current || gameScore >= soloCampaign.targetScore));
   const soloCampaignComplete = Boolean(soloCampaignWon && soloCampaign && soloCampaign.wave >= soloCampaignMaxWave);
   const lampFocusActive = soloLampFocusActive(soloPowerups, now);
   const lampFocusMinutes = soloLampFocusRemainingMinutes(soloPowerups, now);

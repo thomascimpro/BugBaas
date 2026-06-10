@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.9
+
+- Solo Campaign gaat alleen naar de volgende wave als de targetscore echt is gehaald.
+- De result-knop gebruikt nu een expliciete wave-cleared state, zodat een gehaalde wave niet meer als restart level 1 eindigt.
+- Bij niet halen blijft de campaign correct herstarten vanaf level 1.
+
 ## 2.2.8
 
 - Arena-knoppen voor Duel, Training en Solo Campaign zijn hersteld naar duidelijke thumbnail-knoppen met vaste labels.
