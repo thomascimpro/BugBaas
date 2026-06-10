@@ -470,6 +470,22 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     return () => clearTimeout(retry);
   }, [activeDuel?.id, activeDuel?.scores, localSubmittedScores, user]);
 
+  useEffect(() => {
+    if (!activeDuel) return;
+    const ownScore = activeDuel.scores?.[user.uid];
+    if (!ownScore) return;
+    const fixedScore = displayDuelScore(ownScore);
+    if (fixedScore <= ownScore.score) return;
+    const otherUserId = activeDuel.fromUserId === user.uid ? activeDuel.toUserId : activeDuel.fromUserId;
+    if (activeDuel.scores?.[otherUserId]) return;
+    void submitBugSmashDuelScore(user, activeDuel.id, fixedScore, ownScore.caughtBugIds, ownScore.bonusScore)
+      .then((duel) => {
+        setActiveDuel(duel);
+        void refreshDuels().catch(() => undefined);
+      })
+      .catch(() => undefined);
+  }, [activeDuel?.id, activeDuel?.scores, user]);
+
   const activeLocalStartAt = activeDuel ? localStartAtByDuelId[activeDuel.id] : "";
   const activeDuelOwnScore = activeDuel?.scores?.[user.uid];
   const retryingActiveDuel = Boolean(activeDuel && retryingDuelIds.has(activeDuel.id));
@@ -1064,7 +1080,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const gameStartAt = gameDuel?.startAt ?? "";
   const countdown = gameStartAt ? Math.max(0, Math.ceil((Date.parse(gameStartAt) - now) / 1000)) : 0;
   const remainingSeconds = gameStartAt && gameDuel ? Math.max(0, Math.ceil((Date.parse(gameStartAt) + gameDuel.durationMs - now) / 1000)) : 0;
-  const activeDuelScore = retryingActiveDuel ? (runSubmitted ? score + duelBonusScore(score, assist) : score) : ownSubmittedScore?.score ?? (runSubmitted ? score + duelBonusScore(score, assist) : score);
+  const activeDuelScore = retryingActiveDuel ? (runSubmitted ? score + duelBonusScore(score, assist) : score) : ownSubmittedScore ? displayDuelScore(ownSubmittedScore) : (runSubmitted ? score + duelBonusScore(score, assist) : score);
   const incomingPendingDuel = activeDuel?.status === "pending" && activeDuel.toUserId === user.uid;
   const fullscreenGame = Boolean(trainingDuel) || Boolean(duelCanRun && activeLocalStartAt && !playerNeedsManualStart && !awaitingOpponentResult && !runSubmitted);
   const gameScore = trainingDuel && runSubmitted ? score + duelBonusScore(score, assist) : trainingDuel ? score : activeDuelScore;
@@ -1190,7 +1206,6 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           )}
         </View>
         <View style={styles.gameFooter}>
-          {!soloCampaign && renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal, { compact: true, interactive: false })}
           <Text style={styles.gameFooterText}>{trainingDuel ? soloCampaign ? t("duel.soloCampaignFooter", { wave: soloCampaign.wave, level: soloCampaign.level, maxWave: soloCampaignMaxWave }) : t("duel.trainingFooter") : "Kies je targets. Hoge rarity kost meer taps, maar scoort veel meer."}</Text>
         </View>
       </View>
@@ -1250,7 +1265,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 const selected = selectedOpponentId === opponent.uid;
                 const activePairDuel = duels.find((duel) => isActiveDuelBetweenUsers(duel, user.uid, opponent.uid));
                 const blocked = Boolean(activePairDuel);
-                const ownCaughtCount = activePairDuel?.scores?.[user.uid]?.caughtBugIds.length ?? 0;
+                const ownSavedScore = activePairDuel ? displayDuelScore(activePairDuel.scores?.[user.uid] ?? localSubmittedScores[activePairDuel.id]) : 0;
                 return (
                   <Pressable
                     key={opponent.uid}
@@ -1265,7 +1280,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                     }}
                   >
                     <Text style={[styles.opponentName, selected && styles.opponentNameSelected]} numberOfLines={1}>{opponent.displayName}</Text>
-                    <Text style={styles.opponentMeta}>{blocked ? t("duel.ownCaughtCount", { count: ownCaughtCount }) : `${opponent.totalPoints} ${t("common.pointsShort")}`}</Text>
+                    <Text style={styles.opponentMeta}>{blocked ? t("duel.yourScore", { score: ownSavedScore }) : `${opponent.totalPoints} ${t("common.pointsShort")}`}</Text>
                     <Text style={[styles.opponentPresence, selected && styles.opponentPresenceSelected]} numberOfLines={1}>{blocked ? t("duel.activeBetween") : presenceLabel(opponent, t)}</Text>
                   </Pressable>
                 );
@@ -1433,7 +1448,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         </View>
       )}
 
-      <View style={styles.card}>
+      {!activeDuel && <View style={styles.card}>
         <View style={styles.bonusHeader}>
           <Text style={styles.cardTitle}>{t("duel.bonusTitle")}</Text>
           <Pressable style={styles.smallButton} onPress={openSquadModal}>
@@ -1442,7 +1457,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         </View>
         {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal)}
         {renderSquadEffectCards(activeSquadBonuses, t)}
-      </View>
+      </View>}
 
       <Modal transparent animationType="fade" visible={squadModalVisible} onRequestClose={() => setSquadModalVisible(false)}>
         <View style={styles.modalBackdrop}>
@@ -2689,6 +2704,19 @@ function duelBonusScore(score: number, assist: BugSmashDuelBalance) {
   const movementBonus = score >= 12 ? assist.movementFinalBonusCap : 0;
   const streakBonus = score >= 16 ? assist.streakMissForgiveness : 0;
   return supportBonus + movementBonus + streakBonus;
+}
+
+function displayDuelScore(score?: BugSmashDuelScore) {
+  if (!score) return 0;
+  return Math.max(score.score, minimumDuelScoreForCaughtBugIds(score.caughtBugIds, score.bonusScore));
+}
+
+function minimumDuelScoreForCaughtBugIds(caughtBugIds: string[], bonusScore: number) {
+  return caughtBugIds.reduce((total, bugId, index) => {
+    const entry = entryByBugId(bugId);
+    const catchScore = entry ? scoreByRarity[entry.rarity] : 0;
+    return total + catchScore + duelComboBonusPoint(index + 1);
+  }, 0) + Math.max(0, bonusScore);
 }
 
 function stableChance(seed: string, chance: number) {
