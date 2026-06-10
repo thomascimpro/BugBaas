@@ -386,10 +386,6 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
       return candidates.randomOrNull() ?: radarBugs.random()
     }
 
-    private fun requestCount(context: Context, key: String): Int {
-      return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE).getInt(key, 0)
-    }
-
     private fun pickCompanionRarity(): String {
       val roll = Random.nextInt(100)
       return when {

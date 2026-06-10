@@ -36,6 +36,7 @@ type Props = {
   onBack: () => void;
   onDuelAccepted?: (requesterId: string, duelId: string) => Promise<void>;
   onDuelRequest?: (recipientId: string, duelId: string) => Promise<void>;
+  onFullscreenChange?: (fullscreen: boolean) => void;
   onRewardDrop?: (drop: BugDexDropResult) => void;
   onUserUpdated?: (user: User) => void;
 };
@@ -206,7 +207,7 @@ const mythicSpecials: Record<string, MythicSpecialSpec> = {
   }
 };
 
-export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, onBack, onDuelAccepted, onDuelRequest, onRewardDrop, onUserUpdated }: Props) {
+export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, onBack, onDuelAccepted, onDuelRequest, onFullscreenChange, onRewardDrop, onUserUpdated }: Props) {
   const { t } = useI18n();
   const [users, setUsers] = useState<User[]>([]);
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
@@ -746,6 +747,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const lampFocusActive = soloLampFocusActive(soloPowerups, now);
   const lampFocusMinutes = soloLampFocusRemainingMinutes(soloPowerups, now);
   const soloTapMultiplier = soloCampaign && lampFocusActive ? 0.5 : 1;
+
+  useEffect(() => {
+    onFullscreenChange?.(fullscreenGame);
+    return () => onFullscreenChange?.(false);
+  }, [fullscreenGame, onFullscreenChange]);
 
   useEffect(() => {
     if (!soloCampaign || !trainingDuel || !soloCampaignWon || !soloCampaign.boss) return;
