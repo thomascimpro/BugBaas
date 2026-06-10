@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.11
+
+- Solo Campaign boss waves geven nu extra daily boss rewards: boss 1 geeft 5 XP, boss 2 een normale BugDex unlock, boss 3 geeft 10 XP en boss 4 een zeldzame BugDex unlock.
+- Boss bonusclaims zijn server-side per dag en bosslevel begrensd, zodat heropenen of opnieuw renderen geen dubbele rewards geeft.
+
 ## 2.2.10
 
 - Duel-startflow gefixt: de uitdager krijgt na app sluiten/heropenen opnieuw een startknop zolang hij nog geen score heeft.

@@ -26,6 +26,7 @@ import { BugDexRarity, bugDexEntries } from "../services/pointsService";
 import { entryByBugId } from "../services/bugDexService";
 import { playBugSound } from "../services/soundService";
 import { soloCampaignConfig, soloCampaignBugIds, soloCampaignMaxLevel, soloCampaignMaxWave, type SoloCampaignConfig } from "../services/soloCampaignBalance";
+import { claimSoloCampaignBossDailyReward } from "../services/soloCampaignRewardService";
 import { activateSoloLampFocus, consumeSoloBugBomb, emptySoloPowerupInventory, grantSoloBossReward, loadSoloPowerupInventory, soloLampFocusActive, soloLampFocusRemainingMinutes, type SoloPowerupInventory } from "../services/soloPowerupService";
 import { listUsers, updateUserBugSquad } from "../services/userService";
 import { BugDexInventoryItem, BugSmashDuel, User } from "../types";
@@ -902,7 +903,17 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       const labels = result.rewards.map((reward) => reward === "lamp_focus" ? t("duel.powerupLamp") : t("duel.powerupBomb"));
       setSoloRewardNotice(t("duel.bossReward", { reward: labels.join(" + ") }));
     }).catch(() => undefined);
-  }, [soloCampaignWon, soloCampaign?.boss, soloCampaign?.level, trainingDuel?.id, user.uid, t]);
+    void claimSoloCampaignBossDailyReward(user, soloCampaign.level).then((result) => {
+      if (!result) return;
+      if (result.user) onUserUpdated?.(result.user);
+      if (result.drop?.rewardType === "bug") {
+        onRewardDrop?.(result.drop);
+        setSoloRewardNotice(t("duel.bossReward", { reward: bugDexEntryName(result.drop.entry, t) }));
+        return;
+      }
+      if (result.reward.kind === "xp") setSoloRewardNotice(t("duel.bossReward", { reward: `+${result.reward.xp} XP` }));
+    }).catch(() => undefined);
+  }, [onRewardDrop, onUserUpdated, soloCampaignWon, soloCampaign?.boss, soloCampaign?.level, trainingDuel?.id, user, t]);
 
   useEffect(() => {
     if (!soloCampaignComplete || !trainingDuel) return;
