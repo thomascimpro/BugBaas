@@ -58,6 +58,8 @@ const soloBossImages = {
   5: require("../../assets/generated/solo-boss-atlas-hd.png")
 };
 const soloCampaignProgressPrefix = "bugbaas:soloCampaignWave";
+const soloCampaignStartingLives = 3;
+const duelRetryScoreThreshold = 30;
 const duelEffectSprites = {
   fireball: require("../../assets/generated/duel_effect_fireball_hd.png"),
   freeze: require("../../assets/generated/duel_effect_iceburst_hd.png"),
@@ -236,6 +238,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [soloBombFlash, setSoloBombFlash] = useState(false);
   const [soloBombPrimed, setSoloBombPrimed] = useState(false);
   const [soloCampaignUnlockedWave, setSoloCampaignUnlockedWave] = useState(1);
+  const [soloCampaignLives, setSoloCampaignLives] = useState(soloCampaignStartingLives);
   const [squadModalVisible, setSquadModalVisible] = useState(false);
   const [squadLoading, setSquadLoading] = useState(false);
   const [squadBusyId, setSquadBusyId] = useState("");
@@ -247,6 +250,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [localStartAtByDuelId, setLocalStartAtByDuelId] = useState<Record<string, string>>({});
   const [acknowledgedWaitingDuelIds, setAcknowledgedWaitingDuelIds] = useState<Set<string>>(new Set());
   const [dismissedResultDuelIds, setDismissedResultDuelIds] = useState<Set<string>>(new Set());
+  const [retryingDuelIds, setRetryingDuelIds] = useState<Set<string>>(new Set());
   const submittedRef = useRef(false);
   const soloWaveClearedRef = useRef(false);
   const scoreRef = useRef(0);
@@ -396,9 +400,10 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   const activeLocalStartAt = activeDuel ? localStartAtByDuelId[activeDuel.id] : "";
   const activeDuelOwnScore = activeDuel?.scores?.[user.uid];
+  const retryingActiveDuel = Boolean(activeDuel && retryingDuelIds.has(activeDuel.id));
   const requesterCanPreplay = Boolean(activeDuel?.status === "pending" && activeDuel.fromUserId === user.uid);
   const duelCanRun = Boolean(activeDuel?.status === "accepted" || requesterCanPreplay);
-  const playerNeedsManualStart = Boolean(duelCanRun && !activeDuelOwnScore && !activeLocalStartAt);
+  const playerNeedsManualStart = Boolean(duelCanRun && (!activeDuelOwnScore || retryingActiveDuel) && !activeLocalStartAt);
   const playableDuel: BugSmashDuel | null = activeDuel && duelCanRun && activeLocalStartAt
     ? { ...activeDuel, startAt: activeLocalStartAt }
     : activeDuel;
@@ -426,7 +431,14 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           if (!trainingDuel) {
             const bonusScore = duelBonusScore(scoreRef.current, assist);
             void submitBugSmashDuelScore(user, runningDuel.id, scoreRef.current + bonusScore, caughtBugIdsRef.current, bonusScore)
-              .then((duel) => setActiveDuel(duel))
+              .then((duel) => {
+                setActiveDuel(duel);
+                setRetryingDuelIds((current) => {
+                  const next = new Set(current);
+                  next.delete(duel.id);
+                  return next;
+                });
+              })
               .catch(() => setError(t("duel.submitFailed")));
           }
         }
@@ -597,7 +609,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   }
 
   function applyBugHit(bugId: string, source: "helper" | "tap", timestamp = now, duelOverride?: BugSmashDuel) {
-    const runningDuel = duelOverride ?? trainingDuel ?? activeDuel;
+    const runningDuel = duelOverride ?? trainingDuel ?? (activeDuel && activeLocalStartAt ? { ...activeDuel, startAt: activeLocalStartAt } : activeDuel);
     if (!runningDuel || !isRunning(runningDuel, timestamp)) return;
     const entry = entryByBugId(bugId);
     if (!entry || caughtBugIdsRef.current.includes(bugId)) return;
@@ -648,6 +660,10 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         return;
       }
       if (timestamp < readyAt) return;
+      if (!helperProcSuccess(bonus, timestamp)) {
+        helperCooldownAtRef.current[bonus.bugId] = timestamp + Math.round(spec.cooldownMs * 0.55) + helperIndex * 180;
+        return;
+      }
       const helperTargets = renderedTargets.filter((item) => item.motion.progress <= helperMaxTargetProgress(bonus));
       if (!helperTargets.length) return;
       const target = selectHelperTarget(helperTargets, bonus, hitCountsRef.current, timestamp, spec.special);
@@ -723,6 +739,22 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     }));
   }
 
+  function retryOwnDuelScore() {
+    if (!activeDuel || !canRetryOwnDuelScore) return;
+    resetRunState();
+    setAcknowledgedWaitingDuelIds((current) => {
+      const next = new Set(current);
+      next.delete(activeDuel.id);
+      return next;
+    });
+    setRetryingDuelIds((current) => new Set([...current, activeDuel.id]));
+    setLocalStartAtByDuelId((current) => ({
+      ...current,
+      [activeDuel.id]: new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString()
+    }));
+    setNow(Date.now());
+  }
+
   function startTraining() {
     const seed = Date.now() + Math.floor(Math.random() * 100000);
     const timestamp = new Date().toISOString();
@@ -759,6 +791,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     const config = soloCampaignConfig(wave);
     resetRunState();
     setSoloRun({ mode: "campaign", ...config });
+    if (wave === 1) setSoloCampaignLives(soloCampaignStartingLives);
     setActiveDuelId("");
     setActiveDuel(null);
     setError("");
@@ -808,6 +841,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     if (!campaign) return;
     if (soloCampaignComplete) {
       void rememberSoloCampaignWave(1);
+      setSoloCampaignLives(soloCampaignStartingLives);
       startSoloCampaign(1);
       return;
     }
@@ -817,7 +851,13 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       startSoloCampaign(nextWave);
       return;
     }
+    if (soloCampaignLives > 1) {
+      setSoloCampaignLives((current) => Math.max(1, current - 1));
+      startSoloCampaign(campaign.wave);
+      return;
+    }
     void rememberSoloCampaignWave(1);
+    setSoloCampaignLives(soloCampaignStartingLives);
     startSoloCampaign(1);
   }
 
@@ -866,7 +906,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const activeScore = activeDuel?.scores?.[user.uid];
   const opponentId = activeDuel ? activeDuel.fromUserId === user.uid ? activeDuel.toUserId : activeDuel.fromUserId : "";
   const opponentScore = opponentId ? activeDuel?.scores?.[opponentId] : undefined;
-  const awaitingOpponentResult = Boolean((activeDuel?.status === "pending" || activeDuel?.status === "accepted") && activeScore && !opponentScore);
+  const canRetryOwnDuelScore = Boolean(activeDuel && activeScore && !opponentScore && activeScore.score < duelRetryScoreThreshold && (activeDuel.status === "pending" || activeDuel.status === "accepted"));
+  const awaitingOpponentResult = Boolean((activeDuel?.status === "pending" || activeDuel?.status === "accepted") && activeScore && !opponentScore && !retryingActiveDuel);
   const showWaitingResultModal = Boolean(activeDuel && awaitingOpponentResult && !acknowledgedWaitingDuelIds.has(activeDuel.id));
   const resultRewardPending = Boolean(activeDuel?.winnerId && isDuelParticipant(activeDuel, user) && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid));
   const showResultModal = Boolean(activeDuel?.status === "completed" && isDuelParticipant(activeDuel, user) && !duelResultSeenByUser(activeDuel, user) && !dismissedResultDuelIds.has(activeDuel.id));
@@ -875,7 +916,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const gameStartAt = gameDuel?.startAt ?? "";
   const countdown = gameStartAt ? Math.max(0, Math.ceil((Date.parse(gameStartAt) - now) / 1000)) : 0;
   const remainingSeconds = gameStartAt && gameDuel ? Math.max(0, Math.ceil((Date.parse(gameStartAt) + gameDuel.durationMs - now) / 1000)) : 0;
-  const activeDuelScore = activeScore?.score ?? (runSubmitted ? score + duelBonusScore(score, assist) : score);
+  const activeDuelScore = retryingActiveDuel ? (runSubmitted ? score + duelBonusScore(score, assist) : score) : activeScore?.score ?? (runSubmitted ? score + duelBonusScore(score, assist) : score);
   const incomingPendingDuel = activeDuel?.status === "pending" && activeDuel.toUserId === user.uid;
   const fullscreenGame = Boolean(trainingDuel) || Boolean(duelCanRun && activeLocalStartAt && !playerNeedsManualStart && !awaitingOpponentResult);
   const gameScore = trainingDuel && runSubmitted ? score + duelBonusScore(score, assist) : trainingDuel ? score : activeDuelScore;
@@ -939,9 +980,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           <Text style={styles.gameTimer}>{remainingSeconds}s</Text>
           <View style={styles.gameHudPlayer}>
             <Text style={styles.gameOpponent} numberOfLines={1}>{trainingDuel ? soloCampaign ? t("duel.soloPcScore", { score: soloPcScore, target: soloCampaign.targetScore }) : t("duel.trainingNoRewardsShort") : opponentScore ? t("duel.theirScore", { score: opponentScore.score }) : t("duel.waitingScore")}</Text>
-            <Pressable style={styles.gameExitButton} onPress={trainingDuel ? requestStopTraining : onBack}>
-              <Text style={styles.gameExitText}>x</Text>
-            </Pressable>
+            {trainingDuel ? (
+              <Pressable style={styles.gameExitButton} onPress={requestStopTraining}>
+                <Text style={styles.gameExitText}>x</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
         <View style={styles.fullscreenArena}>
@@ -952,6 +995,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               <Text style={styles.trainingResultTitle}>{soloCampaign ? soloCampaignComplete ? t("duel.soloComplete") : soloCampaignWon ? t("duel.soloWin") : t("duel.soloLoss") : t("duel.trainingDone")}</Text>
               <Text style={styles.trainingResultScore}>{t("duel.yourScore", { score: gameScore })}</Text>
               <Text style={styles.trainingResultBody}>{soloCampaign ? t("duel.soloResultBody", { pc: soloCampaign.pcScore, target: soloCampaign.targetScore }) : t("duel.trainingNoRewards")}</Text>
+              {soloCampaign ? <Text style={styles.trainingResultBody}>{t("duel.soloLives", { lives: soloCampaignLives, max: soloCampaignStartingLives })}</Text> : null}
               {soloCampaign ? <Text style={styles.trainingResultBody}>{soloCampaign.boss ? t("duel.soloBossWave", { wave: soloCampaign.wave, level: soloCampaign.level, maxWave: soloCampaignMaxWave }) : t("duel.soloWave", { wave: soloCampaign.wave, level: soloCampaign.level, maxWave: soloCampaignMaxWave })}</Text> : null}
               {soloCampaign && soloRewardNotice ? (
                 <View style={styles.soloRewardCard}>
@@ -960,7 +1004,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 </View>
               ) : null}
               <Pressable style={sharedStyles.button} onPress={soloCampaign ? handleSoloCampaignResultAction : startTraining}>
-                <Text style={sharedStyles.buttonText}>{soloCampaign ? soloCampaignComplete ? t("duel.soloRestart") : soloCampaignWon ? t("duel.soloNextWave") : t("duel.soloRetry") : t("duel.trainingRetry")}</Text>
+                <Text style={sharedStyles.buttonText}>{soloCampaign ? soloCampaignComplete ? t("duel.soloRestart") : soloCampaignWon ? t("duel.soloNextWave") : soloCampaignLives > 1 ? t("duel.soloRetryWave") : t("duel.soloRetry") : t("duel.trainingRetry")}</Text>
               </Pressable>
               {!(soloCampaign && soloCampaignWon) && (
                 <Pressable style={sharedStyles.secondaryButton} onPress={soloCampaign ? requestStopTraining : stopTraining}>
@@ -1087,6 +1131,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 <Text style={styles.soloCampaignBody}>{t("duel.soloCampaignBody")}</Text>
                 <View style={styles.soloCampaignMetaRow}>
                   <Text style={styles.soloCampaignMeta}>{t("duel.soloContinueWave", { wave: soloCampaignUnlockedWave, maxWave: soloCampaignMaxWave })}</Text>
+                  <Text style={styles.soloCampaignMeta}>{t("duel.soloLives", { lives: soloCampaignLives, max: soloCampaignStartingLives })}</Text>
                 </View>
                 <View style={styles.soloPowerupPanel}>
                   <View style={styles.soloPowerupItem}>
@@ -1169,6 +1214,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               <Text style={styles.resultTitle}>{t("duel.waitingResultTitle")}</Text>
               <Text style={styles.noticeText}>{t("duel.waitingResultBody", { name: opponentLabel(activeDuel, user) })}</Text>
               <Text style={styles.resultLine}>{t("duel.yourScore", { score: activeDuelScore })}</Text>
+              {canRetryOwnDuelScore ? (
+                <Pressable style={sharedStyles.button} onPress={retryOwnDuelScore}>
+                  <Text style={sharedStyles.buttonText}>{t("duel.retryLowScore", { score: duelRetryScoreThreshold })}</Text>
+                </Pressable>
+              ) : null}
             </View>
           )}
 
@@ -1296,6 +1346,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               <Text style={styles.startTitle}>{t("duel.waitingResultTitle")}</Text>
               <Text style={styles.startBody}>{t("duel.waitingResultBody", { name: opponentLabel(activeDuel, user) })}</Text>
               <Text style={styles.resultLine}>{t("duel.yourScore", { score: activeDuelScore })}</Text>
+              {canRetryOwnDuelScore ? (
+                <Pressable style={sharedStyles.button} onPress={retryOwnDuelScore}>
+                  <Text style={sharedStyles.buttonText}>{t("duel.retryLowScore", { score: duelRetryScoreThreshold })}</Text>
+                </Pressable>
+              ) : null}
               <Pressable style={sharedStyles.button} onPress={() => setAcknowledgedWaitingDuelIds((current) => new Set([...current, activeDuel.id]))}>
                 <Text style={sharedStyles.buttonText}>{t("common.ok")}</Text>
               </Pressable>
@@ -1484,7 +1539,7 @@ function renderTargets(
             width: targetSize
           }
         ]}
-        onPress={() => onHit(bugId)}
+        onPressIn={() => onHit(bugId)}
       >
         {feedback && <BugSwatterHit bugSize={44} feedback={feedback} style={styles.targetSwatter} />}
         {frozen && (
@@ -1619,15 +1674,17 @@ function helperHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusList>[n
 }
 
 function helperKindBonusHits(kind: HelperImpactKind, target: VisibleDuelTarget, remaining: number) {
-  if (kind === "sticky") return remaining > 1 ? 1 : 0;
-  if (kind === "shield") return target.motion.progress > 0.74 ? 2 : target.motion.progress > 0.55 ? 1 : 0;
+  if (kind === "sticky") return remaining > 2 ? 2 : remaining > 1 ? 1 : 0;
+  if (kind === "shield") return target.motion.progress > 0.78 ? 3 : target.motion.progress > 0.56 ? 2 : 0;
+  if (kind === "zap") return target.entry.rarity !== "Gewoon" ? 1 : 0;
+  if (kind === "splash") return remaining > 2 ? 1 : 0;
   return 0;
 }
 
 function helperControlMsForKind(kind: HelperImpactKind, rarity: BugDexRarity, progress: number) {
-  const rarityBonus = rarity === "Mythisch" ? 260 : rarity === "Legendarisch" ? 210 : rarity === "Episch" ? 150 : rarity === "Zeldzaam" ? 90 : 0;
-  if (kind === "sticky") return 360 + rarityBonus;
-  if (kind === "shield" && progress > 0.52) return 300 + rarityBonus;
+  const rarityBonus = rarity === "Mythisch" ? 420 : rarity === "Legendarisch" ? 310 : rarity === "Episch" ? 220 : rarity === "Zeldzaam" ? 120 : 0;
+  if (kind === "sticky") return 420 + rarityBonus;
+  if (kind === "shield" && progress > 0.5) return 360 + rarityBonus;
   return 0;
 }
 
@@ -1686,19 +1743,19 @@ function helperSplashHitsForTarget(bonus: ReturnType<typeof activeBugSquadBonusL
 }
 
 function helperBaseHitsForRarity(rarity: BugDexRarity) {
-  if (rarity === "Mythisch") return 6;
-  if (rarity === "Legendarisch") return 3;
+  if (rarity === "Mythisch") return 7;
+  if (rarity === "Legendarisch") return 5;
   if (rarity === "Episch") return 3;
   if (rarity === "Zeldzaam") return 2;
   return 1;
 }
 
 function helperCooldownMsForRarity(rarity: BugDexRarity) {
-  if (rarity === "Mythisch") return 4600;
-  if (rarity === "Legendarisch") return 5100;
+  if (rarity === "Mythisch") return 4300;
+  if (rarity === "Legendarisch") return 5200;
   if (rarity === "Episch") return 6500;
-  if (rarity === "Zeldzaam") return 7800;
-  return 9000;
+  if (rarity === "Zeldzaam") return 7900;
+  return 9400;
 }
 
 function helperInitialCooldownMs(cooldownMs: number, helperIndex: number) {
@@ -1710,7 +1767,18 @@ function helperInitialCharge(helperIndex: number) {
 }
 
 function helperMaxTargetProgress(bonus: ReturnType<typeof activeBugSquadBonusList>[number]) {
-  return helperKindForCategory(bonus.category) === "shield" ? 0.94 : 0.88;
+  const rank = helperRarityRank(bonus.rarity);
+  if (helperKindForCategory(bonus.category) === "shield") return Math.min(0.97, 0.9 + rank * 0.018);
+  return Math.min(0.92, 0.84 + rank * 0.018);
+}
+
+function helperProcSuccess(bonus: ReturnType<typeof activeBugSquadBonusList>[number], timestamp: number) {
+  const rank = helperRarityRank(bonus.rarity);
+  const baseChance = [0.74, 0.84, 0.91, 0.96, 1][rank] ?? 0.74;
+  const kind = helperKindForCategory(bonus.category);
+  const kindBoost = kind === "shield" || kind === "sticky" ? 0.03 : kind === "zap" ? 0.02 : 0;
+  const chance = Math.min(1, baseChance + kindBoost);
+  return stableChance(`${bonus.bugId}:${Math.floor(timestamp / 900)}`, chance);
 }
 
 function helperRarityRank(rarity: BugDexRarity) {

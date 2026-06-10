@@ -839,6 +839,7 @@ function AppContent() {
   }
 
   function navigateMain(nextRoute: "home" | "bugs" | "duel" | "bugdex" | "leaderboard") {
+    if (duelFullscreen) return;
     setSelectedBug(null);
     setSelectedUser(null);
     setDuelOpponent(null);
