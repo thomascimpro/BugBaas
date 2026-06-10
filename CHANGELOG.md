@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.21
+
+- Bug Smash Duel helpers passen hun hits nu toe met dezelfde actuele tick-tijd als hun target-keuze, zodat helper damage niet meer wordt weggegooid terwijl tap damage wel werkt.
+- Release blijft legacy-signed voor bestaande installs.
+
 ## 2.1.20
 
 - Compatibility APK voor bestaande GitHub installs: release is weer met dezelfde legacy/debug signing als 2.1.18 gebouwd, zodat Android geen update-conflict geeft.

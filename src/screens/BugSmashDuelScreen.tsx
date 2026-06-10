@@ -466,9 +466,9 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     applyBugHit(bugId, "tap");
   }
 
-  function applyBugHit(bugId: string, source: "helper" | "tap") {
-    const runningDuel = trainingDuel ?? activeDuel;
-    if (!runningDuel || !isRunning(runningDuel, now)) return;
+  function applyBugHit(bugId: string, source: "helper" | "tap", timestamp = now, duelOverride?: BugSmashDuel) {
+    const runningDuel = duelOverride ?? trainingDuel ?? activeDuel;
+    if (!runningDuel || !isRunning(runningDuel, timestamp)) return;
     const entry = entryByBugId(bugId);
     if (!entry || caughtBugIdsRef.current.includes(bugId)) return;
     const targetIndex = runningDuel.bugIds.indexOf(bugId);
@@ -533,11 +533,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         splashTargets.map((item) => ({ id: item.bugId, x: item.motion.x, y: item.motion.y })),
         spec.special
       );
-      for (let hit = 0; hit < targetHits; hit += 1) applyBugHit(target.bugId, "helper");
+      for (let hit = 0; hit < targetHits; hit += 1) applyBugHit(target.bugId, "helper", timestamp, duel);
 
       splashTargets.forEach((item) => {
         const splashHits = helperSplashHitsForTarget(bonus, item, spec.special);
-        for (let hit = 0; hit < splashHits; hit += 1) applyBugHit(item.bugId, "helper");
+        for (let hit = 0; hit < splashHits; hit += 1) applyBugHit(item.bugId, "helper", timestamp, duel);
       });
     });
   }
