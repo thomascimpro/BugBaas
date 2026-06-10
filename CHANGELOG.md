@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.12
+
+- Duel preplay tap-regressie gefixt: de uitdager kan na het versturen van een challenge weer direct bugs raken.
+- Bug Smash targets gebruiken nu directe press-in hits, zodat snelle dubbele taps meetellen.
+- Solo Campaign heeft 3 levens per run: mislukte waves kunnen opnieuw, bij 0 levens start je weer op wave 1.
+- Tijdens fullscreen duel/campaign is in-app navigatie naar home/tab geblokkeerd om per ongeluk wegklikken te voorkomen.
+- Helper-bonussen zijn opnieuw gebalanceerd: hogere tiers hebben betere proc-kans, damage, control en late-target bereik.
+- Bij wachten op de andere speler blijft je score zichtbaar; onder 30 punten kun je je eigen ronde opnieuw spelen zolang de ander nog niet gespeeld heeft.
+
 ## 2.2.11
 
 - Solo Campaign boss waves geven nu extra daily boss rewards: boss 1 geeft 5 XP, boss 2 een normale BugDex unlock, boss 3 geeft 10 XP en boss 4 een zeldzame BugDex unlock.
