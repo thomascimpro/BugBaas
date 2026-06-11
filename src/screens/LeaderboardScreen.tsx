@@ -6,11 +6,13 @@ import { LastCatchSummary, LeaderboardRow } from "../components/LeaderboardRow";
 import { MedalIcon } from "../components/MedalIcon";
 import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
 import { useI18n } from "../services/i18n";
+import { defaultOrganizationId, organizationIdsForUser, organizationNamesForUser } from "../services/organizationService";
 import { listUsers } from "../services/userService";
 import { User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
+  currentUser: User;
   onBack: () => void;
   onSelectUser: (user: User) => void;
 };
@@ -21,11 +23,23 @@ const podiumStyles = [
   { border: "#b87842", background: "#fff0df", shine: "#e2a56d", text: "#6e3f1e", bugId: "duizendpoot" }
 ];
 
-export function LeaderboardScreen({ onBack: _onBack, onSelectUser }: Props) {
+export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }: Props) {
   const { t } = useI18n();
   const [users, setUsers] = useState<User[]>([]);
   const [lastCatches, setLastCatches] = useState<Record<string, LastCatchSummary>>({});
   const [loading, setLoading] = useState(true);
+  const [organizationPickerOpen, setOrganizationPickerOpen] = useState(false);
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState(defaultOrganizationId);
+  const organizationIds = organizationIdsForUser(currentUser);
+  const organizationNames = organizationNamesForUser(currentUser);
+  const organizationOptions = [
+    { id: defaultOrganizationId, name: t("leaderboard.globalRank") },
+    ...organizationIds.map((id) => ({ id, name: organizationNames[id] ?? id }))
+  ];
+  const selectedOrganizationName = organizationOptions.find((item) => item.id === selectedOrganizationId)?.name ?? t("leaderboard.globalRank");
+  const visibleUsers = selectedOrganizationId === defaultOrganizationId
+    ? users
+    : users.filter((item) => organizationIdsForUser(item).includes(selectedOrganizationId));
 
   useEffect(() => {
     let active = true;
@@ -56,11 +70,41 @@ export function LeaderboardScreen({ onBack: _onBack, onSelectUser }: Props) {
           <BugArtImage bugId="atlaskever" size={76} />
         </View>
       </View>
+      {organizationIds.length > 0 && (
+        <View style={styles.filterCard}>
+          <Pressable style={styles.filterHeader} onPress={() => setOrganizationPickerOpen((current) => !current)}>
+            <View style={styles.filterTextBlock}>
+              <Text style={styles.filterLabel}>{t("leaderboard.rankFilter")}</Text>
+              <Text style={styles.filterValue} numberOfLines={1}>{selectedOrganizationName}</Text>
+            </View>
+            <Text style={styles.filterAction}>{organizationPickerOpen ? t("common.close") : t("common.open")}</Text>
+          </Pressable>
+          {organizationPickerOpen && (
+            <View style={styles.filterOptions}>
+              {organizationOptions.map((option) => {
+                const active = option.id === selectedOrganizationId;
+                return (
+                  <Pressable
+                    key={option.id}
+                    style={[styles.filterOption, active && styles.filterOptionActive]}
+                    onPress={() => {
+                      setSelectedOrganizationId(option.id);
+                      setOrganizationPickerOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.filterOptionText, active && styles.filterOptionTextActive]} numberOfLines={1}>{option.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
       {loading ? <ActivityIndicator /> : (
         <FlatList
-          data={users}
+          data={visibleUsers}
           keyExtractor={(user) => user.uid}
-          ListHeaderComponent={users.length ? <Podium users={users.slice(0, 3)} onSelectUser={onSelectUser} /> : null}
+          ListHeaderComponent={visibleUsers.length ? <Podium users={visibleUsers.slice(0, 3)} onSelectUser={onSelectUser} /> : null}
           ListEmptyComponent={<Text style={sharedStyles.subtitle}>{t("leaderboard.empty")}</Text>}
           renderItem={({ item, index }) => <LeaderboardRow user={item} lastCatch={lastCatches[item.uid]} index={index} onPress={() => onSelectUser(item)} />}
           contentContainerStyle={styles.listContent}
@@ -143,6 +187,71 @@ const styles = StyleSheet.create({
     height: 86,
     justifyContent: "center",
     width: 86
+  },
+  filterCard: {
+    backgroundColor: "#fdfefb",
+    borderColor: "#c6d3cc",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+    padding: 10
+  },
+  filterHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10
+  },
+  filterTextBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  filterLabel: {
+    color: "#53645d",
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
+  filterValue: {
+    color: "#102018",
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  filterAction: {
+    backgroundColor: "#eef4ed",
+    borderColor: "#c6d3cc",
+    borderRadius: 8,
+    borderWidth: 1,
+    color: "#15724f",
+    fontSize: 12,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  filterOptions: {
+    gap: 8,
+    marginTop: 10
+  },
+  filterOption: {
+    backgroundColor: "#eef4ed",
+    borderColor: "#c6d3cc",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  filterOptionActive: {
+    backgroundColor: "#15724f",
+    borderColor: "#15724f"
+  },
+  filterOptionText: {
+    color: "#102018",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  filterOptionTextActive: {
+    color: "#ffffff"
   },
   podium: {
     flexDirection: "row",

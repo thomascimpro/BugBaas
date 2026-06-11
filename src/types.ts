@@ -49,6 +49,7 @@ export type Organization = {
   createdBy: string;
   createdByName: string;
   createdAt: string;
+  updatedAt?: string;
 };
 
 export type OrganizationMemberRole = "owner" | "admin" | "member";

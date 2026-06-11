@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, query, runTransaction, setDoc, updateDoc, where } from "firebase/firestore";
+import { collection, doc, getDocs, onSnapshot, query, runTransaction, setDoc, updateDoc, where } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, TradeRequest, User } from "../types";
 import { entryByBugId, listBugDexInventory } from "./bugDexService";
@@ -58,6 +58,23 @@ export async function listTradeRequests(user: User): Promise<TradeRequest[]> {
   const fromSnapshot = await getDocs(query(collection(db, "trades"), where("fromUserId", "==", user.uid)));
   const toSnapshot = await getDocs(query(collection(db, "trades"), where("toUserId", "==", user.uid)));
   return mergeTradeLists([...fromSnapshot.docs, ...toSnapshot.docs].map((item) => item.data() as TradeRequest));
+}
+
+export function countIncomingTradeRequestsForUser(trades: TradeRequest[], userId: string): number {
+  return trades.filter((trade) => trade.toUserId === userId && trade.fromUserId !== userId && trade.status === "Open").length;
+}
+
+export function subscribeIncomingTradeRequestCount(user: User, onCount: (count: number) => void): () => void {
+  if (!isFirebaseConfigured) {
+    onCount(countIncomingTradeRequestsForUser(demoTrades, user.uid));
+    return () => undefined;
+  }
+
+  const incomingTradesQuery = query(collection(db, "trades"), where("toUserId", "==", user.uid), where("status", "==", "Open"));
+  return onSnapshot(incomingTradesQuery, (snapshot) => {
+    const trades = snapshot.docs.map((item) => item.data() as TradeRequest);
+    onCount(countIncomingTradeRequestsForUser(trades, user.uid));
+  });
 }
 
 export async function createTradeRequest(fromUser: User, toUser: User, offerBugIdsInput: string[] | string, requestBugIdsInput: string[] | string): Promise<TradeRequest> {
