@@ -128,7 +128,11 @@ export async function createOrganizationInvite(user: User, email: string, organi
 
   if (!isFirebaseConfigured) return baseInvite;
 
-  const duplicateSnapshot = await getDocs(query(collection(db, "organizationInvites"), where("invitedEmail", "==", invitedEmail)));
+  const duplicateSnapshot = await getDocs(query(
+    collection(db, "organizationInvites"),
+    where("organizationId", "==", organization.id),
+    where("invitedEmail", "==", invitedEmail)
+  ));
   const duplicate = duplicateSnapshot.docs
     .map((item) => item.data() as OrganizationInvite)
     .find((invite) => invite.organizationId === organization.id && invite.status === "open");
@@ -164,11 +168,12 @@ export async function createOrganizationInviteForUser(user: User, invitedUser: U
 
   if (!isFirebaseConfigured) return baseInvite;
 
-  const [userDuplicateSnapshot, emailDuplicateSnapshot] = await Promise.all([
-    getDocs(query(collection(db, "organizationInvites"), where("invitedUserId", "==", invitedUser.uid))),
-    invitedEmail ? getDocs(query(collection(db, "organizationInvites"), where("invitedEmail", "==", invitedEmail))) : Promise.resolve({ docs: [] })
-  ]);
-  const duplicate = [...userDuplicateSnapshot.docs, ...emailDuplicateSnapshot.docs]
+  const duplicateSnapshot = await getDocs(query(
+    collection(db, "organizationInvites"),
+    where("organizationId", "==", organization.id),
+    where("invitedUserId", "==", invitedUser.uid)
+  ));
+  const duplicate = duplicateSnapshot.docs
     .map((item) => item.data() as OrganizationInvite)
     .find((invite) => invite.organizationId === organization.id && invite.status === "open");
   if (duplicate) throw new Error("Deze gebruiker heeft al een open uitnodiging.");

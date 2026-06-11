@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.31
+
+- Organisatieleden toevoegen werkt nu op de geselecteerde username/userId en doet geen brede invite-checks meer op verborgen e-mailvelden.
+
 ## 2.2.30
 
 - Home heeft onderaan een Help / BugBaas Wiki knop die de live wiki opent in de voorkeursbrowser.
