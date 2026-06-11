@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.27
+
+- Arena-badge telt nu alleen inkomende duelacties, zodat uitgaande wachtduels geen onterechte badge meer geven.
+- Foreground BugDex rewards uit duel en movement claims blijven langer in de wachtrij en kunnen ook buiten de hoofdtabbladen spawnen zodra de UI vrij is.
+- Health Connect movement verwerkt hardlopen en fietsen beter apart zonder loopafstand kapot te maken.
+- BugBaas Wiki is simpeler gemaakt met paginaknoppen, echte vlagknoppen en light/dark mode.
+
 ## 2.2.26
 
 - Duel win BugDex rewards blijven nu als foreground catch verschijnen, ook als je na spelen terug op Arena staat.

@@ -136,6 +136,17 @@ export function countBugSmashDuelActionsForUser(duels: BugSmashDuel[], userId: s
   return duels.filter((duel) => isBugSmashDuelActionForUser(duel, userId)).length;
 }
 
+export function countIncomingBugSmashDuelActionsForUser(duels: BugSmashDuel[], userId: string): number {
+  return duels.filter((duel) => isIncomingBugSmashDuelActionForUser(duel, userId)).length;
+}
+
+function isIncomingBugSmashDuelActionForUser(duel: BugSmashDuel, userId: string): boolean {
+  if (duel.toUserId !== userId) return false;
+  if (duel.status === "pending") return true;
+  if (duel.status === "accepted") return !duel.scores?.[userId];
+  return false;
+}
+
 export function isBugSmashDuelActionForUser(duel: BugSmashDuel, userId: string): boolean {
   if (duel.fromUserId !== userId && duel.toUserId !== userId) return false;
   const opponentId = duel.fromUserId === userId ? duel.toUserId : duel.fromUserId;
@@ -179,6 +190,18 @@ export function subscribeBugSmashDuelActionCount(user: User, onCount: (count: nu
     unsubscribeSent();
     unsubscribeReceived();
   };
+}
+
+export function subscribeIncomingBugSmashDuelActionCount(user: User, onCount: (count: number) => void): () => void {
+  if (!isFirebaseConfigured) {
+    onCount(countIncomingBugSmashDuelActionsForUser(Array.from(demoDuels.values()), user.uid));
+    return () => undefined;
+  }
+
+  return onSnapshot(query(collection(db, "bugSmashDuels"), where("toUserId", "==", user.uid)), (snapshot) => {
+    const duels = snapshot.docs.map((item) => item.data() as BugSmashDuel);
+    onCount(countIncomingBugSmashDuelActionsForUser(duels, user.uid));
+  });
 }
 
 export function subscribeBugSmashDuel(duelId: string, onDuel: (duel: BugSmashDuel | null) => void): () => void {
