@@ -1,5 +1,15 @@
 # Test Results
 
+## 2.2.27 release
+
+- `npm.cmd run typecheck`: geslaagd.
+- `:app:assembleRelease`: geslaagd.
+- APK gekopieerd naar `dist/CimPro-BugBaas-2.2.27.apk`.
+- `aapt2 dump badging`: package `nl.cimpro.bugbaas`, versionCode `122`, versionName `2.2.27`, native-code `arm64-v8a`.
+- `apksigner verify --print-certs`: geslaagd.
+- Signing blijft legacy/debug SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA256: `3152267b4da06e4df17ab9d402b3f8285b5153fe69040ba8c32bc00b10837c56`.
+
 ## 2.2.18 release
 
 - `npm.cmd run typecheck`: geslaagd.

@@ -57,6 +57,7 @@ data class MovementClaimSnapshot(
 object MovementRadarNative {
   private const val actionMovementCheck = "nl.cimpro.bugbaas.action.MOVEMENT_RADAR_CHECK"
   private const val estimatedMetersPerStep = 0.75
+  private const val estimatedRunningMetersPerStep = 1.05
   private const val walkingMetersPerRadarBug = 1500.0
   private const val runningMetersPerRadarBug = 3000.0
   private const val cyclingMetersPerRadarBug = 5000.0
@@ -166,22 +167,28 @@ object MovementRadarNative {
       var walkingMeters = 0.0
       var runningMeters = 0.0
       var cyclingMeters = 0.0
-      for (session in nonOverlappingSessions(sessions)) {
+      val movementSessions = nonOverlappingSessions(sessions)
+      for (session in movementSessions) {
         val distanceMeters = if (canReadDistance) aggregateDistanceMeters(client, session.start, session.end) else 0.0
         val walkingStepMeters = if (canReadSteps && session.bucket == "walking") {
           aggregateSteps(client, session.start, session.end) * estimatedMetersPerStep
         } else {
           0.0
         }
+        val runningStepMeters = if (canReadSteps && session.bucket == "running") {
+          aggregateSteps(client, session.start, session.end) * estimatedRunningMetersPerStep
+        } else {
+          0.0
+        }
         when (session.bucket) {
           "walking" -> walkingMeters += max(distanceMeters, walkingStepMeters)
-          "running" -> runningMeters += distanceMeters
+          "running" -> runningMeters += max(distanceMeters, runningStepMeters)
           "cycling" -> cyclingMeters += distanceMeters
         }
       }
 
       if (canReadSteps) {
-        val gaps = gapsOutsideSessions(start, end, sessions)
+        val gaps = gapsOutsideSessions(start, end, movementSessions)
         val gapSteps = gaps.sumOf { aggregateSteps(client, it.start, it.end) }
         walkingMeters += gapSteps * estimatedMetersPerStep
       }
@@ -293,21 +300,23 @@ object MovementRadarNative {
 
   private fun nonOverlappingSessions(sessions: List<MovementSession>): List<MovementSession> {
     val result = mutableListOf<MovementSession>()
-    var cursor: Instant? = null
-    for (session in sessions.sortedBy { it.start }) {
-      val start = cursor?.let { maxInstant(it, session.start) } ?: session.start
-      if (session.end.isAfter(start)) {
-        result.add(MovementSession(session.bucket, start, session.end))
-        cursor = session.end
+    val occupied = mutableListOf<TimeWindow>()
+    val prioritizedSessions = sessions.sortedWith(
+      compareByDescending<MovementSession> { movementSessionPriority(it.bucket) }.thenBy { it.start }
+    )
+    for (session in prioritizedSessions) {
+      for (window in subtractOccupiedWindows(session.start, session.end, occupied)) {
+        result.add(MovementSession(session.bucket, window.start, window.end))
+        occupied.add(window)
       }
     }
-    return result
+    return result.sortedBy { it.start }
   }
 
   private fun gapsOutsideSessions(start: Instant, end: Instant, sessions: List<MovementSession>): List<TimeWindow> {
     val gaps = mutableListOf<TimeWindow>()
     var cursor = start
-    for (session in nonOverlappingSessions(sessions)) {
+    for (session in sessions.sortedBy { it.start }) {
       if (session.start.isAfter(cursor)) gaps.add(TimeWindow(cursor, session.start))
       if (session.end.isAfter(cursor)) cursor = session.end
     }
@@ -401,6 +410,35 @@ object MovementRadarNative {
       ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY -> "cycling"
       else -> null
     }
+  }
+
+  private fun movementSessionPriority(bucket: String): Int {
+    return when (bucket) {
+      "cycling" -> 3
+      "running" -> 2
+      "walking" -> 1
+      else -> 0
+    }
+  }
+
+  private fun subtractOccupiedWindows(start: Instant, end: Instant, occupied: List<TimeWindow>): List<TimeWindow> {
+    if (!end.isAfter(start)) return emptyList()
+    var remaining = listOf(TimeWindow(start, end))
+    for (blocked in occupied.sortedBy { it.start }) {
+      remaining = remaining.flatMap { subtractWindow(it, blocked) }
+      if (remaining.isEmpty()) break
+    }
+    return remaining.filter { it.end.isAfter(it.start) }
+  }
+
+  private fun subtractWindow(window: TimeWindow, blocked: TimeWindow): List<TimeWindow> {
+    if (!blocked.end.isAfter(window.start) || !blocked.start.isBefore(window.end)) return listOf(window)
+    val result = mutableListOf<TimeWindow>()
+    val leftEnd = minInstant(window.end, blocked.start)
+    if (leftEnd.isAfter(window.start)) result.add(TimeWindow(window.start, leftEnd))
+    val rightStart = maxInstant(window.start, blocked.end)
+    if (window.end.isAfter(rightStart)) result.add(TimeWindow(rightStart, window.end))
+    return result
   }
 
   private fun healthPermissions(): Set<String> {

@@ -58,7 +58,7 @@ import {
   subscribeRequestNotificationCounts,
   subscribeUserNotifications
 } from "./src/services/notificationService";
-import { subscribeBugSmashDuelActionCount } from "./src/services/bugSmashDuelService";
+import { subscribeIncomingBugSmashDuelActionCount } from "./src/services/bugSmashDuelService";
 import { setRadarRequestCounts } from "./src/services/movementRadarService";
 
 export type RouteName = "home" | "bugs" | "new" | "detail" | "leaderboard" | "profile" | "userProfile" | "bugdex" | "settings" | "duel";
@@ -69,7 +69,7 @@ const changelogSeenKey = (uid: string, version: string) => `bugbaas:changelog:${
 const badgeUnlockSeenKey = (uid: string, badgeId: string) => `bugbaas:badgeUnlock:${uid}:${badgeId}`;
 const commentForegroundSpawnChance = 0.16;
 const upvoteForegroundSpawnChance = 0.1;
-const maxQueuedForegroundBugs = 3;
+const maxQueuedForegroundBugs = 12;
 const startupEngagementSyncDelayMs = 4000;
 const startupMovementCheckDelayMs = 2500;
 const startupNotificationRegistrationDelayMs = 3500;
@@ -265,10 +265,9 @@ function AppContent() {
   const notificationSettingsRef = useRef<NotificationSettings>(defaultNotificationSettings);
   const handledNotificationResponses = useRef(new Set<string>());
   const dailyLoginClaimedForUsers = useRef(new Set<string>());
-  const foregroundBugEnabled = Boolean(
+  const foregroundUiClear = Boolean(
     user
     && user.nameSet === true
-    && ["home", "bugs", "new", "bugdex", "leaderboard"].includes(route)
     && !badgeUnlock
     && !bugDexDrop
     && !rankUpTier
@@ -278,6 +277,9 @@ function AppContent() {
     && !splatBonusVisible
     && !versionNotice
   );
+  const foregroundRewardPending = pendingForegroundRewards.length > 0;
+  const foregroundBugEnabled = foregroundUiClear && ["home", "bugs", "new", "bugdex", "leaderboard"].includes(route);
+  const forcedForegroundRewardEnabled = foregroundUiClear && foregroundRewardPending && !(route === "duel" && duelFullscreen);
 
   function recordUserActivity(currentUser: User, force = false) {
     void touchUserActivity(currentUser, force)
@@ -529,7 +531,7 @@ function AppContent() {
       tradeCount = counts.trade;
       publishCounts();
     });
-    const unsubscribeDuels = subscribeBugSmashDuelActionCount(user, (count) => {
+    const unsubscribeDuels = subscribeIncomingBugSmashDuelActionCount(user, (count) => {
       duelCount = count;
       publishCounts();
     });
@@ -1173,11 +1175,12 @@ function AppContent() {
       <ForegroundCatchBug
         catchAssist={squadBonuses().catch_assist}
         catchTimeBonus={squadBonuses().catch_time}
-        enabled={foregroundBugEnabled && (!duelRouteActive || pendingForegroundRewards.length > 0) && !(duelRouteActive && duelFullscreen)}
+        enabled={foregroundBugEnabled || forcedForegroundRewardEnabled}
         forcedBugIds={pendingForegroundRewards.map((reward) => reward.bugId)}
         onCaught={(xp, bugId, rarity) => void handleForegroundBugCaught(xp, bugId, rarity)}
         onForcedBugConsumed={(bugId) => {
-          activeForegroundRewardRef.current = pendingForegroundRewards.find((reward) => reward.bugId === bugId) ?? pendingForegroundRewards[0] ?? null;
+          const [nextReward] = pendingForegroundRewards;
+          activeForegroundRewardRef.current = nextReward?.bugId === bugId ? nextReward : pendingForegroundRewards.find((reward) => reward.bugId === bugId) ?? null;
         }}
         onForcedBugMissed={(bugId) => {
           const missedReward = activeForegroundRewardRef.current?.bugId === bugId ? activeForegroundRewardRef.current : null;

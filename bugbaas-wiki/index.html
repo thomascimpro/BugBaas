@@ -11,6 +11,7 @@
       --ink: #102018;
       --muted: #50665d;
       --panel: #ffffff;
+      --panel-soft: #f5faf6;
       --line: #d8e5db;
       --green: #167a4a;
       --deep: #0b2618;
@@ -20,15 +21,56 @@
       --legendary: #b83227;
       --mythic: #7c3aed;
       --shadow: 0 18px 50px rgba(16, 32, 24, .12);
+      --page-bg:
+        radial-gradient(circle at top left, rgba(215, 189, 87, .24), transparent 34rem),
+        linear-gradient(180deg, #f7fbf6 0%, var(--bg) 42%, #e5f0e8 100%);
+      --topbar-bg: rgba(247, 251, 246, .88);
+      --subtle-border: rgba(16, 32, 24, .08);
+      --card-shadow: 0 8px 28px rgba(16, 32, 24, .06);
+      --card-shadow-strong: 0 14px 34px rgba(16, 32, 24, .12);
+      --active-bg: #e6f2e7;
+      --active-border: #b9d4c2;
+      --note-bg: #fff7d6;
+      --note-border: #d7bd57;
+      --note-ink: #4d4220;
+      color-scheme: light;
+    }
+
+    body[data-theme="dark"] {
+      --bg: #07130d;
+      --ink: #eef8f0;
+      --muted: #b1c4b9;
+      --panel: #102118;
+      --panel-soft: #172b20;
+      --line: #294334;
+      --green: #63d68f;
+      --deep: #06110b;
+      --gold: #e1c865;
+      --rare: #45b277;
+      --epic: #5ca8bc;
+      --legendary: #ef6b5f;
+      --mythic: #b59cff;
+      --shadow: 0 18px 50px rgba(0, 0, 0, .34);
+      --page-bg:
+        radial-gradient(circle at top left, rgba(215, 189, 87, .14), transparent 34rem),
+        linear-gradient(180deg, #08150e 0%, var(--bg) 46%, #0d1b13 100%);
+      --topbar-bg: rgba(8, 20, 13, .9);
+      --subtle-border: rgba(232, 246, 237, .1);
+      --card-shadow: 0 8px 28px rgba(0, 0, 0, .24);
+      --card-shadow-strong: 0 14px 34px rgba(0, 0, 0, .34);
+      --active-bg: #173b28;
+      --active-border: #3f7c57;
+      --note-bg: #332a12;
+      --note-border: #9b8335;
+      --note-ink: #f5e7ad;
+      color-scheme: dark;
     }
 
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      background:
-        radial-gradient(circle at top left, rgba(215, 189, 87, .24), transparent 34rem),
-        linear-gradient(180deg, #f7fbf6 0%, var(--bg) 42%, #e5f0e8 100%);
+      background: var(--page-bg);
       color: var(--ink);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       letter-spacing: 0;
@@ -42,8 +84,8 @@
       position: sticky;
       top: 0;
       z-index: 10;
-      background: rgba(247, 251, 246, .88);
-      border-bottom: 1px solid rgba(16, 32, 24, .08);
+      background: var(--topbar-bg);
+      border-bottom: 1px solid var(--subtle-border);
       backdrop-filter: blur(18px);
     }
     .topbar-inner {
@@ -88,14 +130,14 @@
     }
     .side-nav a:hover,
     .side-nav a.active {
-      background: #fff;
+      background: var(--panel);
       border-color: var(--line);
       color: var(--green);
-      box-shadow: 0 8px 24px rgba(16, 32, 24, .08);
+      box-shadow: var(--card-shadow);
     }
     .language-switch {
       align-items: center;
-      background: #fff;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 999px;
       display: flex;
@@ -110,18 +152,77 @@
       border-radius: 999px;
       cursor: pointer;
       display: inline-flex;
-      font-size: 18px;
       font-weight: 900;
-      gap: 5px;
       min-height: 34px;
       justify-content: center;
       min-width: 38px;
       padding: 4px 7px;
     }
+    .language-switch img {
+      border-radius: 999px;
+      box-shadow: 0 0 0 1px rgba(17, 38, 27, .12);
+      height: 22px;
+      object-fit: cover;
+      width: 30px;
+    }
     .language-switch button.active {
-      background: #e6f2e7;
-      border-color: #b9d4c2;
+      background: var(--active-bg);
+      border-color: var(--active-border);
       color: var(--green);
+    }
+    .theme-switch {
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      display: flex;
+      flex: 0 0 auto;
+      gap: 3px;
+      padding: 4px;
+    }
+    .theme-switch button {
+      align-items: center;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      color: var(--muted);
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 17px;
+      min-height: 34px;
+      justify-content: center;
+      min-width: 36px;
+      padding: 4px 7px;
+    }
+    .theme-switch button.active {
+      background: var(--active-bg);
+      border-color: var(--active-border);
+      color: var(--green);
+    }
+    .theme-icon {
+      border-radius: 999px;
+      display: block;
+      height: 18px;
+      position: relative;
+      width: 18px;
+    }
+    .theme-icon.light {
+      background: var(--gold);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 24%, transparent);
+    }
+    .theme-icon.dark {
+      background: currentColor;
+      overflow: hidden;
+    }
+    .theme-icon.dark::after {
+      background: var(--panel);
+      border-radius: 999px;
+      content: "";
+      height: 16px;
+      left: 7px;
+      position: absolute;
+      top: -2px;
+      width: 16px;
     }
 
     .hero {
@@ -159,12 +260,19 @@
       border-radius: 8px;
       color: #fff;
       display: inline-flex;
+      gap: 10px;
       font-weight: 950;
       min-height: 44px;
       padding: 0 16px;
     }
+    .button img {
+      border-radius: 6px;
+      height: 28px;
+      object-fit: cover;
+      width: 28px;
+    }
     .button.secondary {
-      background: #fff;
+      background: var(--panel);
       border-color: var(--line);
       color: var(--ink);
     }
@@ -194,7 +302,7 @@
     main { padding-bottom: 56px; padding-top: 24px; }
     .nav-hint {
       align-items: center;
-      background: #fff;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       color: var(--muted);
@@ -206,6 +314,166 @@
       padding: 12px 14px;
     }
     .nav-hint b { color: var(--green); }
+    .wiki-search {
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--card-shadow);
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr minmax(220px, .62fr);
+      margin: 0 0 16px;
+      padding: 14px;
+    }
+    .wiki-search label {
+      color: var(--ink);
+      display: block;
+      font-size: 18px;
+      font-weight: 950;
+      margin-bottom: 3px;
+    }
+    .wiki-search span {
+      color: var(--muted);
+      display: block;
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.35;
+    }
+    .wiki-search input {
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--ink);
+      font: inherit;
+      font-weight: 800;
+      min-height: 46px;
+      padding: 0 14px;
+      width: 100%;
+    }
+    .wiki-search input:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent);
+      outline: 0;
+    }
+    .overview-links {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin: 0 0 18px;
+    }
+    .overview-tile {
+      align-items: stretch;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--card-shadow);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 100%;
+      overflow: hidden;
+    }
+    .overview-tile img {
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      width: 100%;
+    }
+    .overview-tile span {
+      color: var(--green);
+      display: block;
+      font-size: 12px;
+      font-weight: 950;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .overview-tile b {
+      color: var(--ink);
+      display: block;
+      font-size: 18px;
+      line-height: 1.15;
+      margin: 0;
+    }
+    .overview-tile p {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.4;
+      margin: 8px 0 0;
+    }
+    .overview-tile-body { padding: 14px; }
+    .overview-tile:hover {
+      border-color: var(--active-border);
+      box-shadow: var(--card-shadow-strong);
+      transform: translateY(-1px);
+    }
+    .overview-tile.is-hidden { display: none; }
+    .action-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin: 16px 0 22px;
+    }
+    .action-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--card-shadow);
+      display: grid;
+      gap: 10px;
+      min-height: 100%;
+      overflow: hidden;
+      padding: 12px;
+    }
+    .action-card:hover {
+      border-color: var(--active-border);
+      box-shadow: var(--card-shadow-strong);
+      transform: translateY(-1px);
+    }
+    .action-card img {
+      aspect-ratio: 16 / 9;
+      border-radius: 6px;
+      object-fit: cover;
+      width: 100%;
+    }
+    .action-card b {
+      color: var(--ink);
+      display: block;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+    .action-card span {
+      color: var(--muted);
+      display: block;
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.35;
+      margin-top: 4px;
+    }
+    .improvement-list {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 16px;
+    }
+    .improvement {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--card-shadow);
+      padding: 14px;
+    }
+    .improvement b {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 5px;
+    }
+    .improvement span {
+      color: var(--muted);
+      display: block;
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.4;
+    }
     .wiki-layout {
       align-items: start;
       display: grid;
@@ -213,10 +481,10 @@
       grid-template-columns: 230px minmax(0, 1fr);
     }
     .side-nav {
-      background: rgba(247, 251, 246, .9);
+      background: var(--topbar-bg);
       border: 1px solid var(--line);
       border-radius: 8px;
-      box-shadow: 0 8px 28px rgba(16, 32, 24, .06);
+      box-shadow: var(--card-shadow);
       flex-direction: column;
       gap: 10px;
       padding: 10px;
@@ -231,7 +499,7 @@
       padding: 8px 10px 10px;
     }
     .nav-group {
-      border-top: 1px solid rgba(216, 229, 219, .86);
+      border-top: 1px solid var(--line);
       display: grid;
       gap: 5px;
       padding-top: 10px;
@@ -298,7 +566,7 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       overflow: hidden;
-      box-shadow: 0 8px 28px rgba(16, 32, 24, .06);
+      box-shadow: var(--card-shadow);
     }
     .card img { aspect-ratio: 16 / 9; object-fit: cover; width: 100%; }
     .card-body { padding: 16px; }
@@ -343,7 +611,7 @@
       white-space: nowrap;
     }
     th {
-      background: #f5faf6;
+      background: var(--panel-soft);
       color: var(--muted);
       font-size: 12px;
       font-weight: 950;
@@ -372,7 +640,7 @@
       grid-template-columns: repeat(6, minmax(0, 1fr));
     }
     .effect {
-      background: #fff;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 12px;
@@ -391,7 +659,7 @@
       grid-template-columns: repeat(5, minmax(0, 1fr));
     }
     .boss {
-      background: #fff;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       overflow: hidden;
@@ -410,7 +678,7 @@
     .mythic-card {
       background:
         radial-gradient(circle at 82% 12%, rgba(124, 58, 237, .24), transparent 8rem),
-        linear-gradient(145deg, #ffffff, #f5f0ff);
+        linear-gradient(145deg, var(--panel), var(--panel-soft));
       border: 1px solid rgba(124, 58, 237, .24);
       border-radius: 8px;
       box-shadow: 0 10px 34px rgba(48, 25, 91, .12);
@@ -436,7 +704,7 @@
       z-index: 2;
     }
     .mythic-effect {
-      background: rgba(255, 255, 255, .92);
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
       border: 1px solid rgba(215, 189, 87, .7);
       border-radius: 8px;
       bottom: 10px;
@@ -471,7 +739,7 @@
       margin: 12px 0 0;
     }
     .mythic-stat {
-      background: rgba(255, 255, 255, .76);
+      background: color-mix(in srgb, var(--panel) 76%, transparent);
       border: 1px solid rgba(124, 58, 237, .16);
       border-radius: 8px;
       padding: 8px 10px;
@@ -498,10 +766,10 @@
     }
 
     .note {
-      background: #fff7d6;
-      border: 1px solid #d7bd57;
+      background: var(--note-bg);
+      border: 1px solid var(--note-border);
       border-radius: 8px;
-      color: #4d4220;
+      color: var(--note-ink);
       font-weight: 800;
       line-height: 1.45;
       padding: 14px;
@@ -533,7 +801,11 @@
       }
       .side-nav a { white-space: normal; }
       .quick-grid,
-      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cards,
+      .overview-links,
+      .action-grid,
+      .improvement-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .wiki-search { grid-template-columns: 1fr; }
       .gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .boss-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .mythic-special-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -546,6 +818,9 @@
       .language-switch { align-self: flex-end; }
       .quick-grid,
       .cards,
+      .overview-links,
+      .action-grid,
+      .improvement-list,
       .gallery,
       .boss-grid,
       .mythic-special-grid { grid-template-columns: 1fr; }
@@ -563,10 +838,14 @@
         <span>BugBaas Wiki</span>
       </a>
       <div class="topbar-actions">
+        <div class="theme-switch" aria-label="Theme">
+          <button class="active" type="button" data-theme-value="light" aria-label="Light mode"><span class="theme-icon light" aria-hidden="true"></span></button>
+          <button type="button" data-theme-value="dark" aria-label="Dark mode"><span class="theme-icon dark" aria-hidden="true"></span></button>
+        </div>
         <div class="language-switch" aria-label="Language">
-          <button class="active" type="button" data-lang="nl" aria-label="Nederlands">🇳🇱</button>
-          <button type="button" data-lang="en" aria-label="English">🇬🇧</button>
-          <button type="button" data-lang="fr" aria-label="Français">🇫🇷</button>
+          <button class="active" type="button" data-lang="nl" aria-label="Nederlands"><img src="assets/flag-nl.svg" alt=""></button>
+          <button type="button" data-lang="en" aria-label="English"><img src="assets/flag-gb.svg" alt=""></button>
+          <button type="button" data-lang="fr" aria-label="Français"><img src="assets/flag-fr.svg" alt=""></button>
         </div>
       </div>
     </div>
@@ -583,7 +862,7 @@
         </div>
         <div class="nav-group">
           <span class="nav-group-title">Bugs tab</span>
-          <a href="#features">Melden & overzicht</a>
+          <a href="#features">Snel starten</a>
         </div>
         <div class="nav-group">
           <span class="nav-group-title">Arena tab</span>
@@ -609,10 +888,10 @@
         <div class="hero-copy">
           <p class="eyebrow">Game guide voor spelers die alles willen snappen</p>
           <h1>BugBaas Wiki</h1>
-          <p>Alles over BugDex unlocks, Arena Duel, Solo Campaign, actieve Bug Squad helpers, XP, weekly missions en de echte drop-kansen achter rewards.</p>
+          <p>Gebruik deze wiki als korte handleiding voor de tabs in BugBaas: waar je iets vindt, wat je daar kunt doen en welke regels achter rewards, battles en upgrades zitten.</p>
           <div class="hero-actions">
-            <a class="button" href="#kansen">Bekijk drop-kansen</a>
-            <a class="button secondary" href="#arena">Leer Arena</a>
+            <a class="button" href="#features"><img src="assets/bugdex.jpg" alt=""><span>Start hier</span></a>
+            <a class="button secondary" href="#kansen"><img src="assets/mythic-frame.png" alt=""><span>Bekijk drop-kansen</span></a>
           </div>
         </div>
         <div class="hero-art">
@@ -620,60 +899,146 @@
         </div>
       </div>
 
-      <div class="quick-grid" aria-label="Snelle feiten">
-        <div class="metric"><b>3</b><span>Actieve helperbugs in je Bug Squad</span></div>
-        <div class="metric"><b>30s</b><span>Duel, training en campaign wave duur</span></div>
-        <div class="metric"><b>20</b><span>Solo Campaign waves in 5 levels</span></div>
-        <div class="metric"><b>0%</b><span>Mythisch via random drops; alleen via upgrade</span></div>
+      <div class="action-grid" aria-label="Populaire acties">
+        <a class="action-card" href="#features">
+          <img src="assets/bugdex.jpg" alt="">
+          <div><b>Ik wil een bug melden</b><span>Start bij Bugs: melden, prioriteit geven en updates volgen.</span></div>
+        </a>
+        <a class="action-card" href="#arena">
+          <img src="assets/duel.jpg" alt="">
+          <div><b>Ik wil een duel spelen</b><span>Leer score, seed, rewards en wanneer helpers meetellen.</span></div>
+        </a>
+        <a class="action-card" href="#workshop">
+          <img src="assets/workshop.png" alt="">
+          <div><b>Ik wil bugs ruilen</b><span>Bekijk hoe offers, historie, locks en upgrades werken.</span></div>
+        </a>
+        <a class="action-card" href="#radar">
+          <img src="assets/radar.png" alt="">
+          <div><b>Ik wil daily progressie</b><span>Gebruik login, movement, radar-widget en lampboosts.</span></div>
+        </a>
       </div>
 
-      <div class="nav-hint"><b>Kies links een feature.</b><span>Elke klik opent één featurepagina. Gebruik de linkernavigatie om snel door alle onderdelen te gaan.</span></div>
+      <div class="section-head">
+        <h2>Pagina's</h2>
+        <p>Kies eerst het onderdeel waar je in de app bent. Elke pagina legt kort uit wat je daar doet en welke regels belangrijk zijn.</p>
+      </div>
+      <div class="wiki-search">
+        <div>
+          <label for="wikiFilter">Zoek in de wiki</label>
+          <span>Filter op termen zoals duel, drop, upgrade, lamp, helper of weekly.</span>
+        </div>
+        <input id="wikiFilter" type="search" autocomplete="off" placeholder="duel, drop, upgrade...">
+      </div>
+      <div class="overview-links" aria-label="Alle wiki pagina's">
+        <a class="overview-tile" href="#features">
+          <img src="assets/bugdex.jpg" alt="Bugs tab">
+          <div class="overview-tile-body"><span>Bugs tab</span><b>Snel starten</b><p>Bug melden, status volgen en zien hoe acties rewards kunnen geven.</p></div>
+        </a>
+        <a class="overview-tile" href="#radar">
+          <img src="assets/radar.png" alt="Movement radar">
+          <div class="overview-tile-body"><span>Home tab</span><b>Movement radar</b><p>Dagelijkse signals, bewegen, Bug Lamp en solo-powerups.</p></div>
+        </a>
+        <a class="overview-tile" href="#arena">
+          <img src="assets/duel.jpg" alt="Arena Duel">
+          <div class="overview-tile-body"><span>Arena tab</span><b>Duel</b><p>Speel dezelfde seed tegen een collega en vergelijk score eerlijk.</p></div>
+        </a>
+        <a class="overview-tile" href="#campaign">
+          <img src="assets/campaign.jpg" alt="Solo Campaign">
+          <div class="overview-tile-body"><span>Arena tab</span><b>Solo Campaign</b><p>Oefen waves, versla bosses en claim dagelijkse boss rewards.</p></div>
+        </a>
+        <a class="overview-tile" href="#helpers">
+          <img src="assets/helpers.jpg" alt="Bug Squad helpers">
+          <div class="overview-tile-body"><span>Arena tab</span><b>Squad helpers</b><p>Kies drie actieve bugs die automatisch meehelpen in battles.</p></div>
+        </a>
+        <a class="overview-tile" href="#tips">
+          <img src="assets/powerups.jpg" alt="Speeltips">
+          <div class="overview-tile-body"><span>Arena tab</span><b>Speeltips</b><p>Wanneer je hoge targets pakt, powerups bewaart of beter doorspeelt.</p></div>
+        </a>
+        <a class="overview-tile" href="#bugdex">
+          <img src="assets/jar.jpg" alt="BugDex collectie">
+          <div class="overview-tile-body"><span>BugDex tab</span><b>Collectie</b><p>Bekijk unlocks, duplicates, rarity en welke bugs helperwaarde hebben.</p></div>
+        </a>
+        <a class="overview-tile" href="#kansen">
+          <img src="assets/mythic-frame.png" alt="Drop kansen">
+          <div class="overview-tile-body"><span>BugDex tab</span><b>Drop-kansen</b><p>Zie per actie hoe groot de kans is op een BugDex reward.</p></div>
+        </a>
+        <a class="overview-tile" href="#workshop">
+          <img src="assets/workshop.png" alt="Ruilen en upgraden">
+          <div class="overview-tile-body"><span>BugDex tab</span><b>Ruilen/upgraden</b><p>Gebruik duplicates voor trades en combineer bugs naar hogere rarity.</p></div>
+        </a>
+        <a class="overview-tile" href="#rewards">
+          <img src="assets/lamp.jpg" alt="XP en weekly missions">
+          <div class="overview-tile-body"><span>Rank tab</span><b>XP & weekly</b><p>Bekijk XP-bronnen, weekly missions en de starter boost.</p></div>
+        </a>
+      </div>
+      <div class="panel">
+        <h3>Volgende verbeteringen voor deze wiki</h3>
+        <p>Deze pagina kan nog sterker worden als hij meer als naslagwerk en minder als losse uitlegpagina werkt.</p>
+        <div class="improvement-list">
+          <div class="improvement"><b>Volledige vertaaldekking</b><span>Gebruik vaste vertaalkeys voor alle tekst, inclusief tabellen, alt-teksten en labels.</span></div>
+          <div class="improvement"><b>Release selector</b><span>Laat spelers kiezen voor welke app-versie de drop-kansen en regels gelden.</span></div>
+          <div class="improvement"><b>Interactieve calculators</b><span>Bereken upgradekosten, raritykans en verwachte rewards per actie.</span></div>
+          <div class="improvement"><b>Meer visuele uitleg</b><span>Maak kleine diagrammen voor duel-seed, helper-cooldowns en upgrade routes.</span></div>
+        </div>
+      </div>
     </section>
 
     <section id="features">
       <div class="section-head">
-        <h2>Wat Zit Erin</h2>
-        <p>BugBaas combineert teamfeedback, een verzamelgame en snelle tap-gevechten. De meeste rewards zijn klein, maar consistent spelen bouwt je collectie en helpers op.</p>
+        <h2>Snel starten</h2>
+        <p>BugBaas draait om twee dingen tegelijk: echte bugs beter opvolgen en spelprogressie verdienen door nuttige acties. Begin hier als je wilt weten welke tab waarvoor is.</p>
       </div>
       <div class="cards">
         <article class="card">
           <img src="assets/bugdex.jpg" alt="BugDex collectie">
           <div class="card-body">
-            <h3>BugDex</h3>
-            <p>Verzamel bugs per rarity. Duplicates zijn nuttig voor upgrades en trades.</p>
+            <h3>Bugs melden en volgen</h3>
+            <p>Gebruik de Bugs tab om meldingen aan te maken, status te volgen, comments te plaatsen en upvotes te geven op problemen die aandacht nodig hebben.</p>
           </div>
         </article>
         <article class="card">
           <img src="assets/duel.jpg" alt="Bug Smash Duel">
           <div class="card-body">
-            <h3>Arena Duel</h3>
-            <p>Beide spelers krijgen dezelfde seed. Je score hangt af van taps, target-keuzes en helpers.</p>
+            <h3>Spelen voor progressie</h3>
+            <p>Gebruik Arena voor duels en Solo Campaign. Je verdient XP, boss rewards en soms BugDex unlocks zonder dat spamacties de beste route worden.</p>
           </div>
         </article>
         <article class="card">
           <img src="assets/campaign.jpg" alt="Solo Campaign">
           <div class="card-body">
-            <h3>Solo Campaign</h3>
-            <p>Speel waves tegen BugBot. Boss waves vragen betere timing en een sterkere squad.</p>
+            <h3>Collectie opbouwen</h3>
+            <p>Gebruik BugDex en Workshop om unlocks te bekijken, duplicates te ruilen en upgrades te maken. Actieve helperbugs blijven beschermd.</p>
           </div>
         </article>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Als je wilt...</th><th>Ga naar</th><th>Wat je daar doet</th></tr></thead>
+          <tbody>
+            <tr><td>Een probleem vastleggen</td><td>Bugs tab</td><td>Nieuwe bug melden, prioriteit inschatten en updates plaatsen.</td></tr>
+            <tr><td>Snel dagelijkse progressie halen</td><td>Home tab</td><td>Daily login claimen, radar gebruiken en movement doelen volgen.</td></tr>
+            <tr><td>Je score verbeteren</td><td>Arena tab</td><td>Duels spelen, campaign oefenen en je Bug Squad testen.</td></tr>
+            <tr><td>Je collectie beheren</td><td>BugDex tab</td><td>Unlocks bekijken, helpers kiezen, ruilen en upgraden.</td></tr>
+            <tr><td>Je weekdoelen checken</td><td>Rank tab</td><td>XP, weekly missions en beloningen volgen.</td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
     <section id="bugdex">
       <div class="section-head">
         <h2>BugDex & Rarity</h2>
-        <p>Rarity bepaalt hoeveel taps een bug in Arena nodig heeft, hoeveel score hij oplevert en hoe waardevol hij is als helper of upgrade-materiaal.</p>
+        <p>De BugDex tab is je collectiepagina. Hier zie je welke bugs je hebt, welke rarity ze hebben, welke duplicates je bezit en welke bugs geschikt zijn als helper of upgrade-materiaal.</p>
       </div>
       <div class="two-col">
         <div class="panel dark">
-          <h3>Rarity regels</h3>
+          <h3>Hoe rarity werkt</h3>
           <ul>
-            <li><span class="rarity common">Gewoon</span> basisbugs, vaakst beschikbaar.</li>
-            <li><span class="rarity rare">Zeldzaam</span> betere score en nuttige upgrades.</li>
-            <li><span class="rarity epic">Episch</span> veel sterker, maar duidelijk zeldzamer.</li>
-            <li><span class="rarity legendary">Legendarisch</span> speciale top-tier random reward.</li>
-            <li><span class="rarity mythic">Mythisch</span> niet uit random drops; alleen via upgrade.</li>
+            <li><span class="rarity common">Gewoon</span> komt vaak voor en is vooral tempo- en upgrade-materiaal.</li>
+            <li><span class="rarity rare">Zeldzaam</span> geeft betere score en is nuttig voor vroege helpers.</li>
+            <li><span class="rarity epic">Episch</span> kost meer taps, maar helpt duidelijk meer in battles.</li>
+            <li><span class="rarity legendary">Legendarisch</span> is zeldzaam uit rewards en sterk als helper.</li>
+            <li><span class="rarity mythic">Mythisch</span> is het einddoel en komt alleen uit upgrades.</li>
           </ul>
         </div>
         <div class="table-wrap">
@@ -695,7 +1060,7 @@
     <section id="kansen">
       <div class="section-head">
         <h2>Drop-Kansen</h2>
-        <p>Een reward heeft eerst een kans om een BugDex drop te worden. Daarna rolt de rarity. Bug Squad en Bug Lamp kunnen kleine boosts geven, maar cap blijft beperkt.</p>
+        <p>Niet elke actie geeft direct een bug. Eerst rolt de app of er een BugDex drop komt; daarna wordt de rarity gekozen. Boosts helpen een beetje, maar de caps houden rare en epic drops schaars.</p>
       </div>
       <div class="table-wrap">
         <table>
@@ -720,33 +1085,34 @@
         </table>
       </div>
       <p class="note">Weekly all-3 bonus betekent: je claimt de extra weekbonus pas nadat alle 3 weekly missions van die week afgerond zijn. De BugDex roll is altijd 100%, maar rare blijft onder 25% en epic onder 5%.</p>
+      <p class="note">Duel win rewards geven hun BugDex unlock niet direct in een popup: de bug spawnt eerst als foreground catch. Pas na tappen verschijnt de unlock. Rarity boosts mogen de cap niet breken: Zeldzaam blijft maximaal 24.5% en Episch maximaal 4.9% op random routes.</p>
     </section>
 
     <section id="arena">
       <div class="section-head">
         <h2>Arena Duel</h2>
-        <p>Duel is eerlijk door dezelfde seed: dezelfde bugs, dezelfde timing. Het verschil zit in wat je tapt, wanneer je tapt en welke helperbugs actief zijn.</p>
+        <p>In de Arena tab daag je iemand uit voor een korte score-run. Beide spelers krijgen dezelfde bugvolgorde, dus het verschil zit in target-keuze, timing en je actieve Bug Squad.</p>
       </div>
       <div class="cards">
         <article class="card">
           <img src="assets/duel.jpg" alt="Duel mode">
           <div class="card-body">
-            <h3>Regels</h3>
-            <p>30 seconden, 56 targets, score per rarity. De uitdager kan direct spelen; de tegenstander speelt later met dezelfde seed.</p>
+            <h3>Waar vind je dit</h3>
+            <p>Open de Arena tab en kies Duel. De uitdager speelt direct; de tegenstander kan later dezelfde seed spelen.</p>
           </div>
         </article>
         <article class="card">
           <img src="assets/helpers.jpg" alt="Actieve Bug Squad">
           <div class="card-body">
-            <h3>Helpers</h3>
-            <p>Je 3 actieve bugs schieten elke paar seconden. Lage rarity helpt licht, hogere rarity voelt duidelijk sterker.</p>
+            <h3>Hoe de run werkt</h3>
+            <p>Je hebt 30 seconden en 56 targets. Hogere rarity geeft meer punten, maar vraagt meer taps en betere timing.</p>
           </div>
         </article>
         <article class="card">
           <img src="assets/jar.jpg" alt="Bug jar helper">
           <div class="card-body">
-            <h3>Dagelijkse reward</h3>
-            <p>Win: 10 XP. Verlies: 5 XP. Dagelijkse duel-reward telt maar 1x per dag per tegenstander.</p>
+            <h3>Rewards</h3>
+            <p>Win geeft 10 XP, verlies 5 XP. Een dagelijkse duel-reward telt maar 1x per tegenstander en BugDex wins verschijnen eerst als foreground catch.</p>
           </div>
         </article>
       </div>
@@ -758,6 +1124,7 @@
             <tr><td>Support bonus</td><td>Support helpers geven eindbonus op basis van score.</td><td>Maakt consistent spelen sterker.</td></tr>
             <tr><td>Movement bonus</td><td>Movement helpers kunnen tot 3 eindpunten geven als je genoeg scoort.</td><td>Nuttig voor net-wel/net-niet duels.</td></tr>
             <tr><td>Retry onder 30</td><td>Lage of bugged eigen score kan opnieuw zolang de ander nog niet speelde.</td><td>Voorkomt verloren duels door een slechte submit.</td></tr>
+            <tr><td>Win BugDex reward</td><td>De reward wordt eerst als foreground bug klaargezet.</td><td>Je ziet altijd wat je vangt en krijgt geen stille unlock.</td></tr>
           </tbody>
         </table>
       </div>
@@ -766,11 +1133,11 @@
     <section id="campaign">
       <div class="section-head">
         <h2>Solo Campaign</h2>
-        <p>Campaign is de oefen- en progressiemode tegen BugBot. Je hebt 3 levens, boss waves elke 4e wave en later meer targets met snellere spacing.</p>
+        <p>Solo Campaign staat in de Arena tab en is bedoeld om zonder tegenstander te oefenen. Je speelt waves tegen BugBot, bouwt routine op en claimt dagelijkse boss rewards.</p>
       </div>
       <div class="two-col">
         <div class="panel">
-          <h3>Campaign structuur</h3>
+          <h3>Wat je moet weten</h3>
           <ul>
             <li>5 levels, 20 waves totaal.</li>
             <li>Elke 4e wave is een boss wave.</li>
@@ -804,7 +1171,7 @@
     <section id="helpers">
       <div class="section-head">
         <h2>Bug Squad Helpers</h2>
-        <p>Je actieve Bug Squad bestaat uit maximaal 3 bugs. In Duel en Campaign zie je alleen de helper-towers met timerbalk; die voeren echte hits/control uit.</p>
+        <p>In de BugDex tab kies je maximaal 3 actieve helperbugs. In Duel en Campaign verschijnen ze als towers met cooldownbalk en geven ze automatische hits, slow, shield of andere control.</p>
       </div>
       <div class="gallery">
         <div class="effect"><img src="assets/effect-lightning.png" alt="Zap effect"><b>Zap</b></div>
@@ -992,19 +1359,19 @@
     <section id="radar">
       <div class="section-head">
         <h2>Radar, Movement & Bug Lamp</h2>
-        <p>Movement en widget rewards zijn bedoeld als zachte extra progressie. Ze geven kleine XP en af en toe een BugDex-kans, maar niet genoeg om alleen daarmee alles te halen.</p>
+        <p>De Home tab bundelt dagelijkse progressie: login claim, movement doelen, radar-widget en tijdelijke boosts. Het is extra voortgang, geen vervanging voor bugs melden of battles spelen.</p>
       </div>
       <div class="cards">
-        <article class="card"><img src="assets/radar.png" alt="Bug Radar"><div class="card-body"><h3>Android radar-widget</h3><p>Max 3 signals per dag. Rarity roll: 71% Gewoon, 24% Zeldzaam, 4% Episch, 1% Legendarisch.</p></div></article>
-        <article class="card"><img src="assets/lamp.jpg" alt="Lamp Focus"><div class="card-body"><h3>Bug Lamp</h3><p>Elke 5e daily login geeft een lamp. Actief: 24 uur, movement goals halveren en +2.5% rarity boost via Gewoon naar Zeldzaam/Episch.</p></div></article>
-        <article class="card"><img src="assets/powerups.jpg" alt="Solo powerups"><div class="card-body"><h3>Solo powerups</h3><p>Boss clears geven Lamp Focus en soms Bug Bomb. Activeer ze vooraf; ze zijn niet constant zichtbaar tijdens waves.</p></div></article>
+        <article class="card"><img src="assets/radar.png" alt="Bug Radar"><div class="card-body"><h3>Android radar-widget</h3><p>Geeft maximaal 3 signals per dag. Een signal kan XP en een BugDex roll geven; verwacht vooral gewone en zeldzame bugs.</p></div></article>
+        <article class="card"><img src="assets/lamp.jpg" alt="Lamp Focus"><div class="card-body"><h3>Bug Lamp</h3><p>Elke 5e daily login geeft een lamp. Na activeren werkt hij 24 uur: movement doelen halveren en rarity krijgt een kleine boost.</p></div></article>
+        <article class="card"><img src="assets/powerups.jpg" alt="Solo powerups"><div class="card-body"><h3>Solo powerups</h3><p>Boss clears kunnen Lamp Focus of Bug Bomb geven. Activeer ze bewust voor lastige campaign waves of boss attempts.</p></div></article>
       </div>
     </section>
 
     <section id="rewards">
       <div class="section-head">
         <h2>XP & Missions</h2>
-        <p>XP is laag op spamgevoelige acties en hoger op weekdoelen. Nieuwe spelers onder 20 XP krijgen tijdelijk een starter boost.</p>
+        <p>De Rank tab laat voortgang, XP en weekly missions zien. XP is bewust laag op spamgevoelige acties en hoger op doelen die echt terugkerende activiteit vragen.</p>
       </div>
       <div class="two-col">
         <div class="table-wrap">
@@ -1025,7 +1392,7 @@
           <h3>Starter boost</h3>
           <p>Nieuwe of lage-XP spelers onder 20 XP krijgen 3 dagen lang 2x positieve XP en een extra onafhankelijke BugDex roll. De extra roll geeft niet twee keer dezelfde BugDex unlock in dezelfde catch-flow.</p>
           <h3>Weekly missions</h3>
-          <p>Elke week krijg je een bug/feature missie plus 7.5 km movement target. Rewards zijn vooraf zichtbaar: XP, gewone BugDex of zeldzame BugDex.</p>
+          <p>Elke week krijg je drie doelen, waaronder movement. Rewards zijn vooraf zichtbaar, zodat je weet of je speelt voor XP, een gewone BugDex roll of een betere zeldzame roll.</p>
         </div>
       </div>
     </section>
@@ -1033,12 +1400,24 @@
     <section id="workshop">
       <div class="section-head">
         <h2>Ruilen & Upgraden</h2>
-        <p>De workshop is waar duplicates waarde krijgen. Actieve helperbugs zijn gelocked zodat je niet per ongeluk je squad weggooit.</p>
+        <p>De Workshop staat in de BugDex tab. Hier krijgen duplicates waarde: je kunt ze ruilen met anderen of combineren naar een hogere rarity.</p>
       </div>
       <div class="cards">
-        <article class="card"><img src="assets/workshop.png" alt="BugDex workshop"><div class="card-body"><h3>Ruilen</h3><p>Selecteer meerdere bugs tegelijk, bijvoorbeeld 3 zeldzame voor 1 epische van iemand anders.</p></div></article>
-        <article class="card"><img src="assets/mythic-frame.png" alt="Mythische frame"><div class="card-body"><h3>Upgrades</h3><p>Combineer duplicates of verschillende bugs naar hogere rarity. Mythisch vereist 10 verschillende Legendarische bugs.</p></div></article>
-        <article class="card"><img src="assets/helpers.jpg" alt="Locked helpers"><div class="card-body"><h3>Actieve squad lock</h3><p>Als je een bug 2x hebt en 1 zit in je squad, blijft de extra copy selecteerbaar.</p></div></article>
+        <article class="card"><img src="assets/workshop.png" alt="BugDex workshop"><div class="card-body"><h3>Ruilen</h3><p>Selecteer wat jij aanbiedt en wat je terug wilt. Open trades tonen duidelijk welke kant van de ruil van wie is.</p></div></article>
+        <article class="card"><img src="assets/mythic-frame.png" alt="Mythische frame"><div class="card-body"><h3>Upgrades</h3><p>Combineer bugs naar hogere rarity. Mythisch is alleen via upgrade bereikbaar en vraagt 10 verschillende Legendarische bugs.</p></div></article>
+        <article class="card"><img src="assets/helpers.jpg" alt="Locked helpers"><div class="card-body"><h3>Actieve squad lock</h3><p>Een bug die in je actieve squad zit wordt beschermd. Heb je een extra copy, dan blijft die wel bruikbaar voor trade of upgrade.</p></div></article>
+        <article class="card"><img src="assets/bugdex.jpg" alt="Ruilhistorie"><div class="card-body"><h3>Ruilhistorie</h3><p>Open trades tonen duidelijk wat zij bieden en wat zij van jou willen. Afgeronde, geweigerde en geannuleerde trades blijven kort zichtbaar in historie.</p></div></article>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ruil onderdeel</th><th>Wat je ziet</th><th>Waarom dit helpt</th></tr></thead>
+          <tbody>
+            <tr><td>Inkomend verzoek</td><td>Zij bieden en zij willen van jou staan apart.</td><td>Je hoeft niet meer te raden welke kant van de ruil van wie is.</td></tr>
+            <tr><td>Uitgaand verzoek</td><td>Jij biedt en jij vraagt staan apart.</td><td>Je ziet sneller of je request klopt voordat iemand accepteert.</td></tr>
+            <tr><td>Historie</td><td>Laatste afgeronde, afgewezen en geannuleerde trades.</td><td>Handig om terug te zien wat er met een verzoek is gebeurd.</td></tr>
+            <tr><td>Sortering</td><td>Mythisch, Legendarisch, Episch, Zeldzaam en daarna Gewoon.</td><td>Hogere waarde bugs staan bovenaan bij selecteren.</td></tr>
+          </tbody>
+        </table>
       </div>
       <div class="table-wrap">
         <table>
@@ -1056,7 +1435,7 @@
     <section id="tips">
       <div class="section-head">
         <h2>Slim Spelen</h2>
-        <p>BugBaas is niet bedoeld als alles-pakken game. Je wint door keuzes: pak hoge waarde als je tijd hebt, gewone bugs als je combo of tempo nodig hebt.</p>
+        <p>In battles win je niet door alles te willen pakken. Kies targets op waarde, resterende tijd en helper-cooldowns.</p>
       </div>
       <div class="cards">
         <article class="panel">
@@ -1090,14 +1469,17 @@
   </main>
 
   <footer class="footer">
-    <div class="shell">BugBaas Wiki - statische HTML voor Netlify. Waarden gebaseerd op source versie 2.2.23.</div>
+    <div class="shell">BugBaas Wiki - waarden en kansen kunnen per release wijzigen. Laatst bijgewerkt voor app-versie 2.2.23.</div>
   </footer>
 
   <script>
     const panels = [...document.querySelectorAll(".tab-content > section[id]")];
-    const links = [...document.querySelectorAll(".side-nav a, .hero-actions a")];
+    const links = [...document.querySelectorAll(".side-nav a, .hero-actions a, .action-grid a, .overview-links a")];
     const panelIds = new Set(panels.map((panel) => panel.id));
     const languageButtons = [...document.querySelectorAll(".language-switch button")];
+    const themeButtons = [...document.querySelectorAll(".theme-switch button")];
+    const wikiFilter = document.querySelector("#wikiFilter");
+    const overviewTiles = [...document.querySelectorAll(".overview-tile")];
     const translations = {
       en: {
         "BugBaas Wiki": "BugBaas Wiki",
@@ -1109,6 +1491,7 @@
         "Rank tab": "Rank tab",
         "Movement radar": "Movement radar",
         "Melden & overzicht": "Report & overview",
+        "Snel starten": "Quick start",
         "Duel": "Duel",
         "Squad helpers": "Squad helpers",
         "Speeltips": "Play tips",
@@ -1127,6 +1510,8 @@
         "Workshop": "Workshop",
         "Tips": "Tips",
         "Game guide voor spelers die alles willen snappen": "Game guide for players who want to understand everything",
+        "Gebruik deze wiki als korte handleiding voor de tabs in BugBaas: waar je iets vindt, wat je daar kunt doen en welke regels achter rewards, battles en upgrades zitten.": "Use this wiki as a short guide to the BugBaas tabs: where to find things, what you can do there and which rules sit behind rewards, battles and upgrades.",
+        "Start hier": "Start here",
         "Alles over BugDex unlocks, Arena Duel, Solo Campaign, actieve Bug Squad helpers, XP, weekly missions en de echte drop-kansen achter rewards.": "Everything about BugDex unlocks, Arena Duel, Solo Campaign, active Bug Squad helpers, XP, weekly missions and the real drop chances behind rewards.",
         "Bekijk drop-kansen": "View drop chances",
         "Leer Arena": "Learn Arena",
@@ -1134,6 +1519,22 @@
         "Duel, training en campaign wave duur": "Duel, training and campaign wave duration",
         "Solo Campaign waves in 5 levels": "Solo Campaign waves across 5 levels",
         "Mythisch via random drops; alleen via upgrade": "Mythic from random drops; upgrade only",
+        "Pagina's": "Pages",
+        "Kies eerst het onderdeel waar je in de app bent. Elke pagina legt kort uit wat je daar doet en welke regels belangrijk zijn.": "First choose the part of the app you are using. Each page briefly explains what you do there and which rules matter.",
+        "Alle pagina's": "All pages",
+        "Klik op een tegel om direct naar die feature te gaan. Elke pagina legt een apart deel van de game uit.": "Click a tile to open that feature directly. Each page explains one part of the game.",
+        "Teamfeedback, bugs, ideeen, tricks en organisatiezichtbaarheid.": "Team feedback, bugs, ideas, tricks and organization visibility.",
+        "Loop-, ren- en fietsdoelen, widget-signals, Bug Lamp en powerups.": "Walking, running and cycling goals, widget signals, Bug Lamp and powerups.",
+        "Scores, dezelfde seed, dagelijkse rewards en foreground win unlocks.": "Scores, shared seed, daily rewards and foreground win unlocks.",
+        "Waves, bosses, levens, targetscore en dagelijkse boss rewards.": "Waves, bosses, lives, target score and daily boss rewards.",
+        "Zap, sticky, shield, burst, splash en mythic specials.": "Zap, sticky, shield, burst, splash and mythic specials.",
+        "Wanneer je welke targets pakt en hoe helpers je keuze veranderen.": "When to pick which targets and how helpers change your choices.",
+        "Rarity, taps, score, hitbox en waarom mythisch alleen via upgrade komt.": "Rarity, taps, score, hitbox and why Mythic only comes from upgrades.",
+        "Alle rewardbronnen, rarity caps en wat weekly all-3 betekent.": "All reward sources, rarity caps and what weekly all-3 means.",
+        "Meerdere bugs ruilen, trade history, actieve squad locks en upgrade routes.": "Multi-bug trades, trade history, active squad locks and upgrade routes.",
+        "XP per actie, weekly missions, 7.5 km doel en zichtbare rewards.": "XP per action, weekly missions, 7.5 km goal and visible rewards.",
+        "Kies links of klik een tegel.": "Choose on the left or click a tile.",
+        "Elke klik opent een featurepagina. Gebruik de tegels of linkernavigatie om snel door alle onderdelen te gaan.": "Each click opens a feature page. Use the tiles or left navigation to move through every part quickly.",
         "Kies links een feature.": "Choose a feature on the left.",
         "Elke klik opent één featurepagina. Gebruik de linkernavigatie om snel door alle onderdelen te gaan.": "Each click opens one feature page. Use the left navigation to move through every part quickly.",
         "Wat Zit Erin": "What Is Included",
@@ -1145,6 +1546,14 @@
         "Radar, Movement & Bug Lamp": "Radar, Movement & Bug Lamp",
         "XP & Missions": "XP & Missions",
         "Ruilen & Upgraden": "Trading & Upgrading",
+        "Ruilhistorie": "Trade history",
+        "Ruil onderdeel": "Trade part",
+        "Wat je ziet": "What you see",
+        "Waarom dit helpt": "Why this helps",
+        "Inkomend verzoek": "Incoming request",
+        "Uitgaand verzoek": "Outgoing request",
+        "Historie": "History",
+        "Sortering": "Sorting",
         "Slim Spelen": "Smart Play",
         "Mythic specials": "Mythic specials",
         "Upgrade route": "Upgrade route",
@@ -1173,6 +1582,7 @@
         "Rank tab": "Onglet Rank",
         "Movement radar": "Radar mouvement",
         "Melden & overzicht": "Signaler & apercu",
+        "Snel starten": "Demarrage rapide",
         "Duel": "Duel",
         "Squad helpers": "Helpers squad",
         "Speeltips": "Conseils de jeu",
@@ -1191,6 +1601,8 @@
         "Workshop": "Atelier",
         "Tips": "Conseils",
         "Game guide voor spelers die alles willen snappen": "Guide de jeu pour les joueurs qui veulent tout comprendre",
+        "Gebruik deze wiki als korte handleiding voor de tabs in BugBaas: waar je iets vindt, wat je daar kunt doen en welke regels achter rewards, battles en upgrades zitten.": "Utilise ce wiki comme guide court des onglets BugBaas: ou trouver quoi, ce que tu peux y faire et les regles derriere les rewards, battles et upgrades.",
+        "Start hier": "Commencer ici",
         "Alles over BugDex unlocks, Arena Duel, Solo Campaign, actieve Bug Squad helpers, XP, weekly missions en de echte drop-kansen achter rewards.": "Tout sur les unlocks BugDex, Arena Duel, Solo Campaign, les helpers Bug Squad actifs, l'XP, les weekly missions et les vraies chances de drop.",
         "Bekijk drop-kansen": "Voir les chances de drop",
         "Leer Arena": "Apprendre Arena",
@@ -1198,6 +1610,22 @@
         "Duel, training en campaign wave duur": "Duree des duels, trainings et waves campaign",
         "Solo Campaign waves in 5 levels": "Waves Solo Campaign sur 5 levels",
         "Mythisch via random drops; alleen via upgrade": "Mythique via drops random; upgrade seulement",
+        "Pagina's": "Pages",
+        "Kies eerst het onderdeel waar je in de app bent. Elke pagina legt kort uit wat je daar doet en welke regels belangrijk zijn.": "Choisis d'abord la partie de l'app que tu utilises. Chaque page explique brievement ce que tu y fais et les regles importantes.",
+        "Alle pagina's": "Toutes les pages",
+        "Klik op een tegel om direct naar die feature te gaan. Elke pagina legt een apart deel van de game uit.": "Clique une tuile pour ouvrir directement cette fonction. Chaque page explique une partie du jeu.",
+        "Teamfeedback, bugs, ideeen, tricks en organisatiezichtbaarheid.": "Feedback equipe, bugs, idees, tricks et visibilite organisation.",
+        "Loop-, ren- en fietsdoelen, widget-signals, Bug Lamp en powerups.": "Objectifs marche, course et velo, signaux widget, Bug Lamp et powerups.",
+        "Scores, dezelfde seed, dagelijkse rewards en foreground win unlocks.": "Scores, meme seed, rewards quotidiennes et unlocks win foreground.",
+        "Waves, bosses, levens, targetscore en dagelijkse boss rewards.": "Waves, bosses, vies, target score et rewards boss quotidiennes.",
+        "Zap, sticky, shield, burst, splash en mythic specials.": "Zap, sticky, shield, burst, splash et specials mythiques.",
+        "Wanneer je welke targets pakt en hoe helpers je keuze veranderen.": "Quand prendre quels targets et comment les helpers changent tes choix.",
+        "Rarity, taps, score, hitbox en waarom mythisch alleen via upgrade komt.": "Rarity, taps, score, hitbox et pourquoi Mythique vient seulement des upgrades.",
+        "Alle rewardbronnen, rarity caps en wat weekly all-3 betekent.": "Toutes les sources de reward, caps rarity et ce que weekly all-3 veut dire.",
+        "Meerdere bugs ruilen, trade history, actieve squad locks en upgrade routes.": "Trades multi-bugs, historique, squad locks actifs et routes upgrade.",
+        "XP per actie, weekly missions, 7.5 km doel en zichtbare rewards.": "XP par action, weekly missions, objectif 7.5 km et rewards visibles.",
+        "Kies links of klik een tegel.": "Choisis a gauche ou clique une tuile.",
+        "Elke klik opent een featurepagina. Gebruik de tegels of linkernavigatie om snel door alle onderdelen te gaan.": "Chaque clic ouvre une page de fonction. Utilise les tuiles ou la navigation a gauche pour parcourir tout rapidement.",
         "Kies links een feature.": "Choisis une fonction a gauche.",
         "Elke klik opent één featurepagina. Gebruik de linkernavigatie om snel door alle onderdelen te gaan.": "Chaque clic ouvre une page de fonction. Utilise la navigation a gauche pour parcourir toutes les parties rapidement.",
         "Wat Zit Erin": "Ce Qu'il Contient",
@@ -1209,6 +1637,14 @@
         "Radar, Movement & Bug Lamp": "Radar, Mouvement & Bug Lamp",
         "XP & Missions": "XP & Missions",
         "Ruilen & Upgraden": "Echanger & Upgrader",
+        "Ruilhistorie": "Historique des echanges",
+        "Ruil onderdeel": "Partie trade",
+        "Wat je ziet": "Ce que tu vois",
+        "Waarom dit helpt": "Pourquoi c'est utile",
+        "Inkomend verzoek": "Demande entrante",
+        "Uitgaand verzoek": "Demande sortante",
+        "Historie": "Historique",
+        "Sortering": "Tri",
         "Slim Spelen": "Jouer Intelligemment",
         "Mythic specials": "Specials mythiques",
         "Upgrade route": "Route upgrade",
@@ -1254,6 +1690,21 @@
       }
     }
 
+    function setTheme(theme) {
+      const safeTheme = theme === "dark" ? "dark" : "light";
+      document.body.dataset.theme = safeTheme;
+      themeButtons.forEach((button) => button.classList.toggle("active", button.dataset.themeValue === safeTheme));
+      localStorage.setItem("bugbaas-wiki-theme", safeTheme);
+    }
+
+    function filterOverview(query) {
+      const normalized = query.trim().toLowerCase();
+      overviewTiles.forEach((tile) => {
+        const text = tile.textContent.toLowerCase();
+        tile.classList.toggle("is-hidden", normalized.length > 0 && !text.includes(normalized));
+      });
+    }
+
     links.forEach((link) => {
       link.addEventListener("click", (event) => {
         const id = link.getAttribute("href")?.slice(1);
@@ -1268,6 +1719,12 @@
     languageButtons.forEach((button) => {
       button.addEventListener("click", () => translatePage(button.dataset.lang || "nl"));
     });
+    themeButtons.forEach((button) => {
+      button.addEventListener("click", () => setTheme(button.dataset.themeValue || "light"));
+    });
+    wikiFilter?.addEventListener("input", () => filterOverview(wikiFilter.value));
+    const preferredTheme = window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    setTheme(localStorage.getItem("bugbaas-wiki-theme") || preferredTheme);
     translatePage(localStorage.getItem("bugbaas-wiki-language") || "nl");
   </script>
 </body>
