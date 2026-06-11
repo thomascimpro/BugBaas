@@ -3,6 +3,7 @@ import { db, isFirebaseConfigured } from "../firebase";
 import { BugSmashDuel, BugSmashDuelScore, User } from "../types";
 import { badgesForUser, bugDexEntries, titleForPoints } from "./pointsService";
 import { duelLossXp, duelWinXp } from "./rewardBalanceService";
+import { starterBoostedXp } from "./starterBoostService";
 
 const demoDuels = new Map<string, BugSmashDuel>();
 const demoDuelRewardEvents = new Set<string>();
@@ -290,7 +291,7 @@ export async function claimBugSmashDuelReward(user: User, duelId: string): Promi
     const eventKey = `${user.uid}:${duelDailyRewardEventId(duelOpponentId(duel, user))}`;
     const rewardGranted = !demoDuelRewardEvents.has(eventKey);
     if (rewardGranted) demoDuelRewardEvents.add(eventKey);
-    const totalPoints = Math.max(0, user.totalPoints + (rewardGranted ? result === "win" ? duelWinXp : duelLossXp : 0));
+    const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, rewardGranted ? result === "win" ? duelWinXp : duelLossXp : 0));
     const updatedUser = { ...user, totalPoints, title: titleForPoints(totalPoints) };
     updatedUser.badges = badgesForUser(updatedUser);
     demoDuels.set(duelId, {
@@ -315,7 +316,7 @@ export async function claimBugSmashDuelReward(user: User, duelId: string): Promi
     const eventSnapshot = await transaction.get(eventRef);
     const rewardGranted = !eventSnapshot.exists();
     const currentUser = userSnapshot.data() as User;
-    const totalPoints = Math.max(0, currentUser.totalPoints + (rewardGranted ? result === "win" ? duelWinXp : duelLossXp : 0));
+    const totalPoints = Math.max(0, currentUser.totalPoints + starterBoostedXp(currentUser, rewardGranted ? result === "win" ? duelWinXp : duelLossXp : 0));
     const updatedUser = { ...currentUser, totalPoints, title: titleForPoints(totalPoints) };
     updatedUser.badges = badgesForUser(updatedUser);
     transaction.update(ref, {

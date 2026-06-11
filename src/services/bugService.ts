@@ -3,6 +3,7 @@ import { auth, db, isFirebaseConfigured } from "../firebase";
 import { BugComment, BugReport, BugStatus, NewBugInput, ReportType, User } from "../types";
 import { defaultOrganizationId, defaultOrganizationName, isPublicOrganization, organizationIdsForUser, organizationNamesForUser } from "./organizationService";
 import { badgesForUser, calculateBugPoints, titleForPoints } from "./pointsService";
+import { starterBoostedXp } from "./starterBoostService";
 import { applyUserPoints, commentPointValue, syncEngagementPoints, upvoteGivenPointValue } from "./userService";
 
 const demoBugs: BugReport[] = [];
@@ -224,7 +225,7 @@ export async function updateOwnBug(
       updatedAt: new Date().toISOString()
     };
     const currentUser = userSnapshot.data() as User;
-    const totalPoints = Math.max(0, currentUser.totalPoints + freshPoints - fresh.points);
+    const totalPoints = Math.max(0, currentUser.totalPoints + starterBoostedXp(currentUser, freshPoints - fresh.points));
     const updatedUser = { ...currentUser, totalPoints, title: titleForPoints(totalPoints) };
     updatedUser.badges = badgesForUser(updatedUser);
     transaction.update(bugRef, {

@@ -38,6 +38,7 @@ import { badgeDefinitions, getTierForPoints, type BadgeDefinition, type BugDexEn
 import { claimMovementRadarBonuses } from "./src/services/movementRadarService";
 import { movementRadarXpPerBug } from "./src/services/rewardBalanceService";
 import { checkLatestVersion, VersionNotice } from "./src/services/versionService";
+import { isStarterBoostActive } from "./src/services/starterBoostService";
 import {
   defaultNotificationSettings,
   dismissPhoneNotification,
@@ -68,6 +69,10 @@ const badgeUnlockSeenKey = (uid: string, badgeId: string) => `bugbaas:badgeUnloc
 const commentForegroundSpawnChance = 0.16;
 const upvoteForegroundSpawnChance = 0.1;
 const maxQueuedForegroundBugs = 3;
+const startupEngagementSyncDelayMs = 4000;
+const startupMovementCheckDelayMs = 2500;
+const startupNotificationRegistrationDelayMs = 3500;
+const startupVersionCheckDelayMs = 5000;
 
 type PendingForegroundReward = {
   bugId: BugArtId;
@@ -76,6 +81,7 @@ type PendingForegroundReward = {
   preparedDrop?: BugDexDropResult;
   preGrantedDrop?: BugDexDropResult;
   source: BugDexDropSource;
+  starterBoostBonus?: boolean;
 };
 
 type ChangelogFeature = {
@@ -369,7 +375,8 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    void checkForVersionUpdate();
+    const timer = setTimeout(() => void checkForVersionUpdate(), startupVersionCheckDelayMs);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -418,17 +425,23 @@ function AppContent() {
 
   useEffect(() => {
     if (!user?.uid || user.nameSet !== true) return;
-    void checkMovementRadarBonuses();
+    const startupTimer = setTimeout(() => void checkMovementRadarBonuses(), startupMovementCheckDelayMs);
     const interval = setInterval(() => void checkMovementRadarBonuses(), 15 * 60 * 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(startupTimer);
+      clearInterval(interval);
+    };
   }, [user?.uid, user?.nameSet]);
 
   useEffect(() => {
     if (!user) return;
     void getNotificationSettings(user).then(setNotificationSettings);
-    void registerPhoneNotificationsForUser(user).then((updated) => {
-      if (updated) setUser(updated);
-    }).catch(() => undefined);
+    const timer = setTimeout(() => {
+      void registerPhoneNotificationsForUser(user).then((updated) => {
+        if (updated) setUser(updated);
+      }).catch(() => undefined);
+    }, startupNotificationRegistrationDelayMs);
+    return () => clearTimeout(timer);
   }, [user?.uid]);
 
   useEffect(() => {
@@ -608,7 +621,7 @@ function AppContent() {
       }).catch(() => undefined).finally(() => {
         engagementSyncInProgress.current.delete(appUser.uid);
       });
-    }, 1000);
+    }, startupEngagementSyncDelayMs);
   }
 
   async function maybeShowBugDexDrop(dropPromise: Promise<BugDexDropResult | null>) {
@@ -651,6 +664,23 @@ function AppContent() {
 
   function queueForegroundReward(reward: PendingForegroundReward) {
     setPendingForegroundRewards((queue) => queue.length >= maxQueuedForegroundBugs ? queue : [...queue, reward]);
+  }
+
+  function queueStarterBoostBugRoll(source: BugDexDropSource, appUser: User, excludeBugId?: string) {
+    if (!isStarterBoostActive(appUser) || source === "combine") return;
+    const entry = pickQueuedBugDexRewardEntry(appUser, source);
+    if (!entry || entry.id === excludeBugId) return;
+    queueForegroundReward({
+      bugId: entry.id as BugArtId,
+      entry,
+      id: `starter-boost-${source}-${entry.id}-${Date.now()}-${Math.random()}`,
+      source,
+      starterBoostBonus: true
+    });
+  }
+
+  function bugDropEntryId(drop: BugDexDropResult | null | undefined): string | undefined {
+    return drop?.rewardType === "bug" ? drop.entry.id : undefined;
   }
 
   function queueGuaranteedBugDexReward(source: BugDexDropSource, appUser = userRef.current) {
@@ -773,22 +803,30 @@ function AppContent() {
       if (pendingReward) {
         if (pendingReward.preGrantedDrop) {
           presentBugDexDrop(pendingReward.preGrantedDrop);
+          if (!pendingReward.starterBoostBonus) queueStarterBoostBugRoll(pendingReward.preGrantedDrop.source, splatResult.user, bugDropEntryId(pendingReward.preGrantedDrop));
           return;
         }
         if (pendingReward.preparedDrop?.source === "daily_login") {
           const claimedDrop = await claimDailyLoginBug(splatResult.user, pendingReward.preparedDrop);
           if (claimedDrop?.updatedUser) setUser(claimedDrop.updatedUser);
-          if (claimedDrop) presentBugDexDrop(claimedDrop);
+          if (claimedDrop) {
+            presentBugDexDrop(claimedDrop);
+            if (!pendingReward.starterBoostBonus) queueStarterBoostBugRoll(claimedDrop.source, claimedDrop.updatedUser ?? splatResult.user, bugDropEntryId(claimedDrop));
+          }
           return;
         }
         const rewardDrop = await rollSpecificBugDexDrop(splatResult.user, pendingReward.bugId, pendingReward.source, 1);
         if (rewardDrop?.updatedUser) setUser(rewardDrop.updatedUser);
-        if (rewardDrop) presentBugDexDrop(rewardDrop);
+        if (rewardDrop) {
+          presentBugDexDrop(rewardDrop);
+          if (!pendingReward.starterBoostBonus) queueStarterBoostBugRoll(rewardDrop.source, rewardDrop.updatedUser ?? splatResult.user, bugDropEntryId(rewardDrop));
+        }
         return;
       }
       const caughtBugDrop = await rollSpecificBugDexDrop(splatResult.user, bugId, "bug_splat", 1);
       if (caughtBugDrop) {
         presentBugDexDrop(caughtBugDrop);
+        queueStarterBoostBugRoll(caughtBugDrop.source, splatResult.user, bugDropEntryId(caughtBugDrop));
       } else if (splatResult.milestone) {
         queueRolledBugDexReward("bug_splat", splatResult.user);
       }

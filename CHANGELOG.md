@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.23
+
+- Epic en Legendary BugDex-kansen zijn lager gebalanceerd voor normale rewards, duel rewards, weekly rewards en foreground splats.
+- Android radar-widget rolls zijn strakker gezet: minder Epic/Legendary, meer Zeldzaam.
+- Starter boost blijft een extra onafhankelijke roll geven, maar gebruikt dezelfde lagere rarity-balans.
+
 ## 2.2.21
 
 - BugDex ruilen en upgrades tonen actieve helperbugs als locked potjes en blokkeren selectie zolang ze actief zijn.

@@ -20,6 +20,12 @@ type Props = {
   onClose: () => void;
 };
 
+function tradeBugIds(trade: TradeRequest, side: "offer" | "request") {
+  const ids = side === "offer" ? trade.offerBugIds : trade.requestBugIds;
+  const fallback = side === "offer" ? trade.offerBugId : trade.requestBugId;
+  return (Array.isArray(ids) && ids.length ? ids : [fallback]).filter(Boolean);
+}
+
 export function TradeAnimationModal({ currentUser, trade, onClose }: Props) {
   const { t } = useI18n();
   const cardScale = useRef(new Animated.Value(0.94)).current;
@@ -66,13 +72,15 @@ export function TradeAnimationModal({ currentUser, trade, onClose }: Props) {
   if (!trade) return null;
 
   const isReceiver = currentUser.uid === trade.toUserId;
-  const receivedBugId = isReceiver ? trade.offerBugId : trade.requestBugId;
-  const sentBugId = isReceiver ? trade.requestBugId : trade.offerBugId;
+  const receivedBugIds = isReceiver ? tradeBugIds(trade, "offer") : tradeBugIds(trade, "request");
+  const sentBugIds = isReceiver ? tradeBugIds(trade, "request") : tradeBugIds(trade, "offer");
   const partnerName = isReceiver ? trade.fromUserName : trade.toUserName;
-  const receivedEntry = entryByBugId(receivedBugId);
-  const sentEntry = entryByBugId(sentBugId);
-  const receivedRarity = receivedEntry?.rarity ?? "Gewoon";
-  const sentRarity = sentEntry?.rarity ?? "Gewoon";
+  const receivedEntries = receivedBugIds.map(entryByBugId).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  const sentEntries = sentBugIds.map(entryByBugId).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  const receivedRarity = receivedEntries[0]?.rarity ?? "Gewoon";
+  const sentRarity = sentEntries[0]?.rarity ?? "Gewoon";
+  const receivedNames = receivedEntries.map((entry) => bugDexEntryName(entry, t)).join(" + ") || "Bug";
+  const sentNames = sentEntries.map((entry) => bugDexEntryName(entry, t)).join(" + ") || "Bug";
   const leftX = swap.interpolate({ inputRange: [0, 0.2, 0.76, 1], outputRange: [0, 0, 104, 104] });
   const rightX = swap.interpolate({ inputRange: [0, 0.2, 0.76, 1], outputRange: [0, 0, -104, -104] });
   const leftY = swap.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -34, 0] });
@@ -95,23 +103,35 @@ export function TradeAnimationModal({ currentUser, trade, onClose }: Props) {
             <Animated.View style={[styles.flash, { opacity: flash }]} />
 
             <Animated.View style={[styles.tradePod, styles.leftPod, { transform: [{ translateX: leftX }, { translateY: leftY }] }]}>
-              <BugArtImage bugId={sentBugId} size={78} />
+              <View style={styles.podBugGrid}>
+                {sentBugIds.slice(0, 4).map((bugId, index) => (
+                  <BugArtImage key={`${bugId}-${index}`} bugId={bugId} size={sentBugIds.length > 1 ? 42 : 78} />
+                ))}
+              </View>
               <Text style={[styles.podRarity, { backgroundColor: rarityColors[sentRarity] }]}>{rarityLabel(sentRarity, t)}</Text>
             </Animated.View>
             <Animated.View style={[styles.tradePod, styles.rightPod, { transform: [{ translateX: rightX }, { translateY: rightY }] }]}>
-              <BugArtImage bugId={receivedBugId} size={78} />
+              <View style={styles.podBugGrid}>
+                {receivedBugIds.slice(0, 4).map((bugId, index) => (
+                  <BugArtImage key={`${bugId}-${index}`} bugId={bugId} size={receivedBugIds.length > 1 ? 42 : 78} />
+                ))}
+              </View>
               <Text style={[styles.podRarity, { backgroundColor: rarityColors[receivedRarity] }]}>{rarityLabel(receivedRarity, t)}</Text>
             </Animated.View>
           </View>
 
           <Animated.View style={[styles.result, { opacity: reveal, transform: [{ scale: revealScale }] }]}>
             <View style={styles.resultArt}>
-              <BugArtImage bugId={receivedBugId} size={116} />
+              <View style={styles.resultBugGrid}>
+                {receivedBugIds.slice(0, 6).map((bugId, index) => (
+                  <BugArtImage key={`${bugId}-${index}`} bugId={bugId} size={receivedBugIds.length > 1 ? 46 : 116} />
+                ))}
+              </View>
             </View>
             <Text style={styles.resultLabel}>{t("trade.received")}</Text>
-            <Text style={styles.resultName}>{receivedEntry ? bugDexEntryName(receivedEntry, t) : "Bug"}</Text>
+            <Text style={styles.resultName}>{receivedNames}</Text>
             <Text style={[styles.resultRarity, { backgroundColor: rarityColors[receivedRarity] }]}>{rarityLabel(receivedRarity, t)}</Text>
-            <Text style={styles.resultMeta}>{t("trade.gave", { name: sentEntry ? bugDexEntryName(sentEntry, t) : "Bug" })}</Text>
+            <Text style={styles.resultMeta}>{t("trade.gave", { name: sentNames })}</Text>
             <Text style={[styles.sentRarity, { color: rarityColors[sentRarity] }]}>{rarityLabel(sentRarity, t)}</Text>
           </Animated.View>
 
@@ -215,6 +235,15 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     textAlign: "center"
   },
+  podBugGrid: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 2,
+    justifyContent: "center",
+    maxHeight: 82,
+    width: 88
+  },
   leftPod: {
     left: 18
   },
@@ -239,6 +268,14 @@ const styles = StyleSheet.create({
     height: 136,
     justifyContent: "center",
     width: 136
+  },
+  resultBugGrid: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    justifyContent: "center",
+    padding: 6
   },
   resultLabel: {
     color: "#52665d",

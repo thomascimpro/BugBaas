@@ -311,8 +311,8 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
     val roll = Random.nextInt(100)
     return when {
       roll < 65 -> "Gewoon"
-      roll < 90 -> "Zeldzaam"
-      roll < 98 -> "Episch"
+      roll < 93 -> "Zeldzaam"
+      roll < 99 -> "Episch"
       else -> "Legendarisch"
     }
   }
@@ -390,8 +390,8 @@ class BugRadarWidgetProvider : AppWidgetProvider() {
       val roll = Random.nextInt(100)
       return when {
         roll < 65 -> "Gewoon"
-        roll < 90 -> "Zeldzaam"
-        roll < 98 -> "Episch"
+        roll < 93 -> "Zeldzaam"
+        roll < 99 -> "Episch"
         else -> "Legendarisch"
       }
     }

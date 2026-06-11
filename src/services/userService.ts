@@ -17,6 +17,7 @@ import { sanitizeActiveBugSquad } from "./bugSquadService";
 import { bestUnlockedCharacterId, CharacterId, defaultCharacterId, isCharacterUnlocked, safeCharacterId } from "./characterService";
 import { cleanOrganizationName, defaultOrganizationId, defaultOrganizationName, organizationIdsForUser, organizationNamesForUser, organizationSlug } from "./organizationService";
 import { badgesForUser, titleForPoints } from "./pointsService";
+import { starterBoostedXp, withStarterBoostIfEligible } from "./starterBoostService";
 
 export const upvotePointValue = 3;
 export const upvoteGivenPointValue = 1;
@@ -122,7 +123,7 @@ function cleanDisplayName(displayName?: string | null): string {
 function makeUser(uid: string, email: string, displayName?: string | null, nameSet = false): User {
   const fallbackName = email.split("@")[0] || "Bugmelder";
   const name = cleanDisplayName(displayName);
-  return {
+  return withStarterBoostIfEligible({
     uid,
     displayName: name || fallbackName,
     email,
@@ -153,7 +154,7 @@ function makeUser(uid: string, email: string, displayName?: string | null, nameS
     title: titleForPoints(0),
     upvoteReceivedPointCount: 0,
     badges: []
-  };
+  });
 }
 
 export function subscribeAuth(callback: (user: FirebaseUser | null) => void): () => void {
@@ -203,10 +204,21 @@ export async function ensureUserDocument(firebaseUser: FirebaseUser, preferredDi
   const lastActiveAt = new Date().toISOString();
   if (snapshot.exists()) {
     const user = snapshot.data() as User;
+    const boostedUser = withStarterBoostIfEligible(user);
     const name = cleanDisplayName(preferredDisplayName);
-    if (user.active === false) {
-      await updateDoc(ref, { active: true, lastActiveAt });
+    const starterBoostChanged = boostedUser.starterBoostGrantedAt !== user.starterBoostGrantedAt || boostedUser.starterBoostActiveUntil !== user.starterBoostActiveUntil;
+    if (user.active === false || starterBoostChanged) {
+      await updateDoc(ref, {
+        active: true,
+        lastActiveAt,
+        ...(starterBoostChanged ? {
+          starterBoostActiveUntil: boostedUser.starterBoostActiveUntil,
+          starterBoostGrantedAt: boostedUser.starterBoostGrantedAt
+        } : {})
+      });
       user.active = true;
+      user.starterBoostActiveUntil = boostedUser.starterBoostActiveUntil;
+      user.starterBoostGrantedAt = boostedUser.starterBoostGrantedAt;
     }
     if (name && user.displayName !== name) {
       const updated = { ...user, active: true, displayName: name, lastActiveAt, nameSet: true };
@@ -259,7 +271,7 @@ export async function syncEngagementPoints(user: User): Promise<User> {
       (commentCount - (user.commentPointCount ?? 0)) * commentPointValue
       + (upvoteGivenCount - (user.upvoteGivenPointCount ?? 0)) * upvoteGivenPointValue
       + (upvoteReceivedCount - (user.upvoteReceivedPointCount ?? 0)) * upvotePointValue;
-    const totalPoints = Math.max(0, user.totalPoints + pointsDelta);
+    const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, pointsDelta));
     const updated = normalizeUser({ ...user, ...bugDexStats, totalPoints, commentPointCount: commentCount, upvoteGivenPointCount: upvoteGivenCount, upvoteReceivedPointCount: upvoteReceivedCount });
     demoUsers.set(updated.email, updated);
     if (demoUser?.uid === user.uid) demoUser = updated;
@@ -275,7 +287,7 @@ export async function syncEngagementPoints(user: User): Promise<User> {
       (commentCount - (current.commentPointCount ?? 0)) * commentPointValue
       + (upvoteGivenCount - (current.upvoteGivenPointCount ?? 0)) * upvoteGivenPointValue
       + (upvoteReceivedCount - (current.upvoteReceivedPointCount ?? 0)) * upvotePointValue;
-    const totalPoints = Math.max(0, current.totalPoints + pointsDelta);
+    const totalPoints = Math.max(0, current.totalPoints + starterBoostedXp(current, pointsDelta));
     const updated = normalizeUser({ ...current, ...bugDexStats, active: true, totalPoints, commentPointCount: commentCount, upvoteGivenPointCount: upvoteGivenCount, upvoteReceivedPointCount: upvoteReceivedCount });
     transaction.update(ref, {
       active: true,
@@ -539,6 +551,27 @@ export async function listUsers(): Promise<User[]> {
   return users.sort((a, b) => b.totalPoints - a.totalPoints);
 }
 
+export async function listLeaderboardUsers(): Promise<User[]> {
+  if (!isFirebaseConfigured) {
+    const currentIsTest = Boolean(demoUser?.testAccount);
+    return Array.from(demoUsers.values())
+      .filter((user) => user.active !== false)
+      .filter((user) => currentIsTest ? user.testAccount === true : user.testAccount !== true)
+      .map(normalizeUser)
+      .sort((a, b) => b.totalPoints - a.totalPoints);
+  }
+
+  const snapshot = await getDocs(query(collection(db, "users"), orderBy("totalPoints", "desc")));
+  const currentUid = auth.currentUser?.uid;
+  const currentIsTest = Boolean(snapshot.docs.find((item) => item.id === currentUid)?.data().testAccount);
+  return snapshot.docs
+    .map((item) => item.data() as User)
+    .filter((user) => user.active !== false)
+    .filter((user) => currentIsTest ? user.testAccount === true : user.testAccount !== true)
+    .map((user) => normalizeUser(user.uid === currentUid ? user : publicUser(user)))
+    .sort((a, b) => b.totalPoints - a.totalPoints);
+}
+
 export async function getUserById(uid: string): Promise<User | null> {
   if (!isFirebaseConfigured) {
     const user = Array.from(demoUsers.values()).find((item) => item.uid === uid) ?? null;
@@ -558,7 +591,7 @@ export async function applyUserPoints(uid: string, pointsDelta: number, bugCount
   const current = isFirebaseConfigured ? null : Array.from(demoUsers.values()).find((user) => user.uid === uid) ?? null;
   if (!isFirebaseConfigured) {
     if (!current) return null;
-    const totalPoints = Math.max(0, current.totalPoints + pointsDelta);
+    const totalPoints = Math.max(0, current.totalPoints + starterBoostedXp(current, pointsDelta));
     const bugCount = Math.max(0, current.bugCount + bugCountDelta);
     const updated = normalizeUser({ ...current, totalPoints, bugCount, title: titleForPoints(totalPoints) });
     demoUsers.set(updated.email, updated);
@@ -570,7 +603,7 @@ export async function applyUserPoints(uid: string, pointsDelta: number, bugCount
   const snapshot = await getDoc(ref);
   if (!snapshot.exists()) return null;
   const user = snapshot.data() as User;
-  const totalPoints = Math.max(0, user.totalPoints + pointsDelta);
+  const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, pointsDelta));
   const bugCount = Math.max(0, user.bugCount + bugCountDelta);
   const updated = normalizeUser({ ...user, totalPoints, bugCount, title: titleForPoints(totalPoints) });
   await updateDoc(ref, updated);
@@ -582,7 +615,7 @@ export async function recordBugSplat(user: User): Promise<{ user: User; mileston
     const current = Array.from(demoUsers.values()).find((item) => item.uid === user.uid) ?? user;
     const splatCount = (current.splatCount ?? 0) + 1;
     const milestone = splatCount % splatRewardEvery === 0;
-    const totalPoints = Math.max(0, current.totalPoints + (milestone ? splatRewardPoints : 0));
+    const totalPoints = Math.max(0, current.totalPoints + starterBoostedXp(current, milestone ? splatRewardPoints : 0));
     const updated = normalizeUser({ ...current, splatCount, totalPoints });
     demoUsers.set(updated.email, updated);
     if (demoUser?.uid === user.uid) demoUser = updated;
@@ -596,7 +629,7 @@ export async function recordBugSplat(user: User): Promise<{ user: User; mileston
     const current = snapshot.data() as User;
     const splatCount = (current.splatCount ?? 0) + 1;
     const milestone = splatCount % splatRewardEvery === 0;
-    const totalPoints = Math.max(0, current.totalPoints + (milestone ? splatRewardPoints : 0));
+    const totalPoints = Math.max(0, current.totalPoints + starterBoostedXp(current, milestone ? splatRewardPoints : 0));
     const updated = normalizeUser({ ...current, active: true, splatCount, totalPoints });
     transaction.update(ref, {
       active: true,
