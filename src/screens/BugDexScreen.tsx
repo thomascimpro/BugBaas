@@ -61,7 +61,7 @@ const emptyDailyUpgradeUsage: DailyUpgradeUsage = {
 };
 const activeBugSquadHeroImage = require("../../assets/generated/active-bug-squad-selection-hd.jpg");
 const bugDexWorkshopImage = require("../../assets/generated/bugdex-workshop-shortcut.png");
-const bugDexUpgradeImage = require("../../assets/generated/bugdex_mythic_frame_hd.png");
+const bugDexUpgradeImage = require("../../assets/generated/bugdex-upgrades-button-hd.png");
 const attackIconImages: Record<BugSquadAttackKind, number> = {
   burst: require("../../assets/generated/duel_effect_slash_hd.png"),
   shield: require("../../assets/generated/duel_effect_shield_hd.png"),

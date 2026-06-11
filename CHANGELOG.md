@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.35
+
+- BugDex Upgrades heeft een nieuwe HD knopafbeelding met upgrade-machine, potjes en tier-pijlen.
+
 ## 2.2.34
 
 - Cimpro ledenlijst stopt niet meer wanneer de organisatie-doc zelf geen leesrecht geeft; bekende leden laden dan alsnog via user-membershipvelden.
