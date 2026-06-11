@@ -40,6 +40,7 @@ const rarityColors: Record<BugDexRarity, string> = {
 };
 
 const settingsGearImage = require("../../assets/generated/settings-gear-hd.png");
+const wikiButtonImage = require("../../assets/generated/bugbaas-wiki-button-hd.png");
 const bugBaasWikiUrl = "https://bugbaas-wiki.netlify.app";
 
 export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRadarClaimed, onMovementRegistered, onOpenBugDexWorkshop, onRewardDrop, onUserUpdated, user, onNavigate }: Props) {
@@ -435,9 +436,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
         </View>
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={t("home.wikiCta")} style={styles.wikiCard} onPress={openBugBaasWiki}>
-        <View style={styles.wikiIcon}>
-          <Text style={styles.wikiIconText}>?</Text>
-        </View>
+        <Image resizeMode="cover" source={wikiButtonImage} style={styles.wikiImage} />
         <View style={styles.wikiText}>
           <Text style={styles.wikiTitle}>{t("home.wikiTitle")}</Text>
           <Text style={styles.wikiBody}>{t("home.wikiBody")}</Text>
@@ -1107,21 +1106,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
     padding: 12
   },
-  wikiIcon: {
-    alignItems: "center",
-    backgroundColor: "#102018",
-    borderColor: "#d7bd57",
+  wikiImage: {
     borderRadius: 8,
-    borderWidth: 2,
-    height: 44,
-    justifyContent: "center",
-    width: 44
-  },
-  wikiIconText: {
-    color: "#d7bd57",
-    fontSize: 24,
-    fontWeight: "900",
-    lineHeight: 28
+    height: 58,
+    width: 82
   },
   wikiText: {
     flex: 1,
