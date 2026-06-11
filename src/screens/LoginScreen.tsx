@@ -126,9 +126,9 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
       <AppBackground />
       <WalkingBugsLayer />
       <View style={styles.card}>
-        <Animated.Image accessibilityLabel="CimPro BugBaas logo" resizeMode="contain" source={splashBadge} style={[styles.badge, { transform: [{ scale: badgeScale }] }]} />
+        <Animated.Image accessibilityLabel="BugBaas logo" resizeMode="contain" source={splashBadge} style={[styles.badge, { transform: [{ scale: badgeScale }] }]} />
         <View style={styles.brandRow}>
-          <Text style={sharedStyles.title}>CimPro BugBaas</Text>
+          <Text style={sharedStyles.title}>BugBaas</Text>
           <BugArtImage bugId="neushoornkever" size={62} />
         </View>
         <Pressable style={styles.googlePrimaryButton} disabled={isBusy || !googleClientId} onPress={submitGoogle}>

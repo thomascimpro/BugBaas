@@ -5,7 +5,7 @@ import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Image, ImageSourcePropType, Linking, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppNotification, BugComment, BugReport, BugSeverity, NotificationSettings, User } from "./src/types";
-import { activateBugLamp, applyUserPoints, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, syncMovementKilometers, touchUserActivity, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
+import { activateBugLamp, applyUserPoints, createOrganizationForUser, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, syncMovementKilometers, touchUserActivity, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
 import { activeBugSquadBonuses } from "./src/services/bugSquadService";
 import { movementBoostWithBugLamp } from "./src/services/bugLampService";
 import { LoginScreen } from "./src/screens/LoginScreen";
@@ -33,8 +33,8 @@ import { allBugArtIds, BugArtId } from "./src/services/bugArt";
 import { CharacterId } from "./src/services/characterService";
 import { bugDexEntryName, LanguageProvider, rarityLabel, useI18n } from "./src/services/i18n";
 import { listBugs } from "./src/services/bugService";
-import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, grantBugDexReward, prepareDailyLoginBug, rollBugDexDrop, rollSpecificBugDexDrop } from "./src/services/bugDexService";
-import { badgeDefinitions, getTierForPoints, type BadgeDefinition, type UserTier } from "./src/services/pointsService";
+import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, entryByBugId, pickBugDexRewardEntry, pickQueuedBugDexRewardEntry, prepareDailyLoginBug, rollSpecificBugDexDrop } from "./src/services/bugDexService";
+import { badgeDefinitions, getTierForPoints, type BadgeDefinition, type BugDexEntry, type UserTier } from "./src/services/pointsService";
 import { claimMovementRadarBonuses } from "./src/services/movementRadarService";
 import { movementRadarXpPerBug } from "./src/services/rewardBalanceService";
 import { checkLatestVersion, VersionNotice } from "./src/services/versionService";
@@ -68,6 +68,15 @@ const badgeUnlockSeenKey = (uid: string, badgeId: string) => `bugbaas:badgeUnloc
 const commentForegroundSpawnChance = 0.16;
 const upvoteForegroundSpawnChance = 0.1;
 const maxQueuedForegroundBugs = 3;
+
+type PendingForegroundReward = {
+  bugId: BugArtId;
+  entry: BugDexEntry;
+  id: string;
+  preparedDrop?: BugDexDropResult;
+  preGrantedDrop?: BugDexDropResult;
+  source: BugDexDropSource;
+};
 
 type ChangelogFeature = {
   key: string;
@@ -221,14 +230,14 @@ function AppContent() {
   const [changelogVersion, setChangelogVersion] = useState("");
   const [splatBonusVisible, setSplatBonusVisible] = useState(false);
   const [versionNotice, setVersionNotice] = useState<VersionNotice | null>(null);
-  const [pendingRadarBugIds, setPendingRadarBugIds] = useState<BugArtId[]>([]);
+  const [pendingForegroundRewards, setPendingForegroundRewards] = useState<PendingForegroundReward[]>([]);
   const [duelFullscreen, setDuelFullscreen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const appState = useRef(AppState.currentState);
   const movementCheckInProgress = useRef(false);
   const versionCheckInProgress = useRef(false);
-  const awardedRadarBugCountsRef = useRef(new Map<string, number>());
+  const activeForegroundRewardRef = useRef<PendingForegroundReward | null>(null);
   const userRef = useRef<User | null>(null);
   const previousRankRef = useRef<{ uid: string; minPoints: number } | null>(null);
   const previousBadgesRef = useRef<{ badges: string[]; uid: string } | null>(null);
@@ -370,7 +379,14 @@ function AppContent() {
       setSelectedBug(null);
       setSelectedUser(null);
       setRoute("home");
-      setPendingRadarBugIds((queue) => [...queue, bugId]);
+      const entry = entryByBugId(bugId);
+      if (!entry) return;
+      queueForegroundReward({
+        bugId,
+        entry,
+        id: `deeplink-${bugId}-${Date.now()}-${Math.random()}`,
+        source: "bug_splat"
+      });
     };
 
     void Linking.getInitialURL().then(openRadarBug).catch(() => undefined);
@@ -543,6 +559,11 @@ function AppContent() {
     setUser(await updateUserCharacter(user, characterId));
   }
 
+  async function handleCreateOrganization(organizationName: string) {
+    if (!user) return;
+    setUser(await createOrganizationForUser(user, organizationName));
+  }
+
   async function finishHelpTour() {
     setHelpVisible(false);
     if (!user) return;
@@ -601,6 +622,21 @@ function AppContent() {
   }
 
   function showBugDexDrop(drop: BugDexDropResult) {
+    if (drop.rewardType === "bug") {
+      queueForegroundReward({
+        bugId: drop.entry.id as BugArtId,
+        entry: drop.entry,
+        id: `drop-${drop.source}-${drop.entry.id}-${Date.now()}-${Math.random()}`,
+        preparedDrop: drop.source === "daily_login" ? drop : undefined,
+        preGrantedDrop: drop.source === "daily_login" ? undefined : drop,
+        source: drop.source
+      });
+      return;
+    }
+    presentBugDexDrop(drop);
+  }
+
+  function presentBugDexDrop(drop: BugDexDropResult) {
     if (drop.rewardType === "bug" && drop.isNew && notificationSettingsRef.current.bugdex) {
       void showBugDexUnlockNotification(bugDexEntryName(drop.entry, t), rarityLabel(drop.entry.rarity, t)).catch(() => undefined);
     }
@@ -613,8 +649,35 @@ function AppContent() {
     });
   }
 
+  function queueForegroundReward(reward: PendingForegroundReward) {
+    setPendingForegroundRewards((queue) => queue.length >= maxQueuedForegroundBugs ? queue : [...queue, reward]);
+  }
+
+  function queueGuaranteedBugDexReward(source: BugDexDropSource, appUser = userRef.current) {
+    if (!appUser) return;
+    const entry = pickBugDexRewardEntry(appUser, source);
+    queueForegroundReward({
+      bugId: entry.id as BugArtId,
+      entry,
+      id: `reward-${source}-${entry.id}-${Date.now()}-${Math.random()}`,
+      source
+    });
+  }
+
+  function queueRolledBugDexReward(source: BugDexDropSource, appUser = userRef.current) {
+    if (!appUser) return;
+    const entry = pickQueuedBugDexRewardEntry(appUser, source);
+    if (!entry) return;
+    queueForegroundReward({
+      bugId: entry.id as BugArtId,
+      entry,
+      id: `roll-${source}-${entry.id}-${Date.now()}-${Math.random()}`,
+      source
+    });
+  }
+
   async function closeBugDexDrop() {
-    if (bugDexDrop?.source === "daily_login") {
+    if (bugDexDrop?.source === "daily_login" && !bugDexDrop.updatedUser) {
       const currentUser = userRef.current;
       if (!currentUser || bugDexClaiming) return;
       setBugDexClaiming(true);
@@ -635,7 +698,7 @@ function AppContent() {
 
   function rewardActivity(source: BugDexDropSource) {
     if (!user) return;
-    void maybeShowBugDexDrop(rollBugDexDrop(user, source));
+    queueRolledBugDexReward(source, user);
   }
 
   async function showClaimedRadarBugs(bugIds: BugArtId[]) {
@@ -652,19 +715,14 @@ function AppContent() {
       // Movement XP is additive; radar BugDex rewards should still be shown.
     }
     for (const bugId of bugIds) {
-      try {
-        const drop = await rollSpecificBugDexDrop(nextUser, bugId, "bug_splat", 1);
-        if (drop?.updatedUser) {
-          nextUser = drop.updatedUser;
-          setUser(drop.updatedUser);
-        }
-        if (drop) {
-          markRadarBugAwarded(bugId);
-          showBugDexDrop(drop);
-        }
-      } catch {
-        setPendingRadarBugIds((queue) => [...queue, bugId]);
-      }
+      const entry = entryByBugId(bugId);
+      if (!entry) continue;
+      queueForegroundReward({
+        bugId,
+        entry,
+        id: `radar-${bugId}-${Date.now()}-${Math.random()}`,
+        source: "bug_splat"
+      });
     }
     await dismissPresentedNotificationsForTarget({ type: "movement" }).catch(() => undefined);
   }
@@ -673,27 +731,23 @@ function AppContent() {
     if (Math.random() > chance) return;
     const bugId = allBugArtIds[Math.floor(Math.random() * allBugArtIds.length)];
     if (!bugId) return;
-    setPendingRadarBugIds((queue) => queue.length >= maxQueuedForegroundBugs ? queue : [...queue, bugId]);
-  }
-
-  function markRadarBugAwarded(bugId: string) {
-    const current = awardedRadarBugCountsRef.current.get(bugId) ?? 0;
-    awardedRadarBugCountsRef.current.set(bugId, current + 1);
-  }
-
-  function consumeAwardedRadarBug(bugId: string): boolean {
-    const current = awardedRadarBugCountsRef.current.get(bugId) ?? 0;
-    if (current <= 0) return false;
-    if (current === 1) awardedRadarBugCountsRef.current.delete(bugId);
-    else awardedRadarBugCountsRef.current.set(bugId, current - 1);
-    return true;
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+    const entry = pickQueuedBugDexRewardEntry(currentUser, "bug_splat");
+    if (!entry) return;
+    queueForegroundReward({
+      bugId,
+      entry,
+      id: `foreground-${bugId}-${Date.now()}-${Math.random()}`,
+      source: "bug_splat"
+    });
   }
 
   function rewardBugFixed(bug: BugReport) {
     if (!user) return;
     const attempts = fixedRewardAttempts(bug.severity);
     for (let index = 0; index < attempts; index += 1) {
-      void maybeShowBugDexDrop(grantBugDexReward(user, "bug_fixed"));
+      queueGuaranteedBugDexReward("bug_fixed", user);
     }
   }
 
@@ -702,7 +756,7 @@ function AppContent() {
     try {
       const result = await recordBugSplat(user);
       setUser(result.user);
-      if (result.milestone) void maybeShowBugDexDrop(rollBugDexDrop(result.user, "bug_splat"));
+      if (result.milestone) queueRolledBugDexReward("bug_splat", result.user);
     } catch {
       // Background splat rewards should never interrupt normal app use.
     }
@@ -710,19 +764,33 @@ function AppContent() {
 
   async function handleForegroundBugCaught(xp: number, bugId: string, rarity: "common" | "rare" | "epic" | "legendary" | "mythic") {
     if (!user) return;
+    const pendingReward = activeForegroundRewardRef.current?.bugId === bugId ? activeForegroundRewardRef.current : null;
+    activeForegroundRewardRef.current = null;
     try {
       const updated = await applyUserPoints(user.uid, xp, 0);
       const splatResult = await recordBugSplat(updated ?? user);
       setUser(splatResult.user);
-      if (consumeAwardedRadarBug(bugId)) {
-        if (splatResult.milestone) void maybeShowBugDexDrop(rollBugDexDrop(splatResult.user, "bug_splat"));
+      if (pendingReward) {
+        if (pendingReward.preGrantedDrop) {
+          presentBugDexDrop(pendingReward.preGrantedDrop);
+          return;
+        }
+        if (pendingReward.preparedDrop?.source === "daily_login") {
+          const claimedDrop = await claimDailyLoginBug(splatResult.user, pendingReward.preparedDrop);
+          if (claimedDrop?.updatedUser) setUser(claimedDrop.updatedUser);
+          if (claimedDrop) presentBugDexDrop(claimedDrop);
+          return;
+        }
+        const rewardDrop = await rollSpecificBugDexDrop(splatResult.user, pendingReward.bugId, pendingReward.source, 1);
+        if (rewardDrop?.updatedUser) setUser(rewardDrop.updatedUser);
+        if (rewardDrop) presentBugDexDrop(rewardDrop);
         return;
       }
       const caughtBugDrop = await rollSpecificBugDexDrop(splatResult.user, bugId, "bug_splat", 1);
       if (caughtBugDrop) {
-        showBugDexDrop(caughtBugDrop);
+        presentBugDexDrop(caughtBugDrop);
       } else if (splatResult.milestone) {
-        void maybeShowBugDexDrop(rollBugDexDrop(splatResult.user, "bug_splat"));
+        queueRolledBugDexReward("bug_splat", splatResult.user);
       }
     } catch {
       // Foreground catch rewards should never interrupt normal app use.
@@ -941,7 +1009,7 @@ function AppContent() {
               void refreshUser();
               queueForegroundBug();
               if ((bug.reportType ?? "bug") === "bug") {
-                void maybeShowBugDexDrop(grantBugDexReward(user, "bug_reported"));
+                queueGuaranteedBugDexReward("bug_reported", user);
                 setSplatBonusVisible(true);
               } else {
                 rewardActivity("comment");
@@ -989,6 +1057,8 @@ function AppContent() {
             onLogout={handleLogout}
             onUpdateCharacter={handleCharacterSave}
             onUpdateDisplayName={handleDisplayNameSave}
+            onCreateOrganization={handleCreateOrganization}
+            onUserUpdated={setUser}
             onSelectBug={(bug) => {
               setSelectedBug(bug);
               setRoute("detail");
@@ -1034,9 +1104,18 @@ function AppContent() {
         catchAssist={squadBonuses().catch_assist}
         catchTimeBonus={squadBonuses().catch_time}
         enabled={!duelRouteActive && foregroundBugEnabled}
-        forcedBugIds={pendingRadarBugIds}
+        forcedBugIds={pendingForegroundRewards.map((reward) => reward.bugId)}
         onCaught={(xp, bugId, rarity) => void handleForegroundBugCaught(xp, bugId, rarity)}
-        onForcedBugConsumed={() => setPendingRadarBugIds((queue) => queue.slice(1))}
+        onForcedBugConsumed={() => {
+          setPendingForegroundRewards((queue) => {
+            const [nextReward, ...remaining] = queue;
+            activeForegroundRewardRef.current = nextReward ?? null;
+            return remaining;
+          });
+        }}
+        onForcedBugMissed={() => {
+          activeForegroundRewardRef.current = null;
+        }}
       />
       <RankUpModal tier={rankUpTier} onClose={() => setRankUpTier(null)} />
       <BadgeUnlockModal badge={badgeUnlock} onClose={closeBadgeUnlock} />

@@ -1,12 +1,13 @@
 {
-  "name": "cimpro-bugbaas",
-  "version": "2.2.18",
+  "name": "bugbaas",
+  "version": "2.2.19",
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
+    "seed:cimpro-org": "node scripts/seed_cimpro_organization.mjs",
     "ios": "expo run:ios"
   },
   "dependencies": {

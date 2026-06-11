@@ -1,6 +1,7 @@
-import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, isFirebaseConfigured } from "../firebase";
 import { BugComment, BugReport, BugStatus, NewBugInput, ReportType, User } from "../types";
+import { defaultOrganizationId, defaultOrganizationName, isPublicOrganization, organizationIdsForUser, organizationNamesForUser } from "./organizationService";
 import { badgesForUser, calculateBugPoints, titleForPoints } from "./pointsService";
 import { applyUserPoints, commentPointValue, syncEngagementPoints, upvoteGivenPointValue } from "./userService";
 
@@ -12,10 +13,18 @@ function normalizeBug(bug: BugReport, fallbackId = bug.id): BugReport {
   return {
     ...bug,
     id: bug.id || fallbackId,
+    collectionName: bug.collectionName ?? (bug.organizationId && bug.organizationId !== defaultOrganizationId ? "organizationBugs" : "bugs"),
     reportType: bug.reportType ?? "bug",
+    organizationId: bug.organizationId || defaultOrganizationId,
+    organizationName: bug.organizationName || defaultOrganizationName,
     upvoteUserIds,
     upvoteCount: typeof bug.upvoteCount === "number" ? bug.upvoteCount : upvoteUserIds.length
   };
+}
+
+function bugCollectionName(bug: BugReport): "bugs" | "organizationBugs" {
+  const current = normalizeBug(bug);
+  return current.collectionName ?? (current.organizationId === defaultOrganizationId ? "bugs" : "organizationBugs");
 }
 
 function calculateReportPoints(reportType: ReportType, severity: NewBugInput["severity"], status: BugStatus): number {
@@ -33,19 +42,37 @@ async function currentUserIsTestAccount(): Promise<boolean> {
   return snapshot.exists() && Boolean((snapshot.data() as User).testAccount);
 }
 
+async function currentUserOrganizationIds(): Promise<string[]> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return [];
+  const snapshot = await getDoc(doc(db, "users", uid));
+  return snapshot.exists() ? organizationIdsForUser(snapshot.data() as User) : [];
+}
+
 async function filterBugsForCurrentUser(bugs: BugReport[]): Promise<BugReport[]> {
   if (!isFirebaseConfigured) {
-    return bugs.filter((bug) => bug.reporterTestAccount !== true);
+    const currentOrgIds = new Set<string>();
+    return bugs
+      .map((bug) => normalizeBug(bug))
+      .filter((bug) => bug.organizationId === defaultOrganizationId || currentOrgIds.has(bug.organizationId ?? ""))
+      .filter((bug) => bug.reporterTestAccount !== true);
   }
 
-  const [currentIsTest, userSnapshot] = await Promise.all([
+  const [currentIsTest, currentOrgIds] = await Promise.all([
     currentUserIsTestAccount(),
-    getDocs(collection(db, "users"))
+    currentUserOrganizationIds()
   ]);
+  const currentOrgIdSet = new Set(currentOrgIds);
+  const userSnapshot = await getDocs(collection(db, "users"));
   const usersById = new Map(userSnapshot.docs.map((item) => [item.id, item.data() as User]));
 
   return bugs.filter((bug) => {
-    const reporter = usersById.get(bug.reporterId);
+    const current = normalizeBug(bug);
+    if (current.organizationId !== defaultOrganizationId && !currentOrgIdSet.has(current.organizationId ?? "")) return false;
+    if (current.organizationId === defaultOrganizationId) {
+      return currentIsTest ? current.reporterTestAccount === true : current.reporterTestAccount !== true;
+    }
+    const reporter = usersById.get(current.reporterId);
     const reporterIsTest = bug.reporterTestAccount === true || reporter?.testAccount === true;
     const reporterIsActiveRealUser = Boolean(reporter) && reporter?.active !== false && reporter?.testAccount !== true && bug.reporterTestAccount !== true;
     return currentIsTest ? reporterIsTest || !reporter : reporterIsActiveRealUser;
@@ -63,6 +90,15 @@ export async function createBug(input: NewBugInput, user: User): Promise<BugRepo
   const now = new Date().toISOString();
   const reportType = input.reportType ?? "bug";
   const points = calculateReportPoints(reportType, input.severity, "Nieuw");
+  const userOrganizationIds = organizationIdsForUser(user);
+  const userOrganizationNames = organizationNamesForUser(user);
+  const inputOrganizationId = input.organizationId ?? defaultOrganizationId;
+  const requestedOrganizationId = inputOrganizationId === defaultOrganizationId
+    ? defaultOrganizationId
+    : userOrganizationIds.includes(inputOrganizationId)
+      ? inputOrganizationId
+      : userOrganizationIds[0] ?? defaultOrganizationId;
+  const requestedOrganizationName = isPublicOrganization(requestedOrganizationId) ? defaultOrganizationName : (userOrganizationNames[requestedOrganizationId] ?? requestedOrganizationId);
   const baseBug: BugReport = {
     id: `bug-${Date.now()}`,
     reportType,
@@ -75,6 +111,8 @@ export async function createBug(input: NewBugInput, user: User): Promise<BugRepo
     reporterId: user.uid,
     reporterName: user.displayName,
     reporterTestAccount: user.testAccount === true,
+    organizationId: requestedOrganizationId,
+    organizationName: requestedOrganizationName,
     points,
     upvoteCount: 0,
     upvoteUserIds: [],
@@ -89,8 +127,9 @@ export async function createBug(input: NewBugInput, user: User): Promise<BugRepo
     return bug;
   }
 
-  const docRef = doc(collection(db, "bugs"));
-  const bug: BugReport = { ...baseBug, id: docRef.id };
+  const collectionName = requestedOrganizationId === defaultOrganizationId ? "bugs" : "organizationBugs";
+  const docRef = doc(collection(db, collectionName));
+  const bug: BugReport = { ...baseBug, collectionName, id: docRef.id };
   if (input.screenshotDataUrl) bug.screenshotDataUrl = input.screenshotDataUrl;
   await setDoc(docRef, bug);
   await applyUserPoints(user.uid, points, reportType === "bug" ? 1 : 0);
@@ -102,10 +141,17 @@ export async function listBugs(status?: BugStatus): Promise<BugReport[]> {
     const visibleBugs = await filterBugsForCurrentUser(demoBugs);
     return visibleBugs.filter((bug) => !status || bug.status === status);
   }
-  const snapshot = await getDocs(query(collection(db, "bugs"), orderBy("createdAt", "desc")));
-  const bugs = snapshot.docs.map((item) => normalizeBug(item.data() as BugReport, item.id));
+  const orgIds = await currentUserOrganizationIds();
+  const publicSnapshot = await getDocs(query(collection(db, "bugs"), orderBy("createdAt", "desc")));
+  const orgSnapshots = await Promise.all(orgIds.map((orgId) => getDocs(query(collection(db, "organizationBugs"), where("organizationId", "==", orgId), orderBy("createdAt", "desc")))));
+  const bugs = [
+    ...publicSnapshot.docs.map((item) => normalizeBug({ ...(item.data() as BugReport), collectionName: "bugs" }, item.id)),
+    ...orgSnapshots.flatMap((snapshot) => snapshot.docs.map((item) => normalizeBug({ ...(item.data() as BugReport), collectionName: "organizationBugs" }, item.id)))
+  ];
   const visibleBugs = await filterBugsForCurrentUser(bugs);
-  return visibleBugs.filter((bug) => !status || bug.status === status);
+  return visibleBugs
+    .filter((bug) => !status || bug.status === status)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function updateBugStatus(bug: BugReport, status: BugStatus): Promise<BugReport> {
@@ -120,7 +166,7 @@ export async function updateBugStatus(bug: BugReport, status: BugStatus): Promis
     return updated;
   }
 
-  await updateDoc(doc(db, "bugs", current.id), {
+  await updateDoc(doc(db, bugCollectionName(current), current.id), {
     status: updated.status,
     points: updated.points,
     updatedAt: updated.updatedAt
@@ -157,7 +203,7 @@ export async function updateOwnBug(
     return updated;
   }
 
-  const bugRef = doc(db, "bugs", current.id);
+  const bugRef = doc(db, bugCollectionName(current), current.id);
   const userRef = doc(db, "users", user.uid);
   return runTransaction(db, async (transaction) => {
     const [bugSnapshot, userSnapshot] = await Promise.all([transaction.get(bugRef), transaction.get(userRef)]);
@@ -220,7 +266,7 @@ export async function toggleBugUpvote(bug: BugReport, user: User): Promise<BugRe
     return updated;
   }
 
-  const bugRef = doc(db, "bugs", current.id);
+  const bugRef = doc(db, bugCollectionName(current), current.id);
   const nextBug = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(bugRef);
     if (!snapshot.exists()) throw new Error("Bug niet gevonden.");
@@ -261,9 +307,10 @@ export async function deleteOwnBug(bug: BugReport, user: User): Promise<void> {
     return;
   }
 
-  const bugRef = doc(db, "bugs", current.id);
+  const collectionName = bugCollectionName(current);
+  const bugRef = doc(db, collectionName, current.id);
   const userRef = doc(db, "users", user.uid);
-  const commentSnapshot = await getDocs(collection(db, "bugs", current.id, "comments"));
+  const commentSnapshot = await getDocs(collection(db, collectionName, current.id, "comments"));
   for (let index = 0; index < commentSnapshot.docs.length; index += 450) {
     const batch = writeBatch(db);
     commentSnapshot.docs.slice(index, index + 450).forEach((item) => batch.delete(item.ref));
@@ -299,11 +346,15 @@ export async function listBugComments(bugId: string): Promise<BugComment[]> {
     return demoComments.filter((comment) => comment.bugId === bugId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
-  const snapshot = await getDocs(query(collection(db, "bugs", bugId, "comments"), orderBy("createdAt", "asc")));
+  const publicRef = doc(db, "bugs", bugId);
+  const publicSnapshot = await getDoc(publicRef);
+  const collectionName = publicSnapshot.exists() ? "bugs" : "organizationBugs";
+  const snapshot = await getDocs(query(collection(db, collectionName, bugId, "comments"), orderBy("createdAt", "asc")));
   return snapshot.docs.map((item) => ({ ...(item.data() as BugComment), id: item.id, bugId }));
 }
 
 export async function addBugComment(bug: BugReport, user: User, text: string, reaction: string): Promise<BugComment> {
+  const current = normalizeBug(bug);
   const trimmed = text.trim();
   if (!trimmed && !reaction) throw new Error("Kies een reactie of typ commentaar.");
   if (trimmed.length > 500) throw new Error("Commentaar mag maximaal 500 tekens zijn.");
@@ -311,9 +362,11 @@ export async function addBugComment(bug: BugReport, user: User, text: string, re
   const now = new Date().toISOString();
   const baseComment: BugComment = {
     id: `comment-${Date.now()}`,
-    bugId: bug.id,
+    bugId: current.id,
     authorId: user.uid,
     authorName: user.displayName,
+    organizationId: current.organizationId,
+    organizationName: current.organizationName,
     text: trimmed,
     reaction,
     createdAt: now
@@ -325,7 +378,7 @@ export async function addBugComment(bug: BugReport, user: User, text: string, re
     return baseComment;
   }
 
-  const ref = doc(collection(db, "bugs", bug.id, "comments"));
+  const ref = doc(collection(db, bugCollectionName(current), current.id, "comments"));
   const comment = { ...baseComment, id: ref.id };
   await setDoc(ref, comment);
   await syncEngagementPoints(user);

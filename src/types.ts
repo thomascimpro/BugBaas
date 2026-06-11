@@ -9,6 +9,11 @@ export type User = {
   active?: boolean;
   lastActiveAt?: string;
   testAccount?: boolean;
+  organizationId?: string;
+  organizationName?: string;
+  organizationIds?: string[];
+  organizationNames?: Record<string, string>;
+  organizationInviteId?: string;
   characterId?: string;
   activeBugSquad?: string[];
   bugLampActiveUntil?: string;
@@ -36,8 +41,47 @@ export type User = {
   badges: string[];
 };
 
+export type Organization = {
+  id: string;
+  name: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+};
+
+export type OrganizationMemberRole = "owner" | "admin" | "member";
+
+export type OrganizationMember = {
+  uid: string;
+  displayName: string;
+  email: string;
+  role: OrganizationMemberRole;
+  organizationId: string;
+  organizationName: string;
+  joinedAt: string;
+  invitedById?: string;
+  inviteId?: string;
+};
+
+export type OrganizationInviteStatus = "open" | "accepted" | "cancelled";
+
+export type OrganizationInvite = {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  invitedEmail: string;
+  invitedById: string;
+  invitedByName: string;
+  status: OrganizationInviteStatus;
+  createdAt: string;
+  acceptedAt?: string;
+  acceptedById?: string;
+  cancelledAt?: string;
+};
+
 export type BugReport = {
   id: string;
+  collectionName?: "bugs" | "organizationBugs";
   reportType?: ReportType;
   title: string;
   project: string;
@@ -49,6 +93,8 @@ export type BugReport = {
   reporterId: string;
   reporterName: string;
   reporterTestAccount?: boolean;
+  organizationId?: string;
+  organizationName?: string;
   points: number;
   upvoteCount: number;
   upvoteUserIds: string[];
@@ -61,6 +107,8 @@ export type BugComment = {
   bugId: string;
   authorId: string;
   authorName: string;
+  organizationId?: string;
+  organizationName?: string;
   text: string;
   reaction: string;
   createdAt: string;
@@ -145,4 +193,6 @@ export type NewBugInput = {
   description: string;
   steps: string;
   screenshotDataUrl?: string;
+  organizationId?: string;
+  organizationName?: string;
 };

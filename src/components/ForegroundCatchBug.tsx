@@ -20,6 +20,7 @@ type ActiveBug = {
   bugId: BugArtId;
   durationMs: number;
   facingScale: number;
+  forced: boolean;
   motionCycleMs: number;
   pathRotate: string[];
   pathX: number[];
@@ -38,6 +39,7 @@ type Props = {
   forcedBugIds?: BugArtId[];
   onCaught: (xp: number, bugId: BugArtId, rarity: SpawnRarity) => void;
   onForcedBugConsumed?: (bugId: BugArtId) => void;
+  onForcedBugMissed?: (bugId: BugArtId) => void;
 };
 
 const catchDurationMs = 30000;
@@ -86,7 +88,7 @@ const bugPools = (Object.keys(rarityLabels) as SpawnRarity[]).reduce((pools, rar
   return pools;
 }, {} as Record<SpawnRarity, BugArtId[]>);
 
-export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enabled, forcedBugIds = [], onCaught, onForcedBugConsumed }: Props) {
+export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enabled, forcedBugIds = [], onCaught, onForcedBugConsumed, onForcedBugMissed }: Props) {
   const { height, width } = useWindowDimensions();
   const [activeBug, setActiveBug] = useState<ActiveBug | null>(null);
   const [hits, setHits] = useState(0);
@@ -239,6 +241,7 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
       bugId,
       durationMs,
       facingScale: direction === "right" ? 1 : -1,
+      forced: Boolean(forcedId),
       motionCycleMs: settings.motionCycleMs,
       pathRotate: motionPath.rotate,
       pathX: motionPath.x,
@@ -253,6 +256,7 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
   }
 
   function clearActiveBug() {
+    const missedBug = activeRef.current && activeRef.current.forced && !caughtRef.current ? activeRef.current.bugId : "";
     if (clearTimer.current) {
       clearTimeout(clearTimer.current);
       clearTimer.current = null;
@@ -267,6 +271,7 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
     setHits(0);
     hitsRef.current = 0;
     lastTapAtRef.current = 0;
+    if (missedBug) onForcedBugMissed?.(missedBug);
   }
 
   function tapBug() {
