@@ -1,7 +1,7 @@
 import { User } from "../types";
 
 export const starterBoostDurationMs = 3 * 24 * 60 * 60 * 1000;
-export const starterBoostMaxStartingXp = 20;
+export const starterBoostMaxStartingXp = 80;
 export const starterBoostXpMultiplier = 2;
 
 export function isStarterBoostActive(user: Pick<User, "starterBoostActiveUntil">, now = Date.now()): boolean {
