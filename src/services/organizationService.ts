@@ -254,6 +254,88 @@ export async function listOrganizationMembers(user: User, organizationId: string
   return Array.from(membersById.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
+export async function updateOrganizationName(manager: User, organizationId: string, organizationName: string): Promise<Organization> {
+  const name = cleanOrganizationName(organizationName);
+  if (name.length < 2) throw new Error("Organisatienaam moet minimaal 2 tekens zijn.");
+  if (isPublicOrganization(organizationId)) throw new Error("Public kan niet gewijzigd worden.");
+  const organization = await getOrganizationById(organizationId, manager);
+  if (!organization) throw new Error("Organisatie niet gevonden.");
+  if (!isOrganizationAdmin(manager, organization)) throw new Error("Alleen de organisatiebeheerder kan dit wijzigen.");
+  const updatedAt = new Date().toISOString();
+  const updated: Organization = { ...organization, name, updatedAt };
+
+  if (!isFirebaseConfigured) return updated;
+
+  await updateDoc(doc(db, "organizations", organizationId), { name, updatedAt });
+  const [memberSnapshot, userByDefaultSnapshot, userByMembershipSnapshot, inviteSnapshot] = await Promise.all([
+    getDocs(collection(db, "organizations", organizationId, "members")),
+    getDocs(query(collection(db, "users"), where("organizationId", "==", organizationId))),
+    getDocs(query(collection(db, "users"), where("organizationIds", "array-contains", organizationId))),
+    getDocs(query(collection(db, "organizationInvites"), where("organizationId", "==", organizationId)))
+  ]);
+
+  await Promise.all(memberSnapshot.docs.map((item) => updateDoc(item.ref, { organizationName: name })));
+  const usersById = new Map([...userByDefaultSnapshot.docs, ...userByMembershipSnapshot.docs].map((item) => [item.id, item]));
+  await Promise.all(Array.from(usersById.values()).map((item) => {
+    const current = item.data() as User;
+    return updateDoc(item.ref, {
+      ...(organizationIdForUser(current) === organizationId ? { organizationName: name } : {}),
+      [`organizationNames.${organizationId}`]: name
+    });
+  }));
+  await Promise.all(inviteSnapshot.docs
+    .filter((item) => (item.data() as OrganizationInvite).status === "open")
+    .map((item) => updateDoc(item.ref, { organizationName: name })));
+  return updated;
+}
+
+export async function deleteOrganization(manager: User, organizationId: string): Promise<User> {
+  if (isPublicOrganization(organizationId)) throw new Error("Public kan niet verwijderd worden.");
+  const organization = await getOrganizationById(organizationId, manager);
+  if (!organization) throw new Error("Organisatie niet gevonden.");
+  if (!isOrganizationAdmin(manager, organization)) throw new Error("Alleen de organisatiebeheerder kan dit verwijderen.");
+  if (!isFirebaseConfigured) return manager;
+
+  const [memberSnapshot, userByDefaultSnapshot, userByMembershipSnapshot, inviteSnapshot] = await Promise.all([
+    getDocs(collection(db, "organizations", organizationId, "members")),
+    getDocs(query(collection(db, "users"), where("organizationId", "==", organizationId))),
+    getDocs(query(collection(db, "users"), where("organizationIds", "array-contains", organizationId))),
+    getDocs(query(collection(db, "organizationInvites"), where("organizationId", "==", organizationId)))
+  ]);
+
+  const usersById = new Map([...userByDefaultSnapshot.docs, ...userByMembershipSnapshot.docs].map((item) => [item.id, item]));
+  let updatedManager = manager;
+  for (const item of usersById.values()) {
+    const member = item.data() as User;
+    const remainingIds = organizationIdsForUser(member).filter((id) => id !== organizationId);
+    const memberNames = organizationNamesForUser(member);
+    const nextDefaultId = organizationIdForUser(member) === organizationId ? (remainingIds[0] ?? defaultOrganizationId) : organizationIdForUser(member);
+    const nextDefaultName = nextDefaultId === defaultOrganizationId ? defaultOrganizationName : (memberNames[nextDefaultId] ?? nextDefaultId);
+    await updateDoc(item.ref, {
+      organizationId: nextDefaultId,
+      organizationName: nextDefaultName,
+      organizationIds: arrayRemove(organizationId),
+      [`organizationNames.${organizationId}`]: deleteField()
+    });
+    if (member.uid === manager.uid) {
+      updatedManager = {
+        ...manager,
+        organizationId: nextDefaultId,
+        organizationName: nextDefaultName,
+        organizationIds: remainingIds,
+        organizationNames: Object.fromEntries(Object.entries(memberNames).filter(([id]) => id !== organizationId))
+      };
+    }
+  }
+
+  await Promise.all(inviteSnapshot.docs
+    .filter((item) => (item.data() as OrganizationInvite).status === "open")
+    .map((item) => updateDoc(item.ref, { cancelledAt: new Date().toISOString(), status: "cancelled" })));
+  await Promise.all(memberSnapshot.docs.map((item) => deleteDoc(item.ref)));
+  await deleteDoc(doc(db, "organizations", organizationId));
+  return updatedManager;
+}
+
 export async function listIncomingOrganizationInvites(user: User): Promise<OrganizationInvite[]> {
   const invitedEmail = cleanInviteEmail(user.email);
   if (!isFirebaseConfigured) return [];

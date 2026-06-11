@@ -55,11 +55,11 @@ import {
   showBugDexUnlockNotification,
   showMovementRewardNotification,
   showPhoneNotification,
-  subscribeRequestNotificationCounts,
   subscribeUserNotifications
 } from "./src/services/notificationService";
 import { subscribeIncomingBugSmashDuelActionCount } from "./src/services/bugSmashDuelService";
 import { setRadarRequestCounts } from "./src/services/movementRadarService";
+import { subscribeIncomingTradeRequestCount } from "./src/services/tradeService";
 
 export type RouteName = "home" | "bugs" | "new" | "detail" | "leaderboard" | "profile" | "userProfile" | "bugdex" | "settings" | "duel";
 
@@ -527,8 +527,8 @@ function AppContent() {
       setRequestTabBadges({ trade: tradeCount, duel: duelCount });
       void setRadarRequestCounts(tradeCount, duelCount).catch(() => undefined);
     };
-    const unsubscribeRequests = subscribeRequestNotificationCounts(user, (counts) => {
-      tradeCount = counts.trade;
+    const unsubscribeTrades = subscribeIncomingTradeRequestCount(user, (count) => {
+      tradeCount = count;
       publishCounts();
     });
     const unsubscribeDuels = subscribeIncomingBugSmashDuelActionCount(user, (count) => {
@@ -536,7 +536,7 @@ function AppContent() {
       publishCounts();
     });
     return () => {
-      unsubscribeRequests();
+      unsubscribeTrades();
       unsubscribeDuels();
     };
   }, [user]);
@@ -1121,7 +1121,7 @@ function AppContent() {
             }}
           />
         )}
-        {route === "leaderboard" && <LeaderboardScreen onBack={() => setRoute("home")} onSelectUser={openUserProfile} />}
+        {route === "leaderboard" && <LeaderboardScreen currentUser={user} onBack={() => setRoute("home")} onSelectUser={openUserProfile} />}
         {route === "profile" && (
           <ProfileScreen
             user={user}

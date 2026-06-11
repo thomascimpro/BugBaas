@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.29
+
+- Profiel laadt organisatiegegevens vers uit Firestore, zodat Cimpro-leden niet meer als 0 leden blijven staan.
+- Organisatiebeheerders kunnen de organisatienaam wijzigen en een organisatie verwijderen met bevestiging.
+- Rank-tab heeft nu een dropdown om tussen alle spelers en je eigen organisatie-ranking te wisselen.
+- Arena/BugDex badges tellen alleen echte inkomende acties: inkomende duels voor Arena en inkomende ruilverzoeken voor BugDex.
+
 ## 2.2.28
 
 - Starter boost zit nu in de APK met de nieuwe drempel: accounts onder 80 XP krijgen 3 dagen 2x XP en extra BugDex-rolls.

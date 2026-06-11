@@ -354,6 +354,14 @@ service cloud.firestore {
         && request.resource.data.declinedAt is string;
     }
 
+    function renameInviteOrganizationUpdate() {
+      return signedIn()
+        && resource.data.status == 'open'
+        && organizationAdmin(resource.data.organizationId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['organizationName'])
+        && request.resource.data.organizationName == get(/databases/$(database)/documents/organizations/$(resource.data.organizationId)).data.name;
+    }
+
     function reporterBugUpdate() {
       return publicOrSameOrg(resource.data)
         && resource.data.reporterId == request.auth.uid
@@ -716,7 +724,17 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdByName is string
         && request.resource.data.createdAt is string;
-      allow update, delete: if false;
+      allow update: if signedIn()
+        && organizationAdmin(organizationId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt'])
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdByName == resource.data.createdByName
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.name is string
+        && (!request.resource.data.keys().hasAny(['updatedAt']) || request.resource.data.updatedAt is string);
+      allow delete: if signedIn()
+        && organizationAdmin(organizationId);
 
       match /members/{memberId} {
         allow read: if userIsOrgMember(organizationId) || organizationAdmin(organizationId);
@@ -753,7 +771,7 @@ service cloud.firestore {
         && (organizationAdmin(resource.data.organizationId) || inviteTargetsCurrentUser(resource.data));
       allow create: if validInviteCreate()
         && request.resource.data.id == inviteId;
-      allow update: if cancelInvite() || acceptInvite() || declineInvite();
+      allow update: if cancelInvite() || acceptInvite() || declineInvite() || renameInviteOrganizationUpdate();
       allow delete: if false;
     }
 

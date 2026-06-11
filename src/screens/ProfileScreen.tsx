@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugArtImage } from "../components/BugArtImage";
 import { DisplayNameModal } from "../components/DisplayNameModal";
@@ -22,6 +22,7 @@ import {
   getOrganizationForUser,
   isOrganizationAdmin,
   isPublicOrganization,
+  deleteOrganization,
   listIncomingOrganizationInvites,
   listOrganizationMembers,
   listOrganizationInvites,
@@ -29,11 +30,12 @@ import {
   organizationIdForUser,
   organizationNamesForUser,
   organizationNameForUser,
-  removeOrganizationMember
+  removeOrganizationMember,
+  updateOrganizationName
 } from "../services/organizationService";
 import { BadgeDefinition, badgeDefinitions, BugDexEntry, BugDexRarity, bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
 import { bestUnlockedCharacterId, CharacterId, characterOptions, isCharacterUnlocked, safeCharacterId } from "../services/characterService";
-import { listUsers, upvotePointValue } from "../services/userService";
+import { getUserById, listUsers, upvotePointValue } from "../services/userService";
 import { BugDexInventoryItem, BugReport, Organization, OrganizationInvite, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
@@ -65,6 +67,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   const [badgeInfoVisible, setBadgeInfoVisible] = useState(false);
   const [bugDexVisible, setBugDexVisible] = useState(false);
   const [organizationName, setOrganizationName] = useState("");
+  const [organizationRenameName, setOrganizationRenameName] = useState("");
   const [organizationBusy, setOrganizationBusy] = useState(false);
   const [organizationError, setOrganizationError] = useState("");
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -78,22 +81,24 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   const [selectedInviteUserId, setSelectedInviteUserId] = useState("");
   const [inviteBusy, setInviteBusy] = useState("");
   const [organizationLoading, setOrganizationLoading] = useState(false);
+  const [organizationActionBusy, setOrganizationActionBusy] = useState("");
+  const [organizationUser, setOrganizationUser] = useState(user);
   const [loadingBugs, setLoadingBugs] = useState(true);
   const [loadingBugDex, setLoadingBugDex] = useState(true);
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
   const storedCharacterId = safeCharacterId(user.characterId);
   const selectedCharacterId = isCharacterUnlocked(storedCharacterId, user.totalPoints) ? storedCharacterId : bestUnlockedCharacterId(user.totalPoints);
   const selectedCharacter = characterOptions.find((item) => item.id === selectedCharacterId) ?? characterOptions[0];
-  const userOrganizationIds = organizationIdsForUser(user);
-  const userOrganizationNames = organizationNamesForUser(user);
-  const currentOrganizationId = userOrganizationIds.includes(selectedOrganizationId) ? selectedOrganizationId : userOrganizationIds[0] ?? organizationIdForUser(user);
-  const currentOrganizationName = userOrganizationNames[currentOrganizationId] ?? organizationNameForUser(user);
+  const userOrganizationIds = organizationIdsForUser(organizationUser);
+  const userOrganizationNames = organizationNamesForUser(organizationUser);
+  const currentOrganizationId = userOrganizationIds.includes(selectedOrganizationId) ? selectedOrganizationId : userOrganizationIds[0] ?? organizationIdForUser(organizationUser);
+  const currentOrganizationName = organization?.id === currentOrganizationId ? organization.name : userOrganizationNames[currentOrganizationId] ?? organizationNameForUser(organizationUser);
   const isPublicUser = isPublicOrganization(currentOrganizationId);
-  const canManageOrganization = isOwnProfile && isOrganizationAdmin(user, organization);
+  const canManageOrganization = isOwnProfile && isOrganizationAdmin(organizationUser, organization);
   const memberIds = new Set(organizationMembers.map((member) => member.uid));
   const openInviteUserIds = new Set(organizationInvites.map((invite) => invite.invitedUserId).filter((id): id is string => Boolean(id)));
   const inviteCandidates = organizationUsers
-    .filter((candidate) => candidate.uid !== user.uid)
+    .filter((candidate) => candidate.uid !== organizationUser.uid)
     .filter((candidate) => !memberIds.has(candidate.uid))
     .filter((candidate) => !openInviteUserIds.has(candidate.uid));
   const selectedInviteUser = inviteCandidates.find((candidate) => candidate.uid === selectedInviteUserId) ?? null;
@@ -119,9 +124,13 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   }, [user.uid]);
 
   useEffect(() => {
+    setOrganizationUser(user);
+  }, [user.uid, user.organizationId, user.organizationName, user.organizationIds?.join("|")]);
+
+  useEffect(() => {
     if (!isOwnProfile) return;
     void loadOrganizationState();
-  }, [currentOrganizationId, isOwnProfile, user.uid]);
+  }, [currentOrganizationId, isOwnProfile, organizationUser.uid]);
 
   useEffect(() => {
     if (userOrganizationIds.includes(selectedOrganizationId)) return;
@@ -131,26 +140,38 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   async function loadOrganizationState() {
     setOrganizationLoading(true);
     try {
+      const freshUser = isOwnProfile ? await getUserById(user.uid).catch(() => null) : null;
+      const orgUser = freshUser ?? organizationUser;
+      if (freshUser) {
+        setOrganizationUser(freshUser);
+        onUserUpdated?.(freshUser);
+      }
+      const orgIds = organizationIdsForUser(orgUser);
+      const safeOrganizationId = orgIds.includes(selectedOrganizationId) ? selectedOrganizationId : orgIds[0] ?? organizationIdForUser(orgUser);
       const [nextOrganization, nextIncomingInvites] = await Promise.all([
-        isPublicOrganization(currentOrganizationId) ? getOrganizationForUser(user) : getOrganizationById(currentOrganizationId, user),
-        listIncomingOrganizationInvites(user)
+        isPublicOrganization(safeOrganizationId) ? getOrganizationForUser(orgUser) : getOrganizationById(safeOrganizationId, orgUser),
+        listIncomingOrganizationInvites(orgUser)
       ]);
       setOrganization(nextOrganization);
       setIncomingInvites(nextIncomingInvites);
-      if (isPublicOrganization(currentOrganizationId)) {
+      if (isPublicOrganization(safeOrganizationId)) {
         setOrganizationMembers([]);
         setOrganizationInvites([]);
         setOrganizationUsers([]);
+        setOrganizationRenameName("");
         return;
       }
       const [nextMembers, nextInvites, nextUsers] = await Promise.all([
-        listOrganizationMembers(user, currentOrganizationId),
-        listOrganizationInvites(user, currentOrganizationId),
+        listOrganizationMembers(orgUser, safeOrganizationId),
+        listOrganizationInvites(orgUser, safeOrganizationId),
         listUsers()
       ]);
       setOrganizationMembers(nextMembers);
       setOrganizationInvites(nextInvites);
       setOrganizationUsers(nextUsers);
+      setOrganizationRenameName(nextOrganization?.name ?? userOrganizationNames[safeOrganizationId] ?? safeOrganizationId);
+    } catch (error) {
+      setOrganizationError(error instanceof Error ? error.message : t("profile.organizationLoadFailed"));
     } finally {
       setOrganizationLoading(false);
     }
@@ -185,7 +206,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
     setInviteBusy("invite");
     setOrganizationError("");
     try {
-      await createOrganizationInviteForUser(user, inviteUser, currentOrganizationId);
+      await createOrganizationInviteForUser(organizationUser, inviteUser, currentOrganizationId);
       setSelectedInviteUserId("");
       setInviteUserPickerOpen(false);
       await loadOrganizationState();
@@ -200,7 +221,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
     setInviteBusy(invite.id);
     setOrganizationError("");
     try {
-      const updated = await acceptOrganizationInvite(user, invite);
+      const updated = await acceptOrganizationInvite(organizationUser, invite);
       onUserUpdated?.(updated);
     } catch (error) {
       setOrganizationError(error instanceof Error ? error.message : t("profile.organizationAcceptFailed"));
@@ -213,7 +234,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
     setInviteBusy(invite.id);
     setOrganizationError("");
     try {
-      await declineOrganizationInvite(user, invite);
+      await declineOrganizationInvite(organizationUser, invite);
       await loadOrganizationState();
     } catch (error) {
       setOrganizationError(error instanceof Error ? error.message : t("profile.organizationDeclineFailed"));
@@ -239,12 +260,66 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
     setInviteBusy(member.uid);
     setOrganizationError("");
     try {
-      await removeOrganizationMember(user, member, currentOrganizationId);
+      await removeOrganizationMember(organizationUser, member, currentOrganizationId);
       await loadOrganizationState();
     } catch (error) {
       setOrganizationError(error instanceof Error ? error.message : t("profile.organizationRemoveFailed"));
     } finally {
       setInviteBusy("");
+    }
+  }
+
+  async function submitOrganizationRename() {
+    if (!organization || isPublicUser) return;
+    setOrganizationActionBusy("rename");
+    setOrganizationError("");
+    try {
+      const updated = await updateOrganizationName(organizationUser, currentOrganizationId, organizationRenameName);
+      setOrganization(updated);
+      setOrganizationUser({
+        ...organizationUser,
+        ...(organizationIdForUser(organizationUser) === currentOrganizationId ? { organizationName: updated.name } : {}),
+        organizationNames: { ...organizationNamesForUser(organizationUser), [currentOrganizationId]: updated.name }
+      });
+      await loadOrganizationState();
+    } catch (error) {
+      setOrganizationError(error instanceof Error ? error.message : t("profile.organizationUpdateFailed"));
+    } finally {
+      setOrganizationActionBusy("");
+    }
+  }
+
+  function confirmDeleteOrganization() {
+    if (!organization || isPublicUser) return;
+    Alert.alert(
+      t("profile.organizationDeleteConfirmTitle"),
+      t("profile.organizationDeleteConfirmBody", { name: organization.name }),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        { text: t("profile.organizationDelete"), style: "destructive", onPress: () => void submitDeleteOrganization() }
+      ]
+    );
+  }
+
+  async function submitDeleteOrganization() {
+    if (!organization || isPublicUser) return;
+    setOrganizationActionBusy("delete");
+    setOrganizationError("");
+    try {
+      const updated = await deleteOrganization(organizationUser, currentOrganizationId);
+      setOrganization(null);
+      setOrganizationUser(updated);
+      onUserUpdated?.(updated);
+      setSelectedOrganizationId(organizationIdsForUser(updated)[0] ?? defaultOrganizationId);
+      setOrganizationMembers([]);
+      setOrganizationInvites([]);
+      setOrganizationUsers([]);
+      setIncomingInvites([]);
+      setOrganizationRenameName("");
+    } catch (error) {
+      setOrganizationError(error instanceof Error ? error.message : t("profile.organizationDeleteFailed"));
+    } finally {
+      setOrganizationActionBusy("");
     }
   }
 
@@ -386,6 +461,35 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
           {!isPublicUser && (
             <>
               <Text style={styles.organizationHelp}>{t("profile.organizationHelp")}</Text>
+              {canManageOrganization && (
+                <View style={styles.organizationForm}>
+                  <Text style={styles.organizationSectionTitle}>{t("profile.organizationManageTitle")}</Text>
+                  <TextInput
+                    autoCapitalize="words"
+                    placeholder={t("profile.organizationNamePlaceholder")}
+                    placeholderTextColor="#77847f"
+                    style={styles.organizationInput}
+                    value={organizationRenameName}
+                    onChangeText={setOrganizationRenameName}
+                  />
+                  <View style={styles.organizationActionRow}>
+                    <Pressable
+                      style={[styles.smallActionButton, styles.organizationActionButton, organizationActionBusy === "rename" && styles.disabledButton]}
+                      disabled={Boolean(organizationActionBusy)}
+                      onPress={submitOrganizationRename}
+                    >
+                      <Text style={styles.smallActionText}>{organizationActionBusy === "rename" ? "..." : t("profile.organizationRename")}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.smallDangerButton, styles.organizationActionButton, organizationActionBusy === "delete" && styles.disabledButton]}
+                      disabled={Boolean(organizationActionBusy)}
+                      onPress={confirmDeleteOrganization}
+                    >
+                      <Text style={styles.smallDangerText}>{organizationActionBusy === "delete" ? "..." : t("profile.organizationDelete")}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
               <View style={styles.organizationSection}>
                 <Pressable style={styles.organizationDropdownHeader} onPress={() => setOrganizationMembersOpen((current) => !current)}>
                   <View style={styles.organizationListText}>
@@ -452,7 +556,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
                       <Text style={styles.organizationListTitle} numberOfLines={1}>{member.displayName}</Text>
                       <Text style={styles.organizationListMeta} numberOfLines={1}>{member.email || t("profile.organizationMember")}</Text>
                     </View>
-                    {canManageOrganization && member.uid !== user.uid && (
+                    {canManageOrganization && member.uid !== organizationUser.uid && (
                       <Pressable style={styles.smallDangerButton} disabled={Boolean(inviteBusy)} onPress={() => removeMember(member)}>
                         <Text style={styles.smallDangerText}>{inviteBusy === member.uid ? "..." : t("profile.organizationRemove")}</Text>
                       </Pressable>
@@ -829,6 +933,14 @@ const styles = StyleSheet.create({
   organizationForm: {
     gap: 8,
     marginTop: 10
+  },
+  organizationActionRow: {
+    flexDirection: "row",
+    gap: 8
+  },
+  organizationActionButton: {
+    alignItems: "center",
+    flex: 1
   },
   organizationSection: {
     gap: 8,
