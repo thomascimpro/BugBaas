@@ -1,4 +1,4 @@
-# CimPro BugBaas
+# BugBaas
 
 Android-first Expo/React Native app voor interne bugmeldingen, statusopvolging, punten, ranglijst en BugDex.
 
@@ -54,7 +54,7 @@ Conclusie: dit is de maximale Spark/free implementatie zonder Blaze, Cloud Funct
 
 ## Interne APK
 
-- Laatste APK staat op GitHub Releases: https://github.com/thomascimpro/cimpro-bugbaas/releases
+- Laatste BugBaas APK staat op GitHub Releases: https://github.com/thomascimpro/cimpro-bugbaas/releases
 - Release-stappen staan in `ANDROID_RELEASE_RUNBOOK.md`.
 - APK is bedoeld voor GitHub Releases en handmatige installatie door collega's.
 - Android vraagt gebruikers om installatie uit onbekende bron toe te staan.

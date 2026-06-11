@@ -144,7 +144,7 @@ Template voor GitHub release notes:
 
 ## Installatie
 
-- APK: `CimPro-BugBaas-2.1.19.apk`
+- APK: `BugBaas-2.1.19.apk`
 - Package: `nl.cimpro.bugbaas`
 - VersionCode: `90`
 - SHA256: `...`
@@ -152,7 +152,7 @@ Template voor GitHub release notes:
 
 Regels:
 
-- De titel blijft de exacte versie: `CimPro BugBaas 2.1.19`.
+- De titel blijft de exacte versie: `BugBaas 2.1.19`.
 - De eerste sectie noemt de feature train, niet alleen de patch.
 - Neem bij `2.1.x` minimaal Bug Smash Duel, training, helper bugs, Mythic specials, reward/XP-balans en Android install/signing mee als die relevant zijn.
 - Zet pure bugfixes onder `Patch x.y.z`.
@@ -180,14 +180,14 @@ cd ..
 APK kopieren naar `dist`:
 
 ```powershell
-Copy-Item -LiteralPath 'android\app\build\outputs\apk\release\app-release.apk' -Destination 'dist\CimPro-BugBaas-1.2.0.apk' -Force
+Copy-Item -LiteralPath 'android\app\build\outputs\apk\release\app-release.apk' -Destination 'dist\BugBaas-1.2.0.apk' -Force
 ```
 
 Metadata en hash controleren:
 
 ```powershell
-& "$env:ANDROID_HOME\build-tools\37.0.0\aapt2.exe" dump badging 'dist\CimPro-BugBaas-1.2.0.apk' | Select-String -Pattern 'package:'
-Get-FileHash -Algorithm SHA256 -LiteralPath 'dist\CimPro-BugBaas-1.2.0.apk'
+& "$env:ANDROID_HOME\build-tools\37.0.0\aapt2.exe" dump badging 'dist\BugBaas-1.2.0.apk' | Select-String -Pattern 'package:'
+Get-FileHash -Algorithm SHA256 -LiteralPath 'dist\BugBaas-1.2.0.apk'
 ```
 
 Controleer dat `versionCode` en `versionName` kloppen.
@@ -203,7 +203,7 @@ git tag --list v1.2.0
 
 git add -- CHANGELOG.md android/app/build.gradle app.json package-lock.json package.json src/components/ForegroundCatchBug.tsx src/components/WalkingBugsLayer.tsx
 git commit -m "Release 1.2.0"
-git tag -a v1.2.0 -m "CimPro BugBaas 1.2.0"
+git tag -a v1.2.0 -m "BugBaas 1.2.0"
 git push origin master
 git push origin v1.2.0
 ```
@@ -219,7 +219,7 @@ $notes = @'
 - Release note 3.
 '@
 
-gh release create v1.2.0 'dist\CimPro-BugBaas-1.2.0.apk' --repo thomascimpro/cimpro-bugbaas --title 'CimPro BugBaas 1.2.0' --notes $notes --latest
+gh release create v1.2.0 'dist\BugBaas-1.2.0.apk' --repo thomascimpro/cimpro-bugbaas --title 'BugBaas 1.2.0' --notes $notes --latest
 ```
 
 Controle:

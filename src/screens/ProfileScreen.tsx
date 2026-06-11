@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugArtImage } from "../components/BugArtImage";
 import { DisplayNameModal } from "../components/DisplayNameModal";
@@ -12,10 +12,27 @@ import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
 import { bugSquadBonusForEntry, BugSquadBonusCategory } from "../services/bugSquadService";
 import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
 import { presenceLabel } from "../services/presenceService";
+import {
+  acceptOrganizationInvite,
+  cancelOrganizationInvite,
+  createOrganizationInvite,
+  defaultOrganizationId,
+  getOrganizationById,
+  getOrganizationForUser,
+  isOrganizationAdmin,
+  isPublicOrganization,
+  listIncomingOrganizationInvites,
+  listOrganizationInvites,
+  organizationIdsForUser,
+  organizationIdForUser,
+  organizationNamesForUser,
+  organizationNameForUser,
+  removeOrganizationMember
+} from "../services/organizationService";
 import { BadgeDefinition, badgeDefinitions, BugDexEntry, BugDexRarity, bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
 import { bestUnlockedCharacterId, CharacterId, characterOptions, isCharacterUnlocked, safeCharacterId } from "../services/characterService";
-import { upvotePointValue } from "../services/userService";
-import { BugDexInventoryItem, BugReport, User } from "../types";
+import { listUsers, upvotePointValue } from "../services/userService";
+import { BugDexInventoryItem, BugReport, Organization, OrganizationInvite, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 const bugDexCollectionImage = require("../../assets/generated/bugdex-collection-view-hd.jpg");
@@ -27,13 +44,15 @@ type Props = {
   onLogout?: () => void;
   onUpdateCharacter?: (characterId: CharacterId) => Promise<void>;
   onUpdateDisplayName?: (displayName: string) => Promise<void>;
+  onCreateOrganization?: (organizationName: string) => Promise<void>;
+  onUserUpdated?: (user: User) => void;
   onSelectBug?: (bug: BugReport) => void;
   onChallengeDuel?: (opponent: User) => void;
 };
 
 const bugSmashDuelImage = require("../../assets/generated/bug-smash-duel-concept.jpg");
 
-export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onUpdateCharacter, onUpdateDisplayName, onSelectBug, onChallengeDuel }: Props) {
+export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onUpdateCharacter, onUpdateDisplayName, onCreateOrganization, onUserUpdated, onSelectBug, onChallengeDuel }: Props) {
   const { t, tr } = useI18n();
   const tier = getTierForPoints(user.totalPoints);
   const userPresence = presenceLabel(user, t);
@@ -43,12 +62,29 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   const [characterPickerOpen, setCharacterPickerOpen] = useState(false);
   const [badgeInfoVisible, setBadgeInfoVisible] = useState(false);
   const [bugDexVisible, setBugDexVisible] = useState(false);
+  const [organizationName, setOrganizationName] = useState("");
+  const [organizationBusy, setOrganizationBusy] = useState(false);
+  const [organizationError, setOrganizationError] = useState("");
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [organizationMembers, setOrganizationMembers] = useState<User[]>([]);
+  const [organizationInvites, setOrganizationInvites] = useState<OrganizationInvite[]>([]);
+  const [incomingInvites, setIncomingInvites] = useState<OrganizationInvite[]>([]);
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState(organizationIdsForUser(user)[0] ?? defaultOrganizationId);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteBusy, setInviteBusy] = useState("");
+  const [organizationLoading, setOrganizationLoading] = useState(false);
   const [loadingBugs, setLoadingBugs] = useState(true);
   const [loadingBugDex, setLoadingBugDex] = useState(true);
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
   const storedCharacterId = safeCharacterId(user.characterId);
   const selectedCharacterId = isCharacterUnlocked(storedCharacterId, user.totalPoints) ? storedCharacterId : bestUnlockedCharacterId(user.totalPoints);
   const selectedCharacter = characterOptions.find((item) => item.id === selectedCharacterId) ?? characterOptions[0];
+  const userOrganizationIds = organizationIdsForUser(user);
+  const userOrganizationNames = organizationNamesForUser(user);
+  const currentOrganizationId = userOrganizationIds.includes(selectedOrganizationId) ? selectedOrganizationId : userOrganizationIds[0] ?? organizationIdForUser(user);
+  const currentOrganizationName = userOrganizationNames[currentOrganizationId] ?? organizationNameForUser(user);
+  const isPublicUser = isPublicOrganization(currentOrganizationId);
+  const canManageOrganization = isOwnProfile && isOrganizationAdmin(user, organization);
   const unlockedBadges = badgeDefinitions.filter((badge) => badgeUnlocked(user, badge));
   const bugDexItems = inventory
     .map((item) => {
@@ -70,6 +106,41 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
       .finally(() => setLoadingBugDex(false));
   }, [user.uid]);
 
+  useEffect(() => {
+    if (!isOwnProfile) return;
+    void loadOrganizationState();
+  }, [currentOrganizationId, isOwnProfile, user.uid]);
+
+  useEffect(() => {
+    if (userOrganizationIds.includes(selectedOrganizationId)) return;
+    setSelectedOrganizationId(userOrganizationIds[0] ?? defaultOrganizationId);
+  }, [selectedOrganizationId, userOrganizationIds.join("|")]);
+
+  async function loadOrganizationState() {
+    setOrganizationLoading(true);
+    try {
+      const [nextOrganization, nextIncomingInvites] = await Promise.all([
+        isPublicOrganization(currentOrganizationId) ? getOrganizationForUser(user) : getOrganizationById(currentOrganizationId, user),
+        listIncomingOrganizationInvites(user)
+      ]);
+      setOrganization(nextOrganization);
+      setIncomingInvites(nextIncomingInvites);
+      if (isPublicOrganization(currentOrganizationId)) {
+        setOrganizationMembers([]);
+        setOrganizationInvites([]);
+        return;
+      }
+      const [nextMembers, nextInvites] = await Promise.all([
+        listUsers(),
+        listOrganizationInvites(user, currentOrganizationId)
+      ]);
+      setOrganizationMembers(nextMembers.filter((member) => organizationIdsForUser(member).includes(currentOrganizationId)));
+      setOrganizationInvites(nextInvites);
+    } finally {
+      setOrganizationLoading(false);
+    }
+  }
+
   function squadBonusLabel(category: BugSquadBonusCategory): string {
     return t(`bugdex.squadBonus.${category}`);
   }
@@ -77,6 +148,74 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   function squadBonusValue(category: BugSquadBonusCategory, value: number): string {
     if (category === "streak_protection") return value > 0 ? "1x" : "0x";
     return `+${Math.round(value * 100)}%`;
+  }
+
+  async function submitOrganization() {
+    if (!onCreateOrganization) return;
+    setOrganizationBusy(true);
+    setOrganizationError("");
+    try {
+      await onCreateOrganization(organizationName);
+      setOrganizationName("");
+      await loadOrganizationState();
+    } catch (error) {
+      setOrganizationError(error instanceof Error ? error.message : t("profile.organizationCreateFailed"));
+    } finally {
+      setOrganizationBusy(false);
+    }
+  }
+
+  async function submitInvite() {
+    setInviteBusy("invite");
+    setOrganizationError("");
+    try {
+      await createOrganizationInvite(user, inviteEmail, currentOrganizationId);
+      setInviteEmail("");
+      await loadOrganizationState();
+    } catch (error) {
+      setOrganizationError(error instanceof Error ? error.message : t("profile.organizationInviteFailed"));
+    } finally {
+      setInviteBusy("");
+    }
+  }
+
+  async function acceptInvite(invite: OrganizationInvite) {
+    setInviteBusy(invite.id);
+    setOrganizationError("");
+    try {
+      const updated = await acceptOrganizationInvite(user, invite);
+      onUserUpdated?.(updated);
+    } catch (error) {
+      setOrganizationError(error instanceof Error ? error.message : t("profile.organizationAcceptFailed"));
+    } finally {
+      setInviteBusy("");
+    }
+  }
+
+  async function cancelInvite(invite: OrganizationInvite) {
+    setInviteBusy(invite.id);
+    setOrganizationError("");
+    try {
+      await cancelOrganizationInvite(invite);
+      await loadOrganizationState();
+    } catch (error) {
+      setOrganizationError(error instanceof Error ? error.message : t("profile.organizationCancelFailed"));
+    } finally {
+      setInviteBusy("");
+    }
+  }
+
+  async function removeMember(member: User) {
+    setInviteBusy(member.uid);
+    setOrganizationError("");
+    try {
+      await removeOrganizationMember(user, member, currentOrganizationId);
+      await loadOrganizationState();
+    } catch (error) {
+      setOrganizationError(error instanceof Error ? error.message : t("profile.organizationRemoveFailed"));
+    } finally {
+      setInviteBusy("");
+    }
   }
 
   const renderBadge = (badge: BadgeDefinition) => {
@@ -133,6 +272,120 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
       </View>
 
       <TierBadge points={user.totalPoints} />
+
+      {isOwnProfile && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t("profile.organization")}</Text>
+          <Text style={styles.organizationCurrent}>
+            {t("profile.organizationCurrent", { name: isPublicUser ? t("profile.organizationPublic") : currentOrganizationName })}
+          </Text>
+          {userOrganizationIds.length > 1 && (
+            <View style={styles.organizationPicker}>
+              {userOrganizationIds.map((orgId) => (
+                <Pressable
+                  key={orgId}
+                  style={[styles.organizationPickerOption, orgId === currentOrganizationId && styles.organizationPickerOptionActive]}
+                  onPress={() => setSelectedOrganizationId(orgId)}
+                >
+                  <Text style={[styles.organizationPickerText, orgId === currentOrganizationId && styles.organizationPickerTextActive]} numberOfLines={1}>
+                    {userOrganizationNames[orgId] ?? orgId}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {organizationLoading && <ActivityIndicator color="#15724f" />}
+          {incomingInvites.length > 0 && (
+            <View style={styles.organizationSection}>
+              <Text style={styles.organizationSectionTitle}>{t("profile.organizationIncoming")}</Text>
+              {incomingInvites.map((invite) => (
+                <View key={invite.id} style={styles.organizationListItem}>
+                  <View style={styles.organizationListText}>
+                    <Text style={styles.organizationListTitle} numberOfLines={1}>{invite.organizationName}</Text>
+                    <Text style={styles.organizationListMeta} numberOfLines={1}>{t("profile.organizationInvitedBy", { name: invite.invitedByName })}</Text>
+                  </View>
+                  <Pressable style={styles.smallActionButton} disabled={Boolean(inviteBusy)} onPress={() => acceptInvite(invite)}>
+                    <Text style={styles.smallActionText}>{inviteBusy === invite.id ? "..." : t("profile.organizationAccept")}</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+          {isPublicUser && onCreateOrganization && (
+            <View style={styles.organizationForm}>
+              <TextInput
+                autoCapitalize="words"
+                placeholder={t("profile.organizationNamePlaceholder")}
+                placeholderTextColor="#77847f"
+                style={styles.organizationInput}
+                value={organizationName}
+                onChangeText={setOrganizationName}
+              />
+              <Pressable style={[sharedStyles.button, organizationBusy && styles.disabledButton]} disabled={organizationBusy} onPress={submitOrganization}>
+                {organizationBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("profile.createOrganization")}</Text>}
+              </Pressable>
+              {!!organizationError && <Text style={sharedStyles.error}>{tr(organizationError)}</Text>}
+            </View>
+          )}
+          {!isPublicUser && (
+            <>
+              <Text style={styles.organizationHelp}>{t("profile.organizationHelp")}</Text>
+              {canManageOrganization && (
+                <View style={styles.organizationSection}>
+                  <Text style={styles.organizationSectionTitle}>{t("profile.organizationInvite")}</Text>
+                  <TextInput
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    placeholder={t("profile.organizationInvitePlaceholder")}
+                    placeholderTextColor="#77847f"
+                    style={styles.organizationInput}
+                    value={inviteEmail}
+                    onChangeText={setInviteEmail}
+                  />
+                  <Pressable style={[sharedStyles.button, inviteBusy === "invite" && styles.disabledButton]} disabled={Boolean(inviteBusy)} onPress={submitInvite}>
+                    {inviteBusy === "invite" ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("profile.organizationInviteSend")}</Text>}
+                  </Pressable>
+                </View>
+              )}
+              {organizationInvites.length > 0 && (
+                <View style={styles.organizationSection}>
+                  <Text style={styles.organizationSectionTitle}>{t("profile.organizationOpenInvites")}</Text>
+                  {organizationInvites.map((invite) => (
+                    <View key={invite.id} style={styles.organizationListItem}>
+                      <View style={styles.organizationListText}>
+                        <Text style={styles.organizationListTitle} numberOfLines={1}>{invite.invitedEmail}</Text>
+                        <Text style={styles.organizationListMeta} numberOfLines={1}>{t("profile.organizationInviteOpen")}</Text>
+                      </View>
+                      {canManageOrganization && (
+                        <Pressable style={styles.smallDangerButton} disabled={Boolean(inviteBusy)} onPress={() => cancelInvite(invite)}>
+                          <Text style={styles.smallDangerText}>{inviteBusy === invite.id ? "..." : t("common.cancel")}</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+              <View style={styles.organizationSection}>
+                <Text style={styles.organizationSectionTitle}>{t("profile.organizationMembers")}</Text>
+                {organizationMembers.map((member) => (
+                  <View key={member.uid} style={styles.organizationListItem}>
+                    <View style={styles.organizationListText}>
+                      <Text style={styles.organizationListTitle} numberOfLines={1}>{member.displayName}</Text>
+                      <Text style={styles.organizationListMeta} numberOfLines={1}>{member.email || t("profile.organizationMember")}</Text>
+                    </View>
+                    {canManageOrganization && member.uid !== user.uid && (
+                      <Pressable style={styles.smallDangerButton} disabled={Boolean(inviteBusy)} onPress={() => removeMember(member)}>
+                        <Text style={styles.smallDangerText}>{inviteBusy === member.uid ? "..." : t("profile.organizationRemove")}</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
+              </View>
+              {!!organizationError && <Text style={sharedStyles.error}>{tr(organizationError)}</Text>}
+            </>
+          )}
+        </View>
+      )}
 
       {!isOwnProfile && onChallengeDuel && (
         <View style={styles.card}>
@@ -458,6 +711,120 @@ const styles = StyleSheet.create({
     color: "#15724f",
     fontSize: 12,
     fontWeight: "900"
+  },
+  organizationCurrent: {
+    color: "#31433a",
+    fontSize: 14,
+    fontWeight: "800",
+    marginTop: 6
+  },
+  organizationPicker: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10
+  },
+  organizationPickerOption: {
+    backgroundColor: "#eef4ed",
+    borderColor: "#c6d3cc",
+    borderRadius: 8,
+    borderWidth: 1,
+    maxWidth: "48%",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  organizationPickerOptionActive: {
+    backgroundColor: "#15724f",
+    borderColor: "#15724f"
+  },
+  organizationPickerText: {
+    color: "#102018",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  organizationPickerTextActive: {
+    color: "#ffffff"
+  },
+  organizationForm: {
+    gap: 8,
+    marginTop: 10
+  },
+  organizationSection: {
+    gap: 8,
+    marginTop: 12
+  },
+  organizationSectionTitle: {
+    color: "#102018",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  organizationListItem: {
+    alignItems: "center",
+    backgroundColor: "#f7faf6",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    padding: 10
+  },
+  organizationListText: {
+    flex: 1
+  },
+  organizationListTitle: {
+    color: "#102018",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  organizationListMeta: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 2
+  },
+  organizationInput: {
+    backgroundColor: "#fdfefb",
+    borderColor: "#c8d5ce",
+    borderRadius: 8,
+    borderWidth: 1,
+    color: "#102018",
+    fontSize: 15,
+    fontWeight: "800",
+    paddingHorizontal: 12,
+    paddingVertical: 11
+  },
+  organizationHelp: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 8
+  },
+  smallActionButton: {
+    backgroundColor: "#15724f",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  smallActionText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  smallDangerButton: {
+    backgroundColor: "#fff5f2",
+    borderColor: "#d8a29a",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  smallDangerText: {
+    color: "#b83227",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  disabledButton: {
+    opacity: 0.65
   },
   stats: {
     flexDirection: "row",

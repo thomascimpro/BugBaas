@@ -225,6 +225,10 @@ function acknowledgedWaitingDuelStorageKey(uid: string): string {
   return `bugbaas:acknowledged-waiting-duels:${uid}`;
 }
 
+function pendingDuelScoresStorageKey(uid: string): string {
+  return `bugbaas:pending-duel-scores:${uid}`;
+}
+
 async function loadAcknowledgedWaitingDuelIds(uid: string): Promise<Set<string>> {
   const raw = await AsyncStorage.getItem(acknowledgedWaitingDuelStorageKey(uid));
   if (!raw) return new Set();
@@ -236,6 +240,33 @@ async function saveAcknowledgedWaitingDuelId(uid: string, duelId: string): Promi
   const current = await loadAcknowledgedWaitingDuelIds(uid);
   if (current.has(duelId)) return;
   await AsyncStorage.setItem(acknowledgedWaitingDuelStorageKey(uid), JSON.stringify([...current, duelId]));
+}
+
+async function loadPendingDuelScores(uid: string): Promise<Record<string, BugSmashDuelScore>> {
+  const raw = await AsyncStorage.getItem(pendingDuelScoresStorageKey(uid));
+  if (!raw) return {};
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+  return Object.fromEntries(Object.entries(parsed).filter((item): item is [string, BugSmashDuelScore] => {
+    const score = item[1] as Partial<BugSmashDuelScore> | undefined;
+    return typeof item[0] === "string"
+      && typeof score?.score === "number"
+      && Array.isArray(score.caughtBugIds)
+      && score.caughtBugIds.every((bugId) => typeof bugId === "string")
+      && typeof score.bonusScore === "number"
+      && typeof score.submittedAt === "string";
+  }));
+}
+
+async function savePendingDuelScore(uid: string, duelId: string, score: BugSmashDuelScore): Promise<void> {
+  const current = await loadPendingDuelScores(uid);
+  await AsyncStorage.setItem(pendingDuelScoresStorageKey(uid), JSON.stringify({ ...current, [duelId]: score }));
+}
+
+async function removePendingDuelScore(uid: string, duelId: string): Promise<void> {
+  const current = await loadPendingDuelScores(uid);
+  delete current[duelId];
+  await AsyncStorage.setItem(pendingDuelScoresStorageKey(uid), JSON.stringify(current));
 }
 
 export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, onBack, onDuelAccepted, onDuelRequest, onFullscreenChange, onRewardDrop, onUserUpdated }: Props) {
@@ -276,6 +307,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [dismissedResultDuelIds, setDismissedResultDuelIds] = useState<Set<string>>(new Set());
   const [retryingDuelIds, setRetryingDuelIds] = useState<Set<string>>(new Set());
   const submittedRef = useRef(false);
+  const scoreSubmitPromisesRef = useRef<Record<string, Promise<BugSmashDuel> | undefined>>({});
   const soloWaveClearedRef = useRef(false);
   const scoreRef = useRef(0);
   const caughtBugIdsRef = useRef<string[]>([]);
@@ -338,6 +370,40 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     setCaughtBugIds([]);
     setHitCounts({});
     setHelperImpacts([]);
+  }
+
+  function buildCurrentDuelScore(): BugSmashDuelScore {
+    const bonusScore = duelBonusScore(scoreRef.current, assist);
+    return {
+      score: scoreRef.current + bonusScore,
+      caughtBugIds: caughtBugIdsRef.current,
+      bonusScore,
+      submittedAt: new Date().toISOString()
+    };
+  }
+
+  async function saveDuelScoreNow(duel: BugSmashDuel, submittedScore: BugSmashDuelScore): Promise<BugSmashDuel> {
+    await savePendingDuelScore(user.uid, duel.id, submittedScore).catch(() => undefined);
+    setLocalSubmittedScores((current) => ({ ...current, [duel.id]: submittedScore }));
+    const existingSubmit = scoreSubmitPromisesRef.current[duel.id];
+    if (existingSubmit) return existingSubmit;
+    const submit = submitBugSmashDuelScore(user, duel.id, submittedScore.score, submittedScore.caughtBugIds, submittedScore.bonusScore)
+      .then((savedDuel) => {
+        void removePendingDuelScore(user.uid, savedDuel.id).catch(() => undefined);
+        setActiveDuel((current) => current?.id === savedDuel.id ? savedDuel : current);
+        void refreshDuels().catch(() => undefined);
+        setRetryingDuelIds((current) => {
+          const next = new Set(current);
+          next.delete(savedDuel.id);
+          return next;
+        });
+        return savedDuel;
+      })
+      .finally(() => {
+        delete scoreSubmitPromisesRef.current[duel.id];
+      });
+    scoreSubmitPromisesRef.current[duel.id] = submit;
+    return submit;
   }
 
   async function rememberSoloCampaignProgress(wave: number, lives = soloCampaignLives) {
@@ -419,6 +485,27 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   }, [initialDuelId]);
 
   useEffect(() => {
+    if (!duels.length) return () => undefined;
+    let active = true;
+    void loadPendingDuelScores(user.uid).then((pendingScores) => {
+      if (!active) return;
+      setLocalSubmittedScores((current) => ({ ...pendingScores, ...current }));
+      duels.forEach((duel) => {
+        const pendingScore = pendingScores[duel.id];
+        if (!pendingScore || !isDuelParticipant(duel, user)) return;
+        if (duel.scores?.[user.uid]) {
+          void removePendingDuelScore(user.uid, duel.id).catch(() => undefined);
+          return;
+        }
+        void saveDuelScoreNow(duel, pendingScore).catch(() => undefined);
+      });
+    }).catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [duels, user.uid]);
+
+  useEffect(() => {
     if (initialOpponent?.uid) setSelectedOpponentId(initialOpponent.uid);
   }, [initialOpponent?.uid]);
 
@@ -455,10 +542,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     const localScore = localSubmittedScores[activeDuel.id];
     if (!localScore || activeDuel.scores?.[user.uid]) return;
     const retry = setTimeout(() => {
-      void submitBugSmashDuelScore(user, activeDuel.id, localScore.score, localScore.caughtBugIds, localScore.bonusScore)
+      void saveDuelScoreNow(activeDuel, localScore)
         .then((duel) => {
-          setActiveDuel(duel);
-          void refreshDuels().catch(() => undefined);
           setRetryingDuelIds((current) => {
             const next = new Set(current);
             next.delete(duel.id);
@@ -517,25 +602,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           submittedRef.current = true;
           setRunSubmitted(true);
           if (!trainingDuel) {
-            const bonusScore = duelBonusScore(scoreRef.current, assist);
-            const submittedScore = {
-              score: scoreRef.current + bonusScore,
-              caughtBugIds: caughtBugIdsRef.current,
-              bonusScore,
-              submittedAt: new Date().toISOString()
-            };
-            setLocalSubmittedScores((current) => ({ ...current, [runningDuel.id]: submittedScore }));
-            void submitBugSmashDuelScore(user, runningDuel.id, submittedScore.score, submittedScore.caughtBugIds, submittedScore.bonusScore)
-              .then((duel) => {
-                setActiveDuel(duel);
-                void refreshDuels().catch(() => undefined);
-                setRetryingDuelIds((current) => {
-                  const next = new Set(current);
-                  next.delete(duel.id);
-                  return next;
-                });
-              })
-              .catch(() => setError(t("duel.submitFailed")));
+            void saveDuelScoreNow(runningDuel, buildCurrentDuelScore()).catch(() => setError(t("duel.submitFailed")));
           }
         }
         return;
@@ -877,10 +944,26 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     setNow(Date.now());
   }
 
-  function closeWaitingResultAndGoHome() {
+  async function closeWaitingResultAndGoHome() {
+    if (busy) return;
     if (activeDuel) {
-      setAcknowledgedWaitingDuelIds((current) => new Set([...current, activeDuel.id]));
-      void saveAcknowledgedWaitingDuelId(user.uid, activeDuel.id).catch(() => undefined);
+      const duelToClose = activeDuel;
+      const savedScore = duelToClose.scores?.[user.uid];
+      const localScore = localSubmittedScores[duelToClose.id];
+      setBusy(true);
+      setError("");
+      try {
+        if (!savedScore) {
+          await saveDuelScoreNow(duelToClose, localScore ?? buildCurrentDuelScore());
+        }
+        setAcknowledgedWaitingDuelIds((current) => new Set([...current, duelToClose.id]));
+        await saveAcknowledgedWaitingDuelId(user.uid, duelToClose.id).catch(() => undefined);
+      } catch {
+        setError(t("duel.submitFailed"));
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
     }
     setActiveDuelId("");
     setActiveDuel(null);
@@ -1531,7 +1614,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         </Modal>
       )}
       {activeDuel && (
-        <Modal animationType="fade" transparent visible={showWaitingResultModal} onRequestClose={closeWaitingResultAndGoHome}>
+        <Modal animationType="fade" transparent visible={showWaitingResultModal} onRequestClose={() => void closeWaitingResultAndGoHome()}>
           <View style={styles.startModalBackdrop}>
             <View style={styles.startModalCard}>
               <Text style={styles.startTitle}>{t("duel.waitingResultTitle")}</Text>
@@ -1542,8 +1625,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                   <Text style={sharedStyles.buttonText}>{t("duel.retryLowScore", { score: duelRetryScoreThreshold })}</Text>
                 </Pressable>
               ) : null}
-              <Pressable style={sharedStyles.button} onPress={closeWaitingResultAndGoHome}>
-                <Text style={sharedStyles.buttonText}>{t("common.ok")}</Text>
+              <Pressable disabled={busy} style={sharedStyles.button} onPress={() => void closeWaitingResultAndGoHome()}>
+                <Text style={sharedStyles.buttonText}>{busy ? "..." : t("common.ok")}</Text>
               </Pressable>
             </View>
           </View>
@@ -1670,8 +1753,11 @@ function renderHelperTowers(bonuses: ReturnType<typeof activeBugSquadBonusList>,
         const charge = readyAt === undefined ? helperInitialCharge(index) : 1 - Math.min(1, cooldownLeft / spec.cooldownMs);
         return (
           <View key={`${bonus.bugId}:${index}`} style={[styles.helperTower, { borderColor: spec.color }]}>
+            <Image accessibilityIgnoresInvertColors resizeMode="contain" source={squadJarImage} style={styles.helperTowerJarImage} />
             <HelperTowerPulse color={spec.color} ready={readyAt !== undefined && cooldownLeft <= 0} />
-            <BugArtImage bugId={bonus.bugId} size={38} />
+            <View style={styles.helperTowerBugWrap}>
+              <BugArtImage bugId={bonus.bugId} size={38} />
+            </View>
             <View style={styles.helperChargeTrack}>
               <View style={[styles.helperChargeFill, { backgroundColor: spec.color, width: `${Math.round(charge * 100)}%` }]} />
             </View>
@@ -3331,14 +3417,23 @@ const styles = StyleSheet.create({
   },
   helperTower: {
     alignItems: "center",
-    backgroundColor: "rgba(16,32,24,0.88)",
+    backgroundColor: "rgba(16,32,24,0.5)",
     borderRadius: 8,
     borderWidth: 1,
-    height: 68,
+    height: 74,
     justifyContent: "center",
     paddingTop: 4,
     position: "relative",
-    width: 60
+    overflow: "hidden",
+    width: 64
+  },
+  helperTowerBugWrap: {
+    alignItems: "center",
+    height: 40,
+    justifyContent: "center",
+    marginTop: 1,
+    width: 46,
+    zIndex: 2
   },
   helperTowerDock: {
     alignItems: "flex-end",
@@ -3350,6 +3445,15 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 0,
     zIndex: 9
+  },
+  helperTowerJarImage: {
+    bottom: -9,
+    left: -10,
+    opacity: 0.9,
+    position: "absolute",
+    right: -10,
+    top: -8,
+    zIndex: 0
   },
   helperTowerText: {
     color: "#dce9df",

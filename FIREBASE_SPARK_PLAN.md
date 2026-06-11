@@ -1,6 +1,6 @@
 # Firebase Spark Plan
 
-Uitgangspunt: CimPro BugBaas moet werken op Firebase Spark/free plan.
+Uitgangspunt: BugBaas moet werken op Firebase Spark/free plan.
 
 ## Toegestaan in V1
 

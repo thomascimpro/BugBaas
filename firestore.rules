@@ -18,6 +18,53 @@ service cloud.firestore {
       return type in ['trade', 'new_bug', 'comment', 'bug_update', 'bugdex', 'duel'];
     }
 
+    function orgId(data) {
+      return data.keys().hasAny(['organizationId']) ? data.organizationId : 'public';
+    }
+
+    function orgName(data) {
+      return data.keys().hasAny(['organizationName']) ? data.organizationName : 'Public';
+    }
+
+    function currentOrgId() {
+      return signedIn()
+        ? orgId(get(/databases/$(database)/documents/users/$(request.auth.uid)).data)
+        : 'public';
+    }
+
+    function userIsOrgMember(organizationId) {
+      return signedIn()
+        && organizationId is string
+        && organizationId != 'public'
+        && (
+          currentOrgId() == organizationId
+          || exists(/databases/$(database)/documents/organizations/$(organizationId)/members/$(request.auth.uid))
+        );
+    }
+
+    function publicOrSameOrg(data) {
+      return signedIn() && (orgId(data) == 'public' || userIsOrgMember(orgId(data)));
+    }
+
+    function currentUserEmail() {
+      return signedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.email
+        : '';
+    }
+
+    function organizationAdmin(organizationId) {
+      return signedIn()
+        && organizationId is string
+        && organizationId != 'public'
+        && (
+          get(/databases/$(database)/documents/organizations/$(organizationId)).data.createdBy == request.auth.uid
+          || (
+            exists(/databases/$(database)/documents/organizations/$(organizationId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/organizations/$(organizationId)/members/$(request.auth.uid)).data.role in ['owner', 'admin']
+          )
+        );
+    }
+
     function validInventoryData(bugId) {
       return request.resource.data.bugId == bugId
         && request.resource.data.count is int
@@ -99,6 +146,25 @@ service cloud.firestore {
 
     function validBugCreate() {
       return request.resource.data.reporterId == request.auth.uid
+        && (
+          !request.resource.data.keys().hasAny(['organizationId'])
+          || (request.resource.data.organizationId == 'public' && request.resource.data.organizationName == 'Public')
+        )
+        && request.resource.data.status == 'Nieuw'
+        && validSeverity(request.resource.data.severity)
+        && request.resource.data.title is string
+        && request.resource.data.project is string
+        && request.resource.data.description is string
+        && validUpvotes(request.resource.data)
+        && request.resource.data.upvoteCount == 0;
+    }
+
+    function validOrganizationBugCreate() {
+      return request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.organizationId is string
+        && request.resource.data.organizationId != 'public'
+        && userIsOrgMember(request.resource.data.organizationId)
+        && request.resource.data.organizationName is string
         && request.resource.data.status == 'Nieuw'
         && validSeverity(request.resource.data.severity)
         && request.resource.data.title is string
@@ -113,6 +179,15 @@ service cloud.firestore {
         && request.auth.uid == userId
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
+        && (
+          (request.resource.data.organizationId == resource.data.organizationId
+            && request.resource.data.organizationName == resource.data.organizationName)
+          || (!request.resource.data.keys().hasAny(['organizationId'])
+            && !resource.data.keys().hasAny(['organizationId']))
+          || (!resource.data.keys().hasAny(['organizationId'])
+            && request.resource.data.organizationId == 'public'
+            && request.resource.data.organizationName == 'Public')
+        )
         && request.resource.data.totalPoints is int
         && request.resource.data.totalPoints >= 0
         && request.resource.data.bugCount is int
@@ -139,6 +214,10 @@ service cloud.firestore {
           'mythicBugDexCount',
           'nameSet',
           'notificationPushToken',
+          'organizationId',
+          'organizationIds',
+          'organizationName',
+          'organizationNames',
           'splatCount',
           'title',
           'totalPoints',
@@ -152,8 +231,88 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(['active']) || request.resource.data.active == true);
     }
 
+    function organizationCreateUserUpdate(userId) {
+      let organization = getAfter(/databases/$(database)/documents/organizations/$(request.resource.data.organizationId)).data;
+      return signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['organizationId', 'organizationIds', 'organizationName', 'organizationNames'])
+        && request.resource.data.organizationId is string
+        && request.resource.data.organizationId != 'public'
+        && request.resource.data.organizationName is string
+        && request.resource.data.organizationId == organization.id
+        && request.resource.data.organizationName == organization.name
+        && request.resource.data.organizationIds is list
+        && organization.id in request.resource.data.organizationIds
+        && request.resource.data.organizationNames is map
+        && request.resource.data.organizationNames[organization.id] == organization.name
+        && organization.createdBy == request.auth.uid;
+    }
+
+    function organizationInviteUserUpdate(userId) {
+      let invite = getAfter(/databases/$(database)/documents/organizationInvites/$(request.resource.data.organizationInviteId)).data;
+      return signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['organizationId', 'organizationIds', 'organizationInviteId', 'organizationName', 'organizationNames'])
+        && request.resource.data.organizationInviteId is string
+        && invite.status == 'accepted'
+        && invite.acceptedById == request.auth.uid
+        && invite.invitedEmail == resource.data.email
+        && invite.organizationId in request.resource.data.organizationIds
+        && request.resource.data.organizationNames is map
+        && request.resource.data.organizationNames[invite.organizationId] == invite.organizationName;
+    }
+
+    function organizationRemoveMemberUpdate(userId) {
+      return signedIn()
+        && request.auth.uid != userId
+        && organizationAdmin(resource.data.organizationId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['organizationId', 'organizationIds', 'organizationName', 'organizationNames']);
+    }
+
+    function validInviteCreate() {
+      return signedIn()
+        && organizationAdmin(request.resource.data.organizationId)
+        && request.resource.data.keys().hasOnly([
+          'createdAt',
+          'id',
+          'invitedById',
+          'invitedByName',
+          'invitedEmail',
+          'organizationId',
+          'organizationName',
+          'status'
+        ])
+        && request.resource.data.id is string
+        && request.resource.data.invitedById == request.auth.uid
+        && request.resource.data.invitedByName is string
+        && request.resource.data.invitedEmail is string
+        && request.resource.data.organizationName == get(/databases/$(database)/documents/organizations/$(request.resource.data.organizationId)).data.name
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt is string;
+    }
+
+    function cancelInvite() {
+      return signedIn()
+        && resource.data.status == 'open'
+        && organizationAdmin(resource.data.organizationId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cancelledAt', 'status'])
+        && request.resource.data.status == 'cancelled'
+        && request.resource.data.cancelledAt is string;
+    }
+
+    function acceptInvite() {
+      return signedIn()
+        && resource.data.status == 'open'
+        && resource.data.invitedEmail == currentUserEmail()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acceptedAt', 'acceptedById', 'status'])
+        && request.resource.data.status == 'accepted'
+        && request.resource.data.acceptedById == request.auth.uid
+        && request.resource.data.acceptedAt is string;
+    }
+
     function reporterBugUpdate() {
-      return resource.data.reporterId == request.auth.uid
+      return publicOrSameOrg(resource.data)
+        && resource.data.reporterId == request.auth.uid
         && request.resource.data.reporterId == resource.data.reporterId
         && validStatus(request.resource.data.status)
         && validSeverity(request.resource.data.severity)
@@ -161,7 +320,8 @@ service cloud.firestore {
     }
 
     function upvoteUpdate() {
-      return onlyUpvoteFieldsChanged()
+      return publicOrSameOrg(resource.data)
+        && onlyUpvoteFieldsChanged()
         && resource.data.reporterId != request.auth.uid
         && (firstLegacyUpvote() || toggledOwnUpvote());
     }
@@ -319,9 +479,13 @@ service cloud.firestore {
         && request.auth.uid == userId
         && request.resource.data.uid == userId
         && request.resource.data.email == request.auth.token.email
+        && (
+          !request.resource.data.keys().hasAny(['organizationId'])
+          || (request.resource.data.organizationId == 'public' && request.resource.data.organizationName == 'Public')
+        )
         && (!request.resource.data.keys().hasAny(['active']) || request.resource.data.active == true);
       allow update: if signedIn()
-        && validUserUpdate(userId);
+        && (validUserUpdate(userId) || organizationCreateUserUpdate(userId) || organizationInviteUserUpdate(userId) || organizationRemoveMemberUpdate(userId));
       allow delete: if signedIn() && resource.data.reporterId == request.auth.uid;
 
       match /bugdex/{bugId} {
@@ -456,6 +620,10 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.resource.data.authorId == request.auth.uid
           && request.resource.data.bugId == bugId
+          && (
+            !request.resource.data.keys().hasAny(['organizationId'])
+            || (request.resource.data.organizationId == 'public' && request.resource.data.organizationName == 'Public')
+          )
           && request.resource.data.authorName is string
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 500
@@ -465,6 +633,84 @@ service cloud.firestore {
         allow delete: if signedIn()
           && get(/databases/$(database)/documents/bugs/$(bugId)).data.reporterId == request.auth.uid;
       }
+    }
+
+    match /organizationBugs/{bugId} {
+      allow read: if publicOrSameOrg(resource.data);
+      allow create: if signedIn() && validOrganizationBugCreate();
+      allow update: if signedIn() && (reporterBugUpdate() || upvoteUpdate());
+      allow delete: if publicOrSameOrg(resource.data) && resource.data.reporterId == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if publicOrSameOrg(get(/databases/$(database)/documents/organizationBugs/$(bugId)).data);
+        allow create: if signedIn()
+          && publicOrSameOrg(get(/databases/$(database)/documents/organizationBugs/$(bugId)).data)
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.bugId == bugId
+          && request.resource.data.organizationId == orgId(get(/databases/$(database)/documents/organizationBugs/$(bugId)).data)
+          && request.resource.data.organizationName == orgName(get(/databases/$(database)/documents/organizationBugs/$(bugId)).data)
+          && request.resource.data.authorName is string
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.reaction is string
+          && request.resource.data.createdAt is string;
+        allow update: if false;
+        allow delete: if signedIn()
+          && publicOrSameOrg(get(/databases/$(database)/documents/organizationBugs/$(bugId)).data)
+          && get(/databases/$(database)/documents/organizationBugs/$(bugId)).data.reporterId == request.auth.uid;
+      }
+    }
+
+    match /organizations/{organizationId} {
+      allow read: if signedIn()
+        && userIsOrgMember(organizationId);
+      allow create: if signedIn()
+        && organizationId != 'public'
+        && request.resource.data.keys().hasOnly(['createdAt', 'createdBy', 'createdByName', 'id', 'name'])
+        && request.resource.data.id == organizationId
+        && request.resource.data.name is string
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdByName is string
+        && request.resource.data.createdAt is string;
+      allow update, delete: if false;
+
+      match /members/{memberId} {
+        allow read: if userIsOrgMember(organizationId) || organizationAdmin(organizationId);
+        allow create: if signedIn()
+          && memberId == request.resource.data.uid
+          && request.resource.data.organizationId == organizationId
+          && request.resource.data.organizationName is string
+          && request.resource.data.displayName is string
+          && request.resource.data.email is string
+          && request.resource.data.joinedAt is string
+          && request.resource.data.role in ['owner', 'admin', 'member']
+          && (
+            (
+              memberId == request.auth.uid
+              && request.resource.data.role == 'owner'
+              && getAfter(/databases/$(database)/documents/organizations/$(organizationId)).data.createdBy == request.auth.uid
+            )
+            || (
+              memberId == request.auth.uid
+              && request.resource.data.role == 'member'
+              && request.resource.data.inviteId is string
+              && getAfter(/databases/$(database)/documents/organizationInvites/$(request.resource.data.inviteId)).data.status == 'accepted'
+              && getAfter(/databases/$(database)/documents/organizationInvites/$(request.resource.data.inviteId)).data.acceptedById == request.auth.uid
+              && getAfter(/databases/$(database)/documents/organizationInvites/$(request.resource.data.inviteId)).data.organizationId == organizationId
+            )
+            || organizationAdmin(organizationId)
+          );
+        allow update, delete: if organizationAdmin(organizationId);
+      }
+    }
+
+    match /organizationInvites/{inviteId} {
+      allow read: if signedIn()
+        && (organizationAdmin(resource.data.organizationId) || resource.data.invitedEmail == currentUserEmail());
+      allow create: if validInviteCreate()
+        && request.resource.data.id == inviteId;
+      allow update: if cancelInvite() || acceptInvite();
+      allow delete: if false;
     }
 
     match /trades/{tradeId} {

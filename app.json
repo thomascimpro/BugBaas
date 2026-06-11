@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "CimPro BugBaas",
-    "slug": "cimpro-bugbaas",
-    "version": "2.2.18",
+    "name": "BugBaas",
+    "slug": "bugbaas",
+    "version": "2.2.19",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

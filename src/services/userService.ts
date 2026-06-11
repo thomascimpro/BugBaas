@@ -8,13 +8,14 @@ import {
   signOut,
   updateProfile
 } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, updateDoc } from "firebase/firestore";
+import { arrayUnion, collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, updateDoc, where } from "firebase/firestore";
 import { auth, db, isFirebaseConfigured } from "../firebase";
-import { BugComment, BugReport, User } from "../types";
+import { BugComment, BugReport, Organization, OrganizationMember, User } from "../types";
 import { entryByBugId, listBugDexInventory, syncPointUnlockedBugDex } from "./bugDexService";
 import { normalizeBugLampActiveUntil, normalizeBugLampCount, withActivatedBugLamp } from "./bugLampService";
 import { sanitizeActiveBugSquad } from "./bugSquadService";
 import { bestUnlockedCharacterId, CharacterId, defaultCharacterId, isCharacterUnlocked, safeCharacterId } from "./characterService";
+import { cleanOrganizationName, defaultOrganizationId, defaultOrganizationName, organizationIdsForUser, organizationNamesForUser, organizationSlug } from "./organizationService";
 import { badgesForUser, titleForPoints } from "./pointsService";
 
 export const upvotePointValue = 3;
@@ -32,10 +33,16 @@ function normalizeUser(user: User): User {
   const safeId = safeCharacterId(user.characterId);
   const unlockedCharacterId = isCharacterUnlocked(safeId, user.totalPoints) ? safeId : bestUnlockedCharacterId(user.totalPoints);
   const bugLampActiveUntil = normalizeBugLampActiveUntil(user.bugLampActiveUntil);
+  const organizationIds = organizationIdsForUser(user);
+  const organizationNames = organizationNamesForUser(user);
   const normalized = {
     ...user,
     active: user.active !== false,
     activeBugSquad: sanitizeActiveBugSquad(user.activeBugSquad),
+    organizationId: user.organizationId || defaultOrganizationId,
+    organizationName: user.organizationName || defaultOrganizationName,
+    organizationIds,
+    organizationNames,
     ...(bugLampActiveUntil ? { bugLampActiveUntil } : {}),
     bugLampCount: normalizeBugLampCount(user.bugLampCount),
     bugDexCount: user.bugDexCount ?? 0,
@@ -62,15 +69,28 @@ function publicUser(user: User): User {
 
 async function listAllBugsForScores(): Promise<BugReport[]> {
   if (!isFirebaseConfigured) return [];
-  const snapshot = await getDocs(collection(db, "bugs"));
-  return snapshot.docs.map((item) => item.data() as BugReport);
+  const orgIds = await currentUserOrganizationIds();
+  const publicSnapshot = await getDocs(collection(db, "bugs"));
+  const orgSnapshots = await Promise.all(orgIds.map((orgId) => getDocs(query(collection(db, "organizationBugs"), where("organizationId", "==", orgId)))));
+  return [
+    ...publicSnapshot.docs.map((item) => ({ ...(item.data() as BugReport), collectionName: "bugs" as const })),
+    ...orgSnapshots.flatMap((snapshot) => snapshot.docs.map((item) => ({ ...(item.data() as BugReport), collectionName: "organizationBugs" as const })))
+  ];
+}
+
+async function currentUserOrganizationIds(): Promise<string[]> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return [];
+  const snapshot = await getDoc(doc(db, "users", uid));
+  return snapshot.exists() ? organizationIdsForUser(snapshot.data() as User) : [];
 }
 
 async function countUserComments(uid: string, bugs: BugReport[]): Promise<number> {
   if (!isFirebaseConfigured) return 0;
   let total = 0;
   for (const bug of bugs) {
-    const snapshot = await getDocs(collection(db, "bugs", bug.id, "comments"));
+    const collectionName = bug.collectionName ?? (bug.organizationId && bug.organizationId !== defaultOrganizationId ? "organizationBugs" : "bugs");
+    const snapshot = await getDocs(collection(db, collectionName, bug.id, "comments"));
     total += snapshot.docs.filter((item) => (item.data() as BugComment).authorId === uid).length;
   }
   return total;
@@ -112,6 +132,10 @@ function makeUser(uid: string, email: string, displayName?: string | null, nameS
     nameSet,
     active: true,
     lastActiveAt: new Date().toISOString(),
+    organizationId: defaultOrganizationId,
+    organizationName: defaultOrganizationName,
+    organizationIds: [],
+    organizationNames: {},
     helpSeen: false,
     splatCount: 0,
     totalPoints: 0,
@@ -353,6 +377,55 @@ export async function updateUserDisplayName(user: User, displayName: string): Pr
     displayName: updated.displayName,
     nameSet: true
   });
+  return updated;
+}
+
+export async function createOrganizationForUser(user: User, organizationName: string): Promise<User> {
+  const name = cleanOrganizationName(organizationName);
+  if (name.length < 2) throw new Error("Organisatienaam moet minimaal 2 tekens zijn.");
+  const organizationId = organizationSlug(name);
+  if (organizationId === defaultOrganizationId) throw new Error("Kies een andere organisatienaam.");
+
+  const updated = normalizeUser({ ...user, organizationId, organizationName: name });
+  if (!isFirebaseConfigured) {
+    demoUsers.set(updated.email, updated);
+    if (demoUser?.uid === user.uid) demoUser = updated;
+    return updated;
+  }
+
+  const userRef = doc(db, "users", user.uid);
+  const organizationRef = doc(db, "organizations", organizationId);
+  const memberRef = doc(db, "organizations", organizationId, "members", user.uid);
+  await runTransaction(db, async (transaction) => {
+    const organizationSnapshot = await transaction.get(organizationRef);
+    if (organizationSnapshot.exists()) throw new Error("Deze organisatie bestaat al.");
+    const now = new Date().toISOString();
+    const organization: Organization = {
+      id: organizationId,
+      name,
+      createdBy: user.uid,
+      createdByName: user.displayName,
+      createdAt: now
+    };
+    transaction.set(organizationRef, organization);
+    const member: OrganizationMember = {
+      uid: user.uid,
+      displayName: user.displayName,
+      email: user.email,
+      role: "owner",
+      organizationId,
+      organizationName: name,
+      joinedAt: now
+    };
+    transaction.set(memberRef, member);
+    transaction.update(userRef, {
+      organizationId,
+      organizationName: name,
+      organizationIds: arrayUnion(organizationId),
+      [`organizationNames.${organizationId}`]: name
+    });
+  });
+
   return updated;
 }
 

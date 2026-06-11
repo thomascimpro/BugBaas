@@ -350,6 +350,13 @@ export async function rollBugDexDrop(user: User, source: BugDexDropSource): Prom
   });
 }
 
+export function pickQueuedBugDexRewardEntry(user: User, source: BugDexDropSource): BugDexEntry | null {
+  const bonuses = activeBugSquadBonuses(user);
+  const chanceBoost = sourceChanceBoost(source, bonuses);
+  if (Math.random() > Math.min(0.95, dropChances[source] * (1 + chanceBoost))) return null;
+  return pickEntry(source, bonuses.radar_rarity + bugLampStatus(user).rarityBoost);
+}
+
 export async function rollSpecificBugDexDrop(user: User, bugId: string, source: BugDexDropSource, chance = 0.16): Promise<BugDexDropResult | null> {
   const entry = entryByBugId(bugId);
   if (!entry || Math.random() > chance) return null;

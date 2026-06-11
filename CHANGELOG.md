@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.19
+
+- Organisaties ondersteunen nu meerdere members per organisatie en meerdere organisaties per gebruiker.
+- Org-members staan server-side onder `organizations/{orgId}/members/{uid}`, met legacy `organizationId` fallback voor oude app-versies.
+- Bug/idee/tip/workaround aanmaken kan nu expliciet Public of onder een gekozen organisatie.
+- Organisatiebeheer toont members per geselecteerde organisatie en uitnodigen/verwijderen werkt per organisatie.
+- Firestore rules en Cimpro seed zijn bijgewerkt voor private org-meldingen en members.
+
 ## 2.2.18
 
 - Actieve duelkaarten tonen nu jouw opgeslagen score in plaats van het aantal gevangen bugs.

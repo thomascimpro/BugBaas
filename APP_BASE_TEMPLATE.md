@@ -1,6 +1,6 @@
 # App Base Template
 
-Herbruikbare basis uit CimPro BugBaas voor nieuwe Android-first apps.
+Herbruikbare basis uit BugBaas voor nieuwe Android-first apps.
 
 Gebruik dit bestand als startchecklist wanneer je een nieuwe app bouwt. Kopieer niet blind alles; kies alleen wat past bij de nieuwe app.
 

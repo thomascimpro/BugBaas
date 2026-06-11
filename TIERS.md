@@ -1,6 +1,6 @@
 # Tiers
 
-CimPro BugBaas gebruikt eigen insect-tiers. Punten komen uit bugmeldingen en statuswijzigingen.
+BugBaas gebruikt eigen insect-tiers. Punten komen uit bugmeldingen en statuswijzigingen.
 
 ## Tiers
 
