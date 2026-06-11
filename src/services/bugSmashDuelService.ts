@@ -1,6 +1,6 @@
 import { collection, doc, getDocs, onSnapshot, query, runTransaction, setDoc, where } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
-import { BugSmashDuel, User } from "../types";
+import { BugSmashDuel, BugSmashDuelScore, User } from "../types";
 import { badgesForUser, bugDexEntries, titleForPoints } from "./pointsService";
 import { duelLossXp, duelWinXp } from "./rewardBalanceService";
 
@@ -201,23 +201,24 @@ export async function submitBugSmashDuelScore(user: User, duelId: string, score:
     if (!isParticipant(duel, user)) throw new Error("Je doet niet mee aan dit duel.");
     const requesterCanPreplay = duel.status === "pending" && duel.fromUserId === user.uid;
     if (!requesterCanPreplay && duel.status !== "accepted" && duel.status !== "completed") throw new Error("Duel is niet actief.");
-    const savedScore = Math.max(score, minimumScoreForCaughtBugIds(caughtBugIds, bonusScore));
+    const candidateScore = normalizeSubmittedScore({
+      score,
+      caughtBugIds: [...caughtBugIds],
+      bonusScore,
+      submittedAt: nowIso()
+    });
+    const ownScore = preferredSubmittedScore(duel.scores?.[user.uid], candidateScore);
     const scores = {
       ...(duel.scores ?? {}),
-      [user.uid]: {
-        score: savedScore,
-        caughtBugIds,
-        bonusScore,
-        submittedAt: nowIso()
-      }
+      [user.uid]: ownScore
     };
     const fromScore = scores[duel.fromUserId];
     const toScore = scores[duel.toUserId];
     const completed = Boolean(fromScore && toScore);
     const winnerId = completed
-      ? fromScore.score === toScore.score
+      ? scoreValue(fromScore) === scoreValue(toScore)
         ? undefined
-        : fromScore.score > toScore.score
+        : scoreValue(fromScore) > scoreValue(toScore)
           ? duel.fromUserId
           : duel.toUserId
       : duel.winnerId;
@@ -256,6 +257,29 @@ function minimumScoreForCaughtBugIds(caughtBugIds: string[], bonusScore: number)
     return total + catchScore + ((index + 1) % 5 === 0 ? 1 : 0);
   }, 0);
   return Math.max(0, baseScore + Math.max(0, bonusScore));
+}
+
+function scoreValue(score: BugSmashDuelScore): number {
+  return Math.max(0, score.score, minimumScoreForCaughtBugIds(score.caughtBugIds, score.bonusScore));
+}
+
+function normalizeSubmittedScore(score: BugSmashDuelScore): BugSmashDuelScore {
+  return {
+    ...score,
+    caughtBugIds: [...score.caughtBugIds],
+    bonusScore: Math.max(0, score.bonusScore),
+    score: scoreValue(score)
+  };
+}
+
+function preferredSubmittedScore(existing: BugSmashDuelScore | undefined, candidate: BugSmashDuelScore): BugSmashDuelScore {
+  if (!existing) return candidate;
+  const normalizedExisting = normalizeSubmittedScore(existing);
+  const existingValue = scoreValue(normalizedExisting);
+  const candidateValue = scoreValue(candidate);
+  if (candidateValue > existingValue) return candidate;
+  if (candidateValue === existingValue && candidate.caughtBugIds.length > normalizedExisting.caughtBugIds.length) return candidate;
+  return normalizedExisting;
 }
 
 export async function claimBugSmashDuelReward(user: User, duelId: string): Promise<{ result: "loss" | "win"; rewardGranted: boolean; user: User } | null> {

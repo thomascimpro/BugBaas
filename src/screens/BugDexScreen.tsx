@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
+import { BugJarArt } from "../components/BugJarArt";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugDexUnlockModal } from "../components/BugDexUnlockModal";
 import { MythicRarityFrame } from "../components/MythicRarityFrame";
@@ -524,14 +525,17 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
           </View>
         </View>
         <View style={styles.activeJarPreview}>
-        {Array.from({ length: maxActiveBugSquadSize }).map((_, index) => {
-          const entry = activeSquadEntries[index];
-          return (
-            <View key={entry?.id ?? index} style={styles.activeJarMini}>
-              {entry ? <BugArtImage bugId={entry.id} size={58} /> : <Text style={styles.squadEmptyMark}>+</Text>}
-            </View>
-          );
-        })}
+          {Array.from({ length: maxActiveBugSquadSize }).map((_, index) => {
+            const entry = activeSquadEntries[index];
+            return (
+              <View key={entry?.id ?? index} style={styles.activeJarMini}>
+                <BugJarArt bugId={entry?.id} rarity={entry?.rarity} size={74} unlocked={Boolean(entry)} />
+                <Text style={styles.activeJarMiniName} numberOfLines={1}>
+                  {entry ? bugDexEntryName(entry, t) : t("bugdex.squadEmptySlot")}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       </Pressable>
 
@@ -971,60 +975,16 @@ const styles = StyleSheet.create({
   },
   activeJarMini: {
     alignItems: "center",
-    width: 74
+    flex: 1,
+    minWidth: 0
   },
-  activeJarMiniLid: {
-    backgroundColor: "#6d5441",
-    borderColor: "#3e2e24",
-    borderRadius: 6,
-    borderWidth: 1,
-    height: 9,
-    marginBottom: -2,
-    width: 42,
-    zIndex: 2
-  },
-  activeJarSlot: {
-    alignItems: "center",
-    backgroundColor: "rgba(220,244,250,0.62)",
-    borderColor: "rgba(16,32,24,0.18)",
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    borderRadius: 14,
-    borderWidth: 2,
-    height: 70,
-    justifyContent: "center",
-    overflow: "hidden",
-    width: 62
-  },
-  activeJarShine: {
-    backgroundColor: "rgba(255,255,255,0.52)",
-    borderRadius: 999,
-    height: 42,
-    left: 9,
-    position: "absolute",
-    top: 9,
-    transform: [{ rotate: "9deg" }],
-    width: 7
-  },
-  activeJarBase: {
-    backgroundColor: "rgba(41,67,56,0.18)",
-    borderRadius: 999,
-    bottom: 5,
-    height: 6,
-    left: 10,
-    position: "absolute",
-    right: 10
-  },
-  activeJarMythicFrame: {
-    zIndex: 1
-  },
-  activeJarMythicBug: {
-    zIndex: 2
-  },
-  activeJarEmpty: {
-    color: "#8ca099",
-    fontSize: 24,
-    fontWeight: "900"
+  activeJarMiniName: {
+    color: "#102018",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 4,
+    textAlign: "center",
+    width: "100%"
   },
   preview: {
     alignItems: "center",

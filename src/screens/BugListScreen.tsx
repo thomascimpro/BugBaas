@@ -233,6 +233,7 @@ function reportMatchesSearch(report: BugReport, query: string): boolean {
     report.steps,
     report.status,
     report.severity,
+    report.organizationName,
     reportTypeLabels[reportType]
   ].join(" ").toLowerCase();
   return haystack.includes(query);
