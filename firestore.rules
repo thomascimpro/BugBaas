@@ -99,14 +99,23 @@ service cloud.firestore {
 
     function tradeGain(userId, bugId) {
       let trade = getAfter(/databases/$(database)/documents/trades/$(request.resource.data.lastTradeId)).data;
-      return (userId == trade.fromUserId && bugId == trade.requestBugId)
-        || (userId == trade.toUserId && bugId == trade.offerBugId);
+      let offerBugIds = trade.keys().hasAll(['offerBugIds']) ? trade.offerBugIds : [trade.offerBugId];
+      let requestBugIds = trade.keys().hasAll(['requestBugIds']) ? trade.requestBugIds : [trade.requestBugId];
+      return (userId == trade.fromUserId && bugId in requestBugIds)
+        || (userId == trade.toUserId && bugId in offerBugIds);
     }
 
     function tradeLoss(userId, bugId) {
       let trade = getAfter(/databases/$(database)/documents/trades/$(request.resource.data.lastTradeId)).data;
-      return (userId == trade.fromUserId && bugId == trade.offerBugId)
-        || (userId == trade.toUserId && bugId == trade.requestBugId);
+      let offerBugIds = trade.keys().hasAll(['offerBugIds']) ? trade.offerBugIds : [trade.offerBugId];
+      let requestBugIds = trade.keys().hasAll(['requestBugIds']) ? trade.requestBugIds : [trade.requestBugId];
+      return (userId == trade.fromUserId && bugId in offerBugIds)
+        || (userId == trade.toUserId && bugId in requestBugIds);
+    }
+
+    function multiTrade(data) {
+      return data.keys().hasAll(['offerBugIds', 'requestBugIds'])
+        && (data.offerBugIds.size() > 1 || data.requestBugIds.size() > 1);
     }
 
     function tradeInventoryCreate(userId, bugId) {
@@ -235,6 +244,8 @@ service cloud.firestore {
           'organizationName',
           'organizationNames',
           'splatCount',
+          'starterBoostActiveUntil',
+          'starterBoostGrantedAt',
           'title',
           'totalPoints',
           'tradedBugDexCount',
@@ -244,6 +255,8 @@ service cloud.firestore {
         ])
         && (!request.resource.data.keys().hasAny(['lastActiveAt']) || request.resource.data.lastActiveAt is string)
         && (!request.resource.data.keys().hasAny(['notificationPushToken']) || request.resource.data.notificationPushToken is string)
+        && (!request.resource.data.keys().hasAny(['starterBoostActiveUntil']) || request.resource.data.starterBoostActiveUntil is string)
+        && (!request.resource.data.keys().hasAny(['starterBoostGrantedAt']) || request.resource.data.starterBoostGrantedAt is string)
         && (!request.resource.data.keys().hasAny(['active']) || request.resource.data.active == true);
     }
 
@@ -756,6 +769,19 @@ service cloud.firestore {
         && request.resource.data.toUserName is string
         && request.resource.data.offerBugId is string
         && request.resource.data.requestBugId is string
+        && (
+          !request.resource.data.keys().hasAny(['offerBugIds', 'requestBugIds'])
+          || (
+            request.resource.data.offerBugIds is list
+            && request.resource.data.offerBugIds.size() > 0
+            && request.resource.data.offerBugIds.size() <= 6
+            && request.resource.data.offerBugIds.hasAll([request.resource.data.offerBugId])
+            && request.resource.data.requestBugIds is list
+            && request.resource.data.requestBugIds.size() > 0
+            && request.resource.data.requestBugIds.size() <= 6
+            && request.resource.data.requestBugIds.hasAll([request.resource.data.requestBugId])
+          )
+        )
         && request.resource.data.offerBugId != request.resource.data.requestBugId
         && request.resource.data.status == 'Open'
         && request.resource.data.createdAt is string
@@ -763,9 +789,25 @@ service cloud.firestore {
       allow update: if signedIn()
         && resource.data.status == 'Open'
         && resource.data.toUserId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
         && request.resource.data.status in ['Geaccepteerd', 'Afgewezen']
-        && request.resource.data.updatedAt is string;
+        && request.resource.data.updatedAt is string
+        && (
+          (
+            request.resource.data.status == 'Afgewezen'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+          || (
+            request.resource.data.status == 'Geaccepteerd'
+            && !multiTrade(resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+          || (
+            request.resource.data.status == 'Geaccepteerd'
+            && multiTrade(resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'acceptedBugCount'])
+            && request.resource.data.acceptedBugCount == resource.data.offerBugIds.size() + resource.data.requestBugIds.size()
+          )
+        );
       allow delete: if false;
     }
 

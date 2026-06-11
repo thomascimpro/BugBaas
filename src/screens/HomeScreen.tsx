@@ -13,7 +13,8 @@ import { listBugSmashDuels } from "../services/bugSmashDuelService";
 import { claimMovementRadarBonusesForApp, claimQueuedRadarBugs, getMovementRadarProgress, getQueuedRadarBugIds, MovementRadarProgress } from "../services/movementRadarService";
 import { bugDexEntries, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { languages, useI18n } from "../services/i18n";
-import { listUsers } from "../services/userService";
+import { listLeaderboardUsers } from "../services/userService";
+import { starterBoostRemainingDays } from "../services/starterBoostService";
 import { claimedWeeklyMissionIds, claimWeeklyMissionBonusWithReward, claimWeeklyMissionReward, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
 import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
@@ -70,9 +71,10 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const selectedLanguage = languages.find((item) => item.value === language) ?? languages[0];
   const lampStatus = bugLampStatus(user);
   const showBugLamp = lampStatus.active || lampStatus.count > 0;
+  const starterBoostDays = starterBoostRemainingDays(user);
 
   useEffect(() => {
-    listUsers().then(setUsers);
+    listLeaderboardUsers().then(setUsers);
     listBugs().then(setBugs);
     listBugSmashDuels(user).then(setDuels).catch(() => setDuels([]));
     listBugDexInventory(user).then(setInventory);
@@ -228,6 +230,12 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
           <Text style={styles.statLabel}>{tr(tier.title)}</Text>
         </View>
       </View>
+      {starterBoostDays > 0 && (
+        <View style={styles.starterBoostCard}>
+          <Text style={styles.starterBoostTitle}>{t("home.starterBoostTitle")}</Text>
+          <Text style={styles.starterBoostText}>{t("home.starterBoostText", { days: starterBoostDays })}</Text>
+        </View>
+      )}
       {movementProgress && (
         <View style={styles.movementCard}>
           <View style={styles.movementHeader}>
@@ -614,6 +622,26 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 2,
     textAlign: "center"
+  },
+  starterBoostCard: {
+    backgroundColor: "#fff7d6",
+    borderColor: "#d7bd57",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 8,
+    padding: 12
+  },
+  starterBoostText: {
+    color: "#52665d",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
+    marginTop: 2
+  },
+  starterBoostTitle: {
+    color: "#102018",
+    fontSize: 14,
+    fontWeight: "900"
   },
   movementCard: {
     backgroundColor: "#fdfefb",

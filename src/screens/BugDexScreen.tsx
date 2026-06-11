@@ -7,7 +7,7 @@ import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugDexUnlockModal } from "../components/BugDexUnlockModal";
 import { MythicRarityFrame } from "../components/MythicRarityFrame";
 import { TradeAnimationModal } from "../components/TradeAnimationModal";
-import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineBugDexDuplicates, combineDifferentBugDexUpgrade, combineRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory } from "../services/bugDexService";
+import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineBugDexDuplicates, combineDifferentBugDexUpgrade, combineRequiredCount, differentUpgradeRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory } from "../services/bugDexService";
 import { activeBugSquadBonusList, bugSquadAttackKindForCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad, BugSquadBonusCategory } from "../services/bugSquadService";
 import { bugDexEntryName, bugDexEntryNote, bugDexEntryTitle, rarityLabel, useI18n } from "../services/i18n";
 import { notifyTradeAccepted, notifyTradeRequest } from "../services/notificationService";
@@ -61,6 +61,7 @@ const emptyDailyUpgradeUsage: DailyUpgradeUsage = {
 };
 const activeBugSquadHeroImage = require("../../assets/generated/active-bug-squad-selection-hd.jpg");
 const bugDexWorkshopImage = require("../../assets/generated/bugdex-workshop-shortcut.png");
+const maxTradeBugSelection = 6;
 
 const completedTradeStorageKey = (uid: string) => `bugbaas:seenCompletedTrades:${uid}`;
 
@@ -107,9 +108,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   const [activeSquadIds, setActiveSquadIds] = useState<string[]>(sanitizeActiveBugSquad(user.activeBugSquad));
   const [squadBusyId, setSquadBusyId] = useState("");
   const [squadExpanded, setSquadExpanded] = useState(false);
-  const [tradeOfferId, setTradeOfferId] = useState("");
+  const [tradeOfferIds, setTradeOfferIds] = useState<string[]>([]);
   const [tradeRecipientId, setTradeRecipientId] = useState("");
-  const [tradeRequestId, setTradeRequestId] = useState("");
+  const [tradeRequestIds, setTradeRequestIds] = useState<string[]>([]);
   const [tradeBusy, setTradeBusy] = useState("");
   const [tradeError, setTradeError] = useState("");
   const [showLocked, setShowLocked] = useState(false);
@@ -128,6 +129,10 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   const unlockedEntries = inventory.map((item) => entryByBugId(item.bugId)).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   const activeSquadEntries = activeSquadIds.map((bugId) => entryByBugId(bugId)).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   const activeSquadIdSet = new Set(activeSquadIds);
+  const activeSquadCounts = activeSquadIds.reduce<Record<string, number>>((counts, bugId) => {
+    counts[bugId] = (counts[bugId] ?? 0) + 1;
+    return counts;
+  }, {});
   const headerEntry = unlockedEntries[unlockedEntries.length - 1];
   const dexCards = bugDexEntries
     .map((entry, index) => ({ entry, index, inventoryItem: inventoryById[entry.id] }))
@@ -154,6 +159,23 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   const selectedRecipient = users.find((item) => item.uid === tradeRecipientId);
   const incomingTrades = trades.filter((trade) => trade.toUserId === user.uid && trade.status === "Open");
   const outgoingTrades = trades.filter((trade) => trade.fromUserId === user.uid && trade.status === "Open");
+
+  function activeCountForBug(bugId: string) {
+    return activeSquadCounts[bugId] ?? 0;
+  }
+
+  function spendableCountForItem(item: BugDexInventoryItem | null | undefined) {
+    return item ? Math.max(0, item.count - activeCountForBug(item.bugId)) : 0;
+  }
+
+  function canSpendBugCopy(item: BugDexInventoryItem | null | undefined) {
+    return spendableCountForItem(item) > 0;
+  }
+
+  function canCombineItem(item: BugDexInventoryItem | null | undefined, requiredCount: number) {
+    if (!item || !Number.isFinite(requiredCount) || item.count < requiredCount) return false;
+    return item.count - requiredCount + 1 >= activeCountForBug(item.bugId);
+  }
 
   useEffect(() => {
     void refreshAll();
@@ -199,7 +221,14 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
 
   useEffect(() => {
     const availableIds = new Set(inventory.filter((item) => item.count > 0).map((item) => item.bugId));
-    const isSelectable = (bugId: string) => availableIds.has(bugId) && !activeSquadIds.includes(bugId);
+    const activeCounts = activeSquadIds.reduce<Record<string, number>>((counts, bugId) => {
+      counts[bugId] = (counts[bugId] ?? 0) + 1;
+      return counts;
+    }, {});
+    const isSelectable = (bugId: string) => {
+      const item = inventory.find((candidate) => candidate.bugId === bugId);
+      return availableIds.has(bugId) && Boolean(item && item.count - (activeCounts[bugId] ?? 0) > 0);
+    };
     setUpgradeSelections((current) => ({
       Gewoon: current.Gewoon.filter(isSelectable),
       Zeldzaam: current.Zeldzaam.filter(isSelectable),
@@ -209,12 +238,13 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   }, [activeSquadIds, inventory]);
 
   useEffect(() => {
-    if (!tradeOfferId || !activeSquadIds.includes(tradeOfferId)) return;
-    setTradeOfferId("");
+    const nextOfferIds = tradeOfferIds.filter((bugId) => canSpendBugCopy(inventoryById[bugId]));
+    if (nextOfferIds.length === tradeOfferIds.length) return;
+    setTradeOfferIds(nextOfferIds);
     setTradeRecipientId("");
-    setTradeRequestId("");
+    setTradeRequestIds([]);
     setRecipientInventory([]);
-  }, [activeSquadIds, tradeOfferId]);
+  }, [activeSquadIds, inventory, tradeOfferIds]);
 
   async function refreshAll() {
     await Promise.all([refreshInventory(), refreshTrades(), refreshDailyUpgradeUsage(), refreshTradeUsers()]);
@@ -250,7 +280,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   }
 
   async function combine(bugId: string) {
-    if (activeSquadIds.includes(bugId)) {
+    const entry = entryByBugId(bugId);
+    const requiredCount = entry ? combineRequiredCount(entry.rarity) : Infinity;
+    if (!canCombineItem(inventoryById[bugId], requiredCount)) {
       setUpgradeError(t("bugdex.activeSquadLocked"));
       return;
     }
@@ -268,7 +300,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   }
 
   async function upgradeDifferent(rarity: UpgradeRarity, bugIds: string[]) {
-    if (bugIds.some((bugId) => activeSquadIds.includes(bugId))) {
+    if (bugIds.some((bugId) => !canSpendBugCopy(inventoryById[bugId]))) {
       setUpgradeError(t("bugdex.activeSquadLocked"));
       return;
     }
@@ -287,7 +319,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   }
 
   function toggleUpgradeSelection(rarity: UpgradeRarity, bugId: string) {
-    if (activeSquadIds.includes(bugId)) return;
+    if (!canSpendBugCopy(inventoryById[bugId])) return;
     setUpgradeSelections((current) => {
       const selected = current[rarity];
       if (selected.includes(bugId)) return { ...current, [rarity]: selected.filter((item) => item !== bugId) };
@@ -307,6 +339,17 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
 
   function bugTradeLabel(bugId: string) {
     return `${bugName(bugId)} (${rarityLabel(bugRarity(bugId), t)})`;
+  }
+
+  function tradeBugIds(trade: TradeRequest, side: "offer" | "request") {
+    const ids = side === "offer" ? trade.offerBugIds : trade.requestBugIds;
+    const fallback = side === "offer" ? trade.offerBugId : trade.requestBugId;
+    return (Array.isArray(ids) && ids.length ? ids : [fallback]).filter(Boolean);
+  }
+
+  function bugTradeListLabel(bugIds: string[]) {
+    if (bugIds.length <= 1) return bugIds[0] ? bugTradeLabel(bugIds[0]) : "";
+    return bugIds.map(bugTradeLabel).join(" + ");
   }
 
   function bugBuffText(bugId: string) {
@@ -375,7 +418,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   async function chooseRecipient(uid: string) {
     const recipient = users.find((item) => item.uid === uid);
     setTradeRecipientId(uid);
-    setTradeRequestId("");
+    setTradeRequestIds([]);
     const cachedInventory = inventoriesByUserId[uid];
     setRecipientInventory(cachedInventory ?? []);
     if (!recipient) return;
@@ -385,19 +428,19 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   }
 
   async function sendTradeRequest() {
-    if (!selectedRecipient || !tradeOfferId || !tradeRequestId) return;
-    if (activeSquadIds.includes(tradeOfferId)) {
+    if (!selectedRecipient || !tradeOfferIds.length || !tradeRequestIds.length) return;
+    if (tradeOfferIds.some((bugId) => !canSpendBugCopy(inventoryById[bugId]))) {
       setTradeError(t("bugdex.activeSquadLocked"));
       return;
     }
     setTradeBusy("send");
     setTradeError("");
     try {
-      await createTradeRequest(user, selectedRecipient, tradeOfferId, tradeRequestId);
-      await notifyTradeRequest(selectedRecipient.uid, user, bugName(tradeOfferId));
-      setTradeOfferId("");
+      await createTradeRequest(user, selectedRecipient, tradeOfferIds, tradeRequestIds);
+      await notifyTradeRequest(selectedRecipient.uid, user, bugTradeListLabel(tradeOfferIds));
+      setTradeOfferIds([]);
       setTradeRecipientId("");
-      setTradeRequestId("");
+      setTradeRequestIds([]);
       setRecipientInventory([]);
       setTradeExpanded(false);
       await Promise.all([refreshTrades(), refreshTradeUsers()]);
@@ -416,7 +459,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
       if (accept) {
         setCompletedTrade(result);
         setTradeExpanded(false);
-        await notifyTradeAccepted(trade.fromUserId, user, bugName(trade.requestBugId));
+        await notifyTradeAccepted(trade.fromUserId, user, bugTradeListLabel(tradeBugIds(trade, "request")));
       }
       await refreshAll();
     } catch (error) {
@@ -478,8 +521,8 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             const upgradeRarity = entry.rarity === "Mythisch" ? null : entry.rarity as UpgradeRarity;
             const routeUsedToday = upgradeRarity ? upgradeRouteUsedToday(upgradeRarity) : false;
             const hasEnoughToCombine = unlocked && Number.isFinite(requiredCount) && inventoryItem.count >= requiredCount;
-            const activeSquadLocked = activeSquadIdSet.has(entry.id);
-            const canCombine = hasEnoughToCombine && !routeUsedToday && !activeSquadLocked;
+            const activeSquadLocked = unlocked && activeSquadIdSet.has(entry.id) && !canCombineItem(inventoryItem, requiredCount);
+            const canCombine = hasEnoughToCombine && !routeUsedToday && canCombineItem(inventoryItem, requiredCount);
             const isMythic = unlocked && entry.rarity === "Mythisch";
             return (
               <View key={entry.id} style={[styles.card, !unlocked && styles.lockedCard, isMythic && styles.mythicCard, { borderColor: unlocked ? color : "#cbd8d1" }]}>
@@ -665,14 +708,15 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             <View style={styles.chipRow}>
               {tradeInventory.map((item) => {
                 const rarity = bugRarity(item.bugId);
-                const activeLocked = activeSquadIdSet.has(item.bugId);
-                const selected = tradeOfferId === item.bugId;
+                const activeLocked = !canSpendBugCopy(item);
+                const selected = tradeOfferIds.includes(item.bugId);
+                const maxSelected = !selected && tradeOfferIds.length >= maxTradeBugSelection;
                 return (
                   <Pressable
                     key={item.bugId}
-                    disabled={activeLocked}
-                    style={[styles.tradeBugChip, selected && styles.tradeChipActive, activeLocked && styles.activeSquadLockedChip]}
-                    onPress={() => setTradeOfferId(item.bugId)}
+                    disabled={activeLocked || maxSelected}
+                    style={[styles.tradeBugChip, selected && styles.tradeChipActive, (activeLocked || maxSelected) && styles.activeSquadLockedChip]}
+                    onPress={() => setTradeOfferIds((current) => current.includes(item.bugId) ? current.filter((bugId) => bugId !== item.bugId) : [...current, item.bugId])}
                   >
                     <View style={styles.tradeJarWrap}>
                       {activeLocked ? <BugJarArt bugId={item.bugId} rarity={rarity} size={48} unlocked /> : <BugArtImage bugId={item.bugId} size={34} />}
@@ -698,7 +742,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         ) : (
           <Text style={styles.tradeEmpty}>{t("bugdex.noTradeBugs")}</Text>
         )}
-        {!!tradeOfferId && (
+        {tradeOfferIds.length > 0 && (
           <View style={styles.tradeSection}>
             <Text style={styles.tradeLabel}>{t("bugdex.chooseColleague")}</Text>
             <View style={styles.characterGrid}>
@@ -716,25 +760,29 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             <Text style={styles.tradeLabel}>{t("bugdex.requestBug")}</Text>
             {recipientTradeInventory.length ? (
               <View style={styles.chipRow}>
-                {recipientTradeInventory.map((item) => (
-                  <Pressable key={item.bugId} style={[styles.tradeBugChip, tradeRequestId === item.bugId && styles.tradeChipActive]} onPress={() => setTradeRequestId(item.bugId)}>
-                    <BugArtImage bugId={item.bugId} size={34} />
-                    <Text style={[styles.tradeChipText, tradeRequestId === item.bugId && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                    <Text style={[styles.tradeRarityPill, { backgroundColor: rarityColors[bugRarity(item.bugId)] }]}>{rarityLabel(bugRarity(item.bugId), t)}</Text>
-                    {!ownedTradeBugIds.has(item.bugId) && (
-                      <Text style={[styles.tradeNeedPill, tradeRequestId === item.bugId && styles.tradeNeedPillActive]}>{t("bugdex.youNeedThis")}</Text>
-                    )}
-                    <Text style={[styles.bugBuffMeta, tradeRequestId === item.bugId && styles.tradeChipTextActive]} numberOfLines={2}>{bugBuffText(item.bugId)}</Text>
-                    {item.count > 1 && <Text style={[styles.tradeChipMeta, tradeRequestId === item.bugId && styles.tradeChipTextActive]}>x{item.count}</Text>}
-                  </Pressable>
-                ))}
+                {recipientTradeInventory.map((item) => {
+                  const selected = tradeRequestIds.includes(item.bugId);
+                  const maxSelected = !selected && tradeRequestIds.length >= maxTradeBugSelection;
+                  return (
+                    <Pressable key={item.bugId} disabled={maxSelected} style={[styles.tradeBugChip, selected && styles.tradeChipActive, maxSelected && styles.activeSquadLockedChip]} onPress={() => setTradeRequestIds((current) => current.includes(item.bugId) ? current.filter((bugId) => bugId !== item.bugId) : [...current, item.bugId])}>
+                      <BugArtImage bugId={item.bugId} size={34} />
+                      <Text style={[styles.tradeChipText, selected && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
+                      <Text style={[styles.tradeRarityPill, { backgroundColor: rarityColors[bugRarity(item.bugId)] }]}>{rarityLabel(bugRarity(item.bugId), t)}</Text>
+                      {!ownedTradeBugIds.has(item.bugId) && (
+                        <Text style={[styles.tradeNeedPill, selected && styles.tradeNeedPillActive]}>{t("bugdex.youNeedThis")}</Text>
+                      )}
+                      <Text style={[styles.bugBuffMeta, selected && styles.tradeChipTextActive]} numberOfLines={2}>{bugBuffText(item.bugId)}</Text>
+                      {item.count > 1 && <Text style={[styles.tradeChipMeta, selected && styles.tradeChipTextActive]}>x{item.count}</Text>}
+                    </Pressable>
+                  );
+                })}
               </View>
             ) : (
               <Text style={styles.tradeEmpty}>{t("bugdex.colleagueNoBugs")}</Text>
             )}
           </View>
         )}
-        {!!tradeRequestId && (
+        {tradeOfferIds.length > 0 && tradeRequestIds.length > 0 && (
           <Pressable style={styles.tradeButton} disabled={tradeBusy === "send"} onPress={sendTradeRequest}>
             <Text style={styles.tradeButtonText}>{tradeBusy === "send" ? "..." : t("bugdex.sendTrade")}</Text>
           </Pressable>
@@ -742,7 +790,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         {incomingTrades.map((trade) => (
           <View key={trade.id} style={styles.tradeRequest}>
             <Text style={styles.tradeRequestTitle}>{trade.fromUserName}</Text>
-            <Text style={styles.tradeRequestText}>{t("bugdex.tradeFor", { offer: bugTradeLabel(trade.offerBugId), request: bugTradeLabel(trade.requestBugId) })}</Text>
+            <Text style={styles.tradeRequestText}>{t("bugdex.tradeFor", { offer: bugTradeListLabel(tradeBugIds(trade, "offer")), request: bugTradeListLabel(tradeBugIds(trade, "request")) })}</Text>
             <View style={styles.tradeActions}>
               <Pressable style={styles.acceptButton} disabled={tradeBusy === trade.id} onPress={() => respondTrade(trade, true)}>
                 <Text style={styles.actionText}>{t("bugdex.accept")}</Text>
@@ -756,7 +804,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         {outgoingTrades.map((trade) => (
           <View key={trade.id} style={styles.tradeRequest}>
             <Text style={styles.tradeRequestTitle}>{t("bugdex.pendingTrade")}</Text>
-            <Text style={styles.tradeRequestText}>{t("bugdex.openTo", { bug: bugTradeLabel(trade.offerBugId), name: trade.toUserName })}</Text>
+            <Text style={styles.tradeRequestText}>{t("bugdex.openTo", { bug: bugTradeListLabel(tradeBugIds(trade, "offer")), name: trade.toUserName })}</Text>
             <Pressable style={styles.cancelButton} disabled={tradeBusy === trade.id} onPress={() => cancelTrade(trade)}>
               <Text style={styles.cancelButtonText}>{tradeBusy === trade.id ? "..." : t("bugdex.cancelTrade")}</Text>
             </Pressable>
@@ -772,21 +820,22 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         </View>
         <Text style={styles.tradeHint}>{t("bugdex.dailyUpgradeHint")}</Text>
         {upgradeOptions.map(({ items, rarity, targetRarity }) => {
-          const ready = items.length >= 3;
+          const requiredDifferentCount = differentUpgradeRequiredCount(rarity);
+          const ready = items.length >= requiredDifferentCount;
           const selectedBugIds = upgradeSelections[rarity].filter((bugId) => items.some((item) => item.bugId === bugId));
           const routeUsedToday = upgradeRouteUsedToday(rarity);
-          const canUpgrade = selectedBugIds.length === 3 && !routeUsedToday;
+          const canUpgrade = selectedBugIds.length === requiredDifferentCount && !routeUsedToday;
           return (
             <View key={rarity} style={[styles.upgradeRow, ready && { borderColor: routeUsedToday ? "#c6d3cc" : rarityColors[targetRarity] }, routeUsedToday && styles.upgradeRowUsed]}>
               <View style={styles.upgradeTextBlock}>
-                <Text style={styles.upgradeTitle}>{`${rarityLabel(rarity, t)} x3 -> ${rarityLabel(targetRarity, t)}`}</Text>
-                <Text style={styles.upgradeMeta}>{routeUsedToday ? t("bugdex.routeUsed") : ready ? t("bugdex.chosen", { count: selectedBugIds.length }) : t("bugdex.availableDifferent", { count: items.length })}</Text>
+                <Text style={styles.upgradeTitle}>{`${rarityLabel(rarity, t)} x${requiredDifferentCount} -> ${rarityLabel(targetRarity, t)}`}</Text>
+                <Text style={styles.upgradeMeta}>{routeUsedToday ? t("bugdex.routeUsed") : ready ? t("bugdex.chosen", { count: selectedBugIds.length, required: requiredDifferentCount }) : t("bugdex.availableDifferent", { count: items.length, required: requiredDifferentCount })}</Text>
                 {ready && !routeUsedToday && (
                   <View style={styles.upgradeChoiceGrid}>
                     {items.map((item) => {
                       const selected = selectedBugIds.includes(item.bugId);
-                      const activeLocked = activeSquadIdSet.has(item.bugId);
-                      const disabled = activeLocked || (!selected && selectedBugIds.length >= 3);
+                      const activeLocked = !canSpendBugCopy(item);
+                      const disabled = activeLocked || (!selected && selectedBugIds.length >= requiredDifferentCount);
                       const rarityColor = rarityColors[bugRarity(item.bugId)];
                       return (
                         <Pressable
@@ -820,7 +869,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
               </View>
               {ready ? (
                 <Pressable style={[styles.upgradeButton, { backgroundColor: canUpgrade ? rarityColors[targetRarity] : "#87958e" }]} disabled={!canUpgrade || upgradeBusy === rarity} onPress={() => upgradeDifferent(rarity, selectedBugIds)}>
-                  <Text style={styles.upgradeButtonText}>{upgradeBusy === rarity ? "..." : routeUsedToday ? t("common.tomorrow") : canUpgrade ? t("bugdex.upgradeAction") : t("bugdex.chooseThree")}</Text>
+                  <Text style={styles.upgradeButtonText}>{upgradeBusy === rarity ? "..." : routeUsedToday ? t("common.tomorrow") : canUpgrade ? t("bugdex.upgradeAction") : t("bugdex.chooseThree", { required: requiredDifferentCount })}</Text>
                 </Pressable>
               ) : (
                 <Text style={styles.upgradeLocked}>{t("bugdex.notYet")}</Text>

@@ -22,6 +22,8 @@ export type User = {
     helpSeen?: boolean;
     notificationPushToken?: string;
     splatCount?: number;
+  starterBoostActiveUntil?: string;
+  starterBoostGrantedAt?: string;
   bugDexCount?: number;
   commentPointCount?: number;
   legendaryBugDexCount?: number;
@@ -183,9 +185,12 @@ export type TradeRequest = {
   toUserName: string;
   offerBugId: string;
   requestBugId: string;
+  offerBugIds?: string[];
+  requestBugIds?: string[];
   status: TradeStatus;
   createdAt: string;
   updatedAt: string;
+  acceptedBugCount?: number;
   requesterSeenAt?: string;
 };
 

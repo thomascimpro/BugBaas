@@ -293,6 +293,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [soloCampaignUnlockedWave, setSoloCampaignUnlockedWave] = useState(1);
   const [soloCampaignLives, setSoloCampaignLives] = useState(soloCampaignStartingLives);
   const [squadModalVisible, setSquadModalVisible] = useState(false);
+  const [helperInfoVisible, setHelperInfoVisible] = useState(false);
   const [squadLoading, setSquadLoading] = useState(false);
   const [squadBusyId, setSquadBusyId] = useState("");
   const [now, setNow] = useState(Date.now());
@@ -1173,6 +1174,14 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const showWaitingResultModal = Boolean(activeDuel && awaitingOpponentResult && !acknowledgedWaitingDuelIds.has(activeDuel.id));
   const resultRewardPending = Boolean(activeDuel?.winnerId && isDuelParticipant(activeDuel, user) && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid));
   const showResultModal = Boolean(activeDuel?.status === "completed" && isDuelParticipant(activeDuel, user) && !duelResultSeenByUser(activeDuel, user) && !dismissedResultDuelIds.has(activeDuel.id));
+  const helperInfoItems = [
+    { body: t("duel.helperInfo.zap"), name: t("duel.helper.zap") },
+    { body: t("duel.helperInfo.sticky"), name: t("duel.helper.sticky") },
+    { body: t("duel.helperInfo.shield"), name: t("duel.helper.shield") },
+    { body: t("duel.helperInfo.splash"), name: t("duel.helper.splash") },
+    { body: t("duel.helperInfo.burst"), name: t("duel.helper.burst") },
+    { body: t("duel.helperInfo.mythic"), name: t("duel.helperInfo.mythicName") }
+  ];
   const visibleRecentDuels = duels.filter((duel) => duel.status !== "cancelled");
   const gameDuel = trainingDuel ?? playableDuel;
   const gameStartAt = gameDuel?.startAt ?? "";
@@ -1277,7 +1286,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             </View>
           ) : isRunning(gameDuel, now) ? (
             <>
-              {renderTargets(gameDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug, soloCampaign)}
+              {renderTargets(gameDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug, t, soloCampaign)}
               {renderHelperImpacts(helperImpacts)}
               {renderHelperTowers(activeSquadBonuses, helperCooldownAtRef.current, now, t)}
               {soloCampaign && (
@@ -1355,9 +1364,14 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 <Text style={styles.arenaSquadPreviewTitle}>{t("duel.bonusTitle")}</Text>
                 <Text style={styles.arenaSquadPreviewMeta}>{t("duel.squadSelectedCount", { count: activeSquadIds.length, max: maxActiveBugSquadSize })}</Text>
               </View>
-              <Pressable style={styles.smallButton} onPress={openSquadModal}>
-                <Text style={styles.smallButtonText}>{t("duel.changeSquad")}</Text>
-              </Pressable>
+              <View style={styles.helperHeaderActions}>
+                <Pressable accessibilityLabel={t("duel.helperInfoTitle")} style={styles.infoButton} onPress={() => setHelperInfoVisible(true)}>
+                  <Text style={styles.infoButtonText}>i</Text>
+                </Pressable>
+                <Pressable style={styles.smallButton} onPress={openSquadModal}>
+                  <Text style={styles.smallButtonText}>{t("duel.changeSquad")}</Text>
+                </Pressable>
+              </View>
             </View>
             {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal, { compact: true })}
           </View>
@@ -1548,7 +1562,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                   <Text style={styles.countdown}>{countdown}</Text>
                 ) : isRunning(playableDuel, now) ? (
                   <>
-                    {renderTargets(playableDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug)}
+                    {renderTargets(playableDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug, t)}
                     {renderHelperImpacts(helperImpacts)}
                     {renderHelperTowers(activeSquadBonuses, helperCooldownAtRef.current, now, t)}
                   </>
@@ -1577,9 +1591,14 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       <View style={styles.card}>
         <View style={styles.bonusHeader}>
           <Text style={styles.cardTitle}>{t("duel.bonusTitle")}</Text>
-          <Pressable style={styles.smallButton} onPress={openSquadModal}>
-            <Text style={styles.smallButtonText}>{t("duel.changeSquad")}</Text>
-          </Pressable>
+          <View style={styles.helperHeaderActions}>
+            <Pressable accessibilityLabel={t("duel.helperInfoTitle")} style={styles.infoButton} onPress={() => setHelperInfoVisible(true)}>
+              <Text style={styles.infoButtonText}>i</Text>
+            </Pressable>
+            <Pressable style={styles.smallButton} onPress={openSquadModal}>
+              <Text style={styles.smallButtonText}>{t("duel.changeSquad")}</Text>
+            </Pressable>
+          </View>
         </View>
         {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal)}
         {renderSquadEffectCards(activeSquadBonuses, t)}
@@ -1639,6 +1658,32 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             )}
             <Pressable style={sharedStyles.button} onPress={() => setSquadModalVisible(false)}>
               <Text style={sharedStyles.buttonText}>{t("common.done")}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Modal transparent animationType="fade" visible={helperInfoVisible} onRequestClose={() => setHelperInfoVisible(false)}>
+        <View style={styles.startModalBackdrop}>
+          <View style={styles.startModalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderCopy}>
+                <Text style={styles.cardTitle}>{t("duel.helperInfoTitle")}</Text>
+                <Text style={styles.modalIntro}>{t("duel.helperInfoIntro")}</Text>
+              </View>
+              <Pressable style={styles.closeButton} onPress={() => setHelperInfoVisible(false)}>
+                <Text style={styles.closeButtonText}>x</Text>
+              </Pressable>
+            </View>
+            <View style={styles.helperInfoList}>
+              {helperInfoItems.map((item) => (
+                <View key={item.name} style={styles.helperInfoItem}>
+                  <Text style={styles.helperInfoName}>{item.name}</Text>
+                  <Text style={styles.helperInfoBody}>{item.body}</Text>
+                </View>
+              ))}
+            </View>
+            <Pressable style={sharedStyles.button} onPress={() => setHelperInfoVisible(false)}>
+              <Text style={sharedStyles.buttonText}>{t("common.ok")}</Text>
             </Pressable>
           </View>
         </View>
@@ -1743,12 +1788,16 @@ function renderSquadJars(
         return (
           <Pressable key={index} disabled={!interactive} style={styles.squadJarWrap} onPress={onOpen}>
             <View style={[styles.squadJar, compact && styles.squadJarCompact, entry && { borderColor: rarityColors[entry.rarity] }]}>
+              <View pointerEvents="none" style={[styles.squadJarLid, compact && styles.squadJarLidCompact, entry && { backgroundColor: rarityColors[entry.rarity], borderColor: rarityColors[entry.rarity] }]} />
+              <View pointerEvents="none" style={[styles.squadJarGlow, compact && styles.squadJarGlowCompact, entry && { backgroundColor: `${rarityColors[entry.rarity]}26` }]} />
+              <View pointerEvents="none" style={[styles.squadJarShine, compact && styles.squadJarShineCompact]} />
               <Image accessibilityIgnoresInvertColors resizeMode="contain" source={squadJarImage} style={[styles.squadJarImage, compact && styles.squadJarImageCompact]} />
               {entry ? (
                 <>
                   <View pointerEvents="none" style={[styles.squadJarBugWrap, compact && styles.squadJarBugWrapCompact]}>
                     <BugArtImage bugId={entry.id} size={compact ? 30 : 50} />
                   </View>
+                  <Text style={[styles.squadJarRarity, compact && styles.squadJarRarityCompact, { backgroundColor: rarityColors[entry.rarity] }]} numberOfLines={1}>{rarityLabel(entry.rarity, t)}</Text>
                   {!compact && <Text style={styles.squadJarName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>}
                   {!compact && bonus && <Text style={styles.squadJarBonus} numberOfLines={1}>{squadBonusLabel(bonus.category, t)}</Text>}
                 </>
@@ -1758,6 +1807,7 @@ function renderSquadJars(
                   {!compact && <Text style={styles.squadJarBonus}>{t("bugdex.squadEmptySlot")}</Text>}
                 </>
               )}
+              <View pointerEvents="none" style={[styles.squadJarBase, compact && styles.squadJarBaseCompact]} />
             </View>
           </Pressable>
         );
@@ -1841,6 +1891,7 @@ function renderTargets(
   frozenTargets: Record<string, FrozenTarget>,
   targetTimeOffsets: Record<string, number>,
   onHit: (bugId: string) => void,
+  t: ReturnType<typeof useI18n>["t"],
   soloCampaign?: SoloCampaignConfig | null
 ) {
   return collectRenderedTargets(duel, timestamp, caughtBugIds, assist, frozenTargets, targetTimeOffsets, soloCampaign)
@@ -1877,6 +1928,9 @@ function renderTargets(
             <Text style={styles.targetFreezeText}>TIME</Text>
           </View>
         )}
+        <View pointerEvents="none" style={[styles.targetRarityBadge, { backgroundColor: rarityColors[entry.rarity] }]}>
+          <Text style={styles.targetRarityText} numberOfLines={1}>{rarityLabel(entry.rarity, t)}</Text>
+        </View>
         {bossLevel > 0 ? (
           <>
             <Image accessibilityIgnoresInvertColors resizeMode="contain" source={soloBossImageForLevel(bossLevel)} style={{ height: bugArtSize, width: bugArtSize }} />
@@ -3069,6 +3123,11 @@ const styles = StyleSheet.create({
     gap: 10,
     justifyContent: "space-between"
   },
+  helperHeaderActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8
+  },
   card: {
     backgroundColor: "#fdfefb",
     borderColor: "#d7e1d9",
@@ -3245,6 +3304,33 @@ const styles = StyleSheet.create({
   helperImpactLayer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 8
+  },
+  helperInfoBody: {
+    color: "#53645d",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16
+  },
+  helperInfoItem: {
+    backgroundColor: "#f7faf6",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    padding: 10
+  },
+  helperInfoList: {
+    gap: 8,
+    marginBottom: 14,
+    marginTop: 8
+  },
+  helperInfoName: {
+    color: "#102018",
+    fontSize: 13,
+    fontWeight: "900",
+    width: 68
   },
   helperImpactLabel: {
     alignItems: "center",
@@ -3503,6 +3589,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     marginTop: 8
+  },
+  infoButton: {
+    alignItems: "center",
+    backgroundColor: "#102018",
+    borderColor: "#d7bd57",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: "center",
+    width: 32
+  },
+  infoButtonText: {
+    color: "#d7bd57",
+    fontSize: 16,
+    fontWeight: "900",
+    lineHeight: 18
   },
   helperMuzzleFlash: {
     borderRadius: 999,
@@ -4426,6 +4528,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 12
   },
+  squadJarBaseCompact: {
+    bottom: 3,
+    height: 4,
+    left: 9,
+    right: 9
+  },
   squadJarBonus: {
     color: "#53645d",
     fontSize: 9,
@@ -4452,6 +4560,11 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: 58,
     zIndex: 1
+  },
+  squadJarGlowCompact: {
+    bottom: 7,
+    height: 32,
+    width: 38
   },
   squadJarImage: {
     bottom: -5,
@@ -4480,6 +4593,11 @@ const styles = StyleSheet.create({
     width: 54,
     zIndex: 2
   },
+  squadJarLidCompact: {
+    height: 7,
+    marginBottom: -1,
+    width: 42
+  },
   squadJarName: {
     color: "#102018",
     fontSize: 10,
@@ -4488,6 +4606,28 @@ const styles = StyleSheet.create({
     textAlign: "center",
     width: "100%",
     zIndex: 4
+  },
+  squadJarRarity: {
+    borderRadius: 999,
+    color: "#ffffff",
+    fontSize: 8,
+    fontWeight: "900",
+    marginTop: 2,
+    maxWidth: "92%",
+    overflow: "hidden",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    textAlign: "center",
+    zIndex: 4
+  },
+  squadJarRarityCompact: {
+    bottom: 2,
+    fontSize: 7,
+    left: 5,
+    marginTop: 0,
+    paddingHorizontal: 3,
+    position: "absolute",
+    right: 5
   },
   squadJarShine: {
     backgroundColor: "rgba(255,255,255,0.7)",
@@ -4498,6 +4638,12 @@ const styles = StyleSheet.create({
     top: 8,
     width: 10,
     zIndex: 2
+  },
+  squadJarShineCompact: {
+    height: 24,
+    left: 6,
+    top: 6,
+    width: 7
   },
   squadJars: {
     flexDirection: "row",
@@ -4609,6 +4755,25 @@ const styles = StyleSheet.create({
     shadowOffset: { height: 0, width: 0 },
     shadowOpacity: 0.45,
     shadowRadius: 8
+  },
+  targetRarityBadge: {
+    borderColor: "rgba(255,255,255,0.92)",
+    borderRadius: 999,
+    borderWidth: 1,
+    left: -5,
+    minWidth: 40,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    position: "absolute",
+    top: -11,
+    zIndex: 5
+  },
+  targetRarityText: {
+    color: "#ffffff",
+    fontSize: 7,
+    fontWeight: "900",
+    lineHeight: 9,
+    textAlign: "center"
   },
   targetSwatter: {
     left: 0,

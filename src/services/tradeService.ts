@@ -4,6 +4,7 @@ import { BugDexInventoryItem, TradeRequest, User } from "../types";
 import { entryByBugId, listBugDexInventory } from "./bugDexService";
 
 const demoTrades: TradeRequest[] = [];
+const maxTradeBugIdsPerSide = 6;
 
 function nowIso() {
   return new Date().toISOString();
@@ -18,13 +19,24 @@ function withTradeId(item: BugDexInventoryItem, tradeId: string): BugDexInventor
   return { ...item, lastTradeId: tradeId, lastUnlockedAt: nowIso() };
 }
 
-function addBug(item: BugDexInventoryItem | null, bugId: string, rarity: string, tradeId: string): BugDexInventoryItem {
+function normalizeTradeBugIds(trade: Pick<TradeRequest, "offerBugId" | "requestBugId" | "offerBugIds" | "requestBugIds">, side: "offer" | "request"): string[] {
+  const ids = side === "offer" ? trade.offerBugIds : trade.requestBugIds;
+  const fallback = side === "offer" ? trade.offerBugId : trade.requestBugId;
+  const normalized = (Array.isArray(ids) && ids.length ? ids : [fallback]).filter((bugId): bugId is string => typeof bugId === "string" && bugId.length > 0);
+  return normalized.length ? normalized : [fallback];
+}
+
+function aggregateBugIds(bugIds: string[]): Map<string, number> {
+  return bugIds.reduce((counts, bugId) => counts.set(bugId, (counts.get(bugId) ?? 0) + 1), new Map<string, number>());
+}
+
+function addBug(item: BugDexInventoryItem | null, bugId: string, rarity: string, tradeId: string, amount = 1): BugDexInventoryItem {
   const now = nowIso();
   return item
-    ? withTradeId({ ...item, count: item.count + 1, sources: Array.from(new Set([...item.sources, "trade"])) }, tradeId)
+    ? withTradeId({ ...item, count: item.count + amount, sources: Array.from(new Set([...item.sources, "trade"])) }, tradeId)
     : {
         bugId,
-        count: 1,
+        count: amount,
         firstUnlockedAt: now,
         lastUnlockedAt: now,
         rarity,
@@ -33,9 +45,9 @@ function addBug(item: BugDexInventoryItem | null, bugId: string, rarity: string,
       };
 }
 
-function removeTradeBug(item: BugDexInventoryItem, tradeId: string): BugDexInventoryItem {
-  if (item.count < 1) throw new Error("Deze bug ontbreekt.");
-  return withTradeId({ ...item, count: item.count - 1 }, tradeId);
+function removeTradeBug(item: BugDexInventoryItem, tradeId: string, amount = 1): BugDexInventoryItem {
+  if (item.count < amount) throw new Error("Deze bug ontbreekt.");
+  return withTradeId({ ...item, count: item.count - amount }, tradeId);
 }
 
 export async function listTradeRequests(user: User): Promise<TradeRequest[]> {
@@ -48,16 +60,26 @@ export async function listTradeRequests(user: User): Promise<TradeRequest[]> {
   return mergeTradeLists([...fromSnapshot.docs, ...toSnapshot.docs].map((item) => item.data() as TradeRequest));
 }
 
-export async function createTradeRequest(fromUser: User, toUser: User, offerBugId: string, requestBugId: string): Promise<TradeRequest> {
+export async function createTradeRequest(fromUser: User, toUser: User, offerBugIdsInput: string[] | string, requestBugIdsInput: string[] | string): Promise<TradeRequest> {
   if (fromUser.uid === toUser.uid) throw new Error("Kies een collega om mee te ruilen.");
-  if (offerBugId === requestBugId) throw new Error("Kies twee verschillende bugs.");
+  const offerBugIds = (Array.isArray(offerBugIdsInput) ? offerBugIdsInput : [offerBugIdsInput]).filter(Boolean);
+  const requestBugIds = (Array.isArray(requestBugIdsInput) ? requestBugIdsInput : [requestBugIdsInput]).filter(Boolean);
+  if (!offerBugIds.length || !requestBugIds.length) throw new Error("Kies bugs om te ruilen.");
+  if (offerBugIds.length > maxTradeBugIdsPerSide || requestBugIds.length > maxTradeBugIdsPerSide) throw new Error("Kies maximaal 6 bugs per kant.");
+  if (offerBugIds.some((bugId) => requestBugIds.includes(bugId))) throw new Error("Kies twee verschillende bugs.");
 
   const inventory = await listBugDexInventory(fromUser);
-  const offer = inventory.find((item) => item.bugId === offerBugId);
-  if (!offer || offer.count < 1) throw new Error("Je hebt deze bug niet.");
+  const offerCounts = aggregateBugIds(offerBugIds);
+  for (const [bugId, amount] of offerCounts) {
+    const offer = inventory.find((item) => item.bugId === bugId);
+    if (!offer || offer.count < amount) throw new Error("Je hebt deze bug niet.");
+  }
   const recipientInventory = await listBugDexInventory(toUser);
-  const requested = recipientInventory.find((item) => item.bugId === requestBugId);
-  if (!requested || requested.count < 1) throw new Error("Deze collega heeft deze bug niet meer.");
+  const requestCounts = aggregateBugIds(requestBugIds);
+  for (const [bugId, amount] of requestCounts) {
+    const requested = recipientInventory.find((item) => item.bugId === bugId);
+    if (!requested || requested.count < amount) throw new Error("Deze collega heeft deze bug niet meer.");
+  }
 
   const now = nowIso();
   const baseTrade: TradeRequest = {
@@ -66,8 +88,10 @@ export async function createTradeRequest(fromUser: User, toUser: User, offerBugI
     fromUserName: fromUser.displayName,
     toUserId: toUser.uid,
     toUserName: toUser.displayName,
-    offerBugId,
-    requestBugId,
+    offerBugId: offerBugIds[0],
+    requestBugId: requestBugIds[0],
+    offerBugIds,
+    requestBugIds,
     status: "Open",
     createdAt: now,
     updatedAt: now
@@ -98,19 +122,11 @@ export async function respondToTradeRequest(user: User, trade: TradeRequest, acc
     return rejected;
   }
 
-  const offerEntry = entryByBugId(trade.offerBugId);
-  const requestEntry = entryByBugId(trade.requestBugId);
-  if (!offerEntry || !requestEntry) throw new Error("BugDex item niet gevonden.");
-
   if (!isFirebaseConfigured) {
     throw new Error("Demo ruilen is alleen beschikbaar met Firebase.");
   }
 
   const tradeRef = doc(db, "trades", trade.id);
-  const fromOfferRef = doc(db, "users", trade.fromUserId, "bugdex", trade.offerBugId);
-  const toRequestRef = doc(db, "users", trade.toUserId, "bugdex", trade.requestBugId);
-  const fromRequestRef = doc(db, "users", trade.fromUserId, "bugdex", trade.requestBugId);
-  const toOfferRef = doc(db, "users", trade.toUserId, "bugdex", trade.offerBugId);
 
   return runTransaction(db, async (transaction) => {
     const freshTradeSnapshot = await transaction.get(tradeRef);
@@ -119,27 +135,56 @@ export async function respondToTradeRequest(user: User, trade: TradeRequest, acc
     if (freshTrade.status !== "Open") throw new Error("Dit ruilverzoek is al verwerkt.");
     if (freshTrade.toUserId !== user.uid) throw new Error("Dit ruilverzoek is niet voor jou.");
 
-    const fromOfferSnapshot = await transaction.get(fromOfferRef);
-    const toRequestSnapshot = await transaction.get(toRequestRef);
-    if (!fromOfferSnapshot.exists() || !toRequestSnapshot.exists()) throw new Error("Een ruilbug ontbreekt.");
+    const normalizedOfferBugIds = normalizeTradeBugIds(freshTrade, "offer");
+    const normalizedRequestBugIds = normalizeTradeBugIds(freshTrade, "request");
+    const offerCounts = aggregateBugIds(normalizedOfferBugIds);
+    const requestCounts = aggregateBugIds(normalizedRequestBugIds);
+    const offerBugIds = Array.from(offerCounts.keys());
+    const requestBugIds = Array.from(requestCounts.keys());
+    const missingEntry = [...offerBugIds, ...requestBugIds].some((bugId) => !entryByBugId(bugId));
+    if (missingEntry) throw new Error("BugDex item niet gevonden.");
 
-    const fromOffer = fromOfferSnapshot.data() as BugDexInventoryItem;
-    const toRequest = toRequestSnapshot.data() as BugDexInventoryItem;
-    const fromRequestSnapshot = await transaction.get(fromRequestRef);
-    const toOfferSnapshot = await transaction.get(toOfferRef);
-    const fromRequest = fromRequestSnapshot.exists() ? fromRequestSnapshot.data() as BugDexInventoryItem : null;
-    const toOffer = toOfferSnapshot.exists() ? toOfferSnapshot.data() as BugDexInventoryItem : null;
+    const fromOfferRefs = offerBugIds.map((bugId) => doc(db, "users", freshTrade.fromUserId, "bugdex", bugId));
+    const toRequestRefs = requestBugIds.map((bugId) => doc(db, "users", freshTrade.toUserId, "bugdex", bugId));
+    const fromRequestRefs = requestBugIds.map((bugId) => doc(db, "users", freshTrade.fromUserId, "bugdex", bugId));
+    const toOfferRefs = offerBugIds.map((bugId) => doc(db, "users", freshTrade.toUserId, "bugdex", bugId));
+    const fromOfferSnapshots = await Promise.all(fromOfferRefs.map((ref) => transaction.get(ref)));
+    const toRequestSnapshots = await Promise.all(toRequestRefs.map((ref) => transaction.get(ref)));
+    const fromRequestSnapshots = await Promise.all(fromRequestRefs.map((ref) => transaction.get(ref)));
+    const toOfferSnapshots = await Promise.all(toOfferRefs.map((ref) => transaction.get(ref)));
     const updatedAt = nowIso();
 
-    const nextFromOffer = removeTradeBug(fromOffer, trade.id);
-    const nextToRequest = removeTradeBug(toRequest, trade.id);
-    transaction.set(fromOfferRef, nextFromOffer);
-    transaction.set(toRequestRef, nextToRequest);
-    transaction.set(fromRequestRef, addBug(fromRequest, trade.requestBugId, requestEntry.rarity, trade.id));
-    transaction.set(toOfferRef, addBug(toOffer, trade.offerBugId, offerEntry.rarity, trade.id));
-    transaction.update(tradeRef, { status: "Geaccepteerd", updatedAt });
+    offerBugIds.forEach((bugId, index) => {
+      const snapshot = fromOfferSnapshots[index];
+      if (!snapshot.exists()) throw new Error("Een ruilbug ontbreekt.");
+      const item = snapshot.data() as BugDexInventoryItem;
+      transaction.set(fromOfferRefs[index], removeTradeBug(item, freshTrade.id, offerCounts.get(bugId) ?? 1));
+    });
+    requestBugIds.forEach((bugId, index) => {
+      const snapshot = toRequestSnapshots[index];
+      if (!snapshot.exists()) throw new Error("Een ruilbug ontbreekt.");
+      const item = snapshot.data() as BugDexInventoryItem;
+      transaction.set(toRequestRefs[index], removeTradeBug(item, freshTrade.id, requestCounts.get(bugId) ?? 1));
+    });
+    requestBugIds.forEach((bugId, index) => {
+      const existing = fromRequestSnapshots[index].exists() ? fromRequestSnapshots[index].data() as BugDexInventoryItem : null;
+      const entry = entryByBugId(bugId);
+      if (!entry) return;
+      transaction.set(fromRequestRefs[index], addBug(existing, bugId, entry.rarity, freshTrade.id, requestCounts.get(bugId) ?? 1));
+    });
+    offerBugIds.forEach((bugId, index) => {
+      const existing = toOfferSnapshots[index].exists() ? toOfferSnapshots[index].data() as BugDexInventoryItem : null;
+      const entry = entryByBugId(bugId);
+      if (!entry) return;
+      transaction.set(toOfferRefs[index], addBug(existing, bugId, entry.rarity, freshTrade.id, offerCounts.get(bugId) ?? 1));
+    });
+    const acceptedUpdate: Partial<TradeRequest> = { status: "Geaccepteerd", updatedAt };
+    if (normalizedOfferBugIds.length > 1 || normalizedRequestBugIds.length > 1) {
+      acceptedUpdate.acceptedBugCount = normalizedOfferBugIds.length + normalizedRequestBugIds.length;
+    }
+    transaction.update(tradeRef, acceptedUpdate);
 
-    return { ...freshTrade, status: "Geaccepteerd", updatedAt };
+    return { ...freshTrade, ...acceptedUpdate };
   });
 }
 

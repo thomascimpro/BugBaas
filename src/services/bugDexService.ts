@@ -5,6 +5,7 @@ import { bugLampStatus, shouldAwardBugLamp, withAwardedBugLamp } from "./bugLamp
 import { activeBugSquadBonuses } from "./bugSquadService";
 import { badgesForUser, BugDexEntry, BugDexRarity, bugDexEntries, isBugDexEntryUnlocked, titleForPoints } from "./pointsService";
 import { dailyLoginXp } from "./rewardBalanceService";
+import { starterBoostedXp } from "./starterBoostService";
 
 export type BugDexDropSource =
   | "daily_login"
@@ -74,20 +75,20 @@ const dropChances: Record<BugDexDropSource, number> = {
 
 const rarityWeights: Record<BugDexDropSource, Array<[BugDexRarity, number]>> = {
   daily_login: [["Gewoon", 100]],
-  bug_reported: [["Gewoon", 54.1], ["Zeldzaam", 31], ["Episch", 12], ["Legendarisch", 2.5], ["Mythisch", 0.4]],
-  comment: [["Gewoon", 68], ["Zeldzaam", 27], ["Episch", 4.7], ["Legendarisch", 0.3]],
-  status_update: [["Zeldzaam", 67], ["Episch", 30], ["Legendarisch", 2.7], ["Mythisch", 0.3]],
-  bug_fixed: [["Gewoon", 18], ["Zeldzaam", 50], ["Episch", 25], ["Legendarisch", 6.6], ["Mythisch", 0.4]],
-  upvote_given: [["Gewoon", 75], ["Zeldzaam", 24.5], ["Episch", 0.5]],
+  bug_reported: [["Gewoon", 58], ["Zeldzaam", 31], ["Episch", 10], ["Legendarisch", 1]],
+  comment: [["Gewoon", 69.4], ["Zeldzaam", 27], ["Episch", 3.5], ["Legendarisch", 0.1]],
+  status_update: [["Zeldzaam", 72.3], ["Episch", 26.5], ["Legendarisch", 1.2]],
+  bug_fixed: [["Gewoon", 25], ["Zeldzaam", 50], ["Episch", 22], ["Legendarisch", 3]],
+  upvote_given: [["Gewoon", 75], ["Zeldzaam", 24.7], ["Episch", 0.3]],
   profile_view: [["Gewoon", 88], ["Zeldzaam", 12]],
-  bug_splat: [["Gewoon", 65.1], ["Zeldzaam", 25], ["Episch", 7.5], ["Legendarisch", 2], ["Mythisch", 0.4]],
-  weekly_mission: [["Zeldzaam", 54], ["Episch", 36], ["Legendarisch", 9.6], ["Mythisch", 0.4]],
+  bug_splat: [["Gewoon", 69], ["Zeldzaam", 25], ["Episch", 5.3], ["Legendarisch", 0.7]],
+  weekly_mission: [["Zeldzaam", 65], ["Episch", 31], ["Legendarisch", 4]],
   weekly_mission_common: [["Gewoon", 100]],
   weekly_mission_rare: [["Zeldzaam", 100]],
   solo_boss_common: [["Gewoon", 100]],
   solo_boss_rare: [["Zeldzaam", 100]],
   solo_campaign_clear: [["Zeldzaam", 100]],
-  duel_win: [["Gewoon", 68], ["Zeldzaam", 24], ["Episch", 6.5], ["Legendarisch", 1.1], ["Mythisch", 0.4]],
+  duel_win: [["Gewoon", 70.5], ["Zeldzaam", 24], ["Episch", 5], ["Legendarisch", 0.5]],
   combine: [["Zeldzaam", 100]]
 };
 
@@ -124,7 +125,7 @@ export async function listBugDexInventory(user: User): Promise<BugDexInventoryIt
 }
 
 export async function syncPointUnlockedBugDex(user: Pick<User, "uid" | "totalPoints" | "bugCount">): Promise<void> {
-  const unlockedEntries = bugDexEntries.filter((entry) => isBugDexEntryUnlocked(entry, user));
+  const unlockedEntries = bugDexEntries.filter((entry) => entry.rarity !== "Mythisch" && isBugDexEntryUnlocked(entry, user));
   if (!unlockedEntries.length) return;
   const now = new Date().toISOString();
 
@@ -263,7 +264,7 @@ export async function claimDailyLoginBug(user: User, preparedDrop?: BugDexDropRe
     const userSnapshot = await transaction.get(userRef);
     const currentUser = userSnapshot.exists() ? userSnapshot.data() as User : user;
     const lampUser = shouldAwardBugLamp(streakDay) ? withAwardedBugLamp(currentUser) : { ...currentUser, bugLampCount: currentUser.bugLampCount ?? 0 };
-    const totalPoints = Math.max(0, lampUser.totalPoints + dailyLoginXp);
+    const totalPoints = Math.max(0, lampUser.totalPoints + starterBoostedXp(lampUser, dailyLoginXp));
     const updatedUser = {
       ...lampUser,
       totalPoints,
@@ -429,11 +430,12 @@ export async function combineBugDexDuplicates(user: User, bugId: string): Promis
 
 export async function combineDifferentBugDexUpgrade(user: User, bugIds: string[]): Promise<BugDexDropResult> {
   const uniqueBugIds = Array.from(new Set(bugIds));
-  if (uniqueBugIds.length !== 3) throw new Error("Kies 3 verschillende bugs.");
   const sourceEntries = uniqueBugIds.map(entryByBugId);
   if (sourceEntries.some((entry) => !entry)) throw new Error("Bug niet gevonden.");
   const sourceRarity = sourceEntries[0]?.rarity;
   if (!sourceRarity || sourceEntries.some((entry) => entry?.rarity !== sourceRarity)) throw new Error("Kies 3 bugs van dezelfde rarity.");
+  const requiredCount = differentUpgradeRequiredCount(sourceRarity);
+  if (uniqueBugIds.length !== requiredCount) throw new Error(`Kies ${requiredCount} verschillende bugs.`);
   const targetRarity = nextRarity(sourceRarity);
   if (!targetRarity) throw new Error("Mythisch kan niet verder upgraden.");
 
@@ -496,7 +498,7 @@ async function grantDailyReward(user: User, streakDay: number, entry = pickDaily
   const daysUntilBetterReward = daysUntilNextDailyStreakReward(streakDay);
   const result = await grantSpecificBug(user, entry, "daily_login");
   const lampUser = shouldAwardBugLamp(streakDay) ? withAwardedBugLamp(user) : { ...user, bugLampCount: user.bugLampCount ?? 0 };
-  const totalPoints = Math.max(0, lampUser.totalPoints + dailyLoginXp);
+  const totalPoints = Math.max(0, lampUser.totalPoints + starterBoostedXp(lampUser, dailyLoginXp));
   const updatedUser = { ...lampUser, totalPoints, title: titleForPoints(totalPoints) };
   updatedUser.badges = badgesForUser(updatedUser);
   return { ...result, streakDay, daysUntilBetterReward, updatedUser };
@@ -619,8 +621,12 @@ export function combineRequiredCount(rarity: BugDexRarity): number {
   if (rarity === "Gewoon") return 3;
   if (rarity === "Zeldzaam") return 4;
   if (rarity === "Episch") return 5;
-  if (rarity === "Legendarisch") return 6;
+  if (rarity === "Legendarisch") return 10;
   return Number.POSITIVE_INFINITY;
+}
+
+export function differentUpgradeRequiredCount(rarity: BugDexRarity): number {
+  return rarity === "Legendarisch" ? 10 : 3;
 }
 
 function nextRarity(rarity: BugDexRarity): BugDexRarity | null {

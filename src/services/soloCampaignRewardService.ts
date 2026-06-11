@@ -3,6 +3,7 @@ import { db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, User } from "../types";
 import { BugDexDropResult, BugDexDropSource, pickBugDexRewardEntry } from "./bugDexService";
 import { badgesForUser, titleForPoints } from "./pointsService";
+import { starterBoostedXp } from "./starterBoostService";
 
 type SoloBossDailyReward =
   | { kind: "xp"; xp: number }
@@ -36,7 +37,7 @@ export async function claimSoloCampaignBossDailyReward(user: User, bossLevel: nu
     if (demoSoloBossClaims.has(demoKey)) return null;
     demoSoloBossClaims.add(demoKey);
     if (reward.kind === "xp") {
-      const totalPoints = Math.max(0, user.totalPoints + reward.xp);
+      const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, reward.xp));
       const updated = { ...user, totalPoints, title: titleForPoints(totalPoints) };
       updated.badges = badgesForUser(updated);
       return { reward, user: updated };
@@ -69,7 +70,7 @@ export async function claimSoloCampaignBossDailyReward(user: User, bossLevel: nu
     let drop: BugDexDropResult | undefined;
 
     if (reward.kind === "xp") {
-      const totalPoints = Math.max(0, current.totalPoints + reward.xp);
+      const totalPoints = Math.max(0, current.totalPoints + starterBoostedXp(current, reward.xp));
       updated = { ...current, totalPoints, title: titleForPoints(totalPoints) };
       updated.badges = badgesForUser(updated);
       transaction.update(userRef, {

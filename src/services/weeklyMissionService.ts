@@ -4,6 +4,7 @@ import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
 import { BugDexDropResult, BugDexDropSource, pickBugDexRewardEntry, grantBugDexReward } from "./bugDexService";
 import { badgesForUser, titleForPoints } from "./pointsService";
 import { weeklyMissionBonusXp } from "./rewardBalanceService";
+import { starterBoostedXp } from "./starterBoostService";
 
 export type WeeklyMission = {
   id: string;
@@ -196,7 +197,7 @@ export async function claimWeeklyMissionBonus(user: User, missions: WeeklyMissio
   if (!isFirebaseConfigured) {
     if (demoWeeklyClaims.has(claimKey)) return null;
     demoWeeklyClaims.add(claimKey);
-    const totalPoints = Math.max(0, user.totalPoints + weeklyMissionBonusXp);
+    const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, weeklyMissionBonusXp));
     const updated = { ...user, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
     return updated;
@@ -209,7 +210,7 @@ export async function claimWeeklyMissionBonus(user: User, missions: WeeklyMissio
     const claimSnapshot = await transaction.get(claimRef);
     if (!userSnapshot.exists() || claimSnapshot.exists()) return null;
     const current = userSnapshot.data() as User;
-    const totalPoints = Math.max(0, current.totalPoints + weeklyMissionBonusXp);
+    const totalPoints = Math.max(0, current.totalPoints + starterBoostedXp(current, weeklyMissionBonusXp));
     const updated = { ...current, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
     transaction.set(claimRef, {
@@ -236,7 +237,7 @@ export async function claimWeeklyMissionBonusWithReward(user: User, missions: We
 
   if (!isFirebaseConfigured) {
     if (demoWeeklyClaims.has(claimKey)) return null;
-    const totalPoints = Math.max(0, user.totalPoints + weeklyMissionBonusXp);
+    const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, weeklyMissionBonusXp));
     const updated = { ...user, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
     const drop = await grantBugDexReward(updated, "weekly_mission");
@@ -260,7 +261,7 @@ export async function claimWeeklyMissionBonusWithReward(user: User, missions: We
 
     const current = userSnapshot.data() as User;
     const shouldAwardXp = !existingClaim;
-    const totalPoints = shouldAwardXp ? Math.max(0, current.totalPoints + weeklyMissionBonusXp) : current.totalPoints;
+    const totalPoints = shouldAwardXp ? Math.max(0, current.totalPoints + starterBoostedXp(current, weeklyMissionBonusXp)) : current.totalPoints;
     const updated = { ...current, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
 
@@ -319,7 +320,7 @@ export async function claimWeeklyMissionReward(user: User, mission: WeeklyMissio
       const drop = await grantBugDexReward(user, mission.rewardSource);
       return { drop, user };
     }
-    const totalPoints = Math.max(0, user.totalPoints + mission.rewardXp);
+    const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, mission.rewardXp));
     const updated = { ...user, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
     return { user: updated };
@@ -335,7 +336,7 @@ export async function claimWeeklyMissionReward(user: User, mission: WeeklyMissio
     const rewardSnapshot = rewardRef ? await transaction.get(rewardRef) : null;
     if (!userSnapshot.exists() || claimSnapshot.exists()) return null;
     const current = userSnapshot.data() as User;
-    const totalPoints = Math.max(0, current.totalPoints + (mission.rewardType === "xp" ? mission.rewardXp : 0));
+    const totalPoints = Math.max(0, current.totalPoints + starterBoostedXp(current, mission.rewardType === "xp" ? mission.rewardXp : 0));
     const updated = { ...current, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
 
