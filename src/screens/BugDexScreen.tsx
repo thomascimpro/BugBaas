@@ -61,6 +61,7 @@ const emptyDailyUpgradeUsage: DailyUpgradeUsage = {
 };
 const activeBugSquadHeroImage = require("../../assets/generated/active-bug-squad-selection-hd.jpg");
 const bugDexWorkshopImage = require("../../assets/generated/bugdex-workshop-shortcut.png");
+const bugDexUpgradeImage = require("../../assets/generated/bugdex_mythic_frame_hd.png");
 const attackIconImages: Record<BugSquadAttackKind, number> = {
   burst: require("../../assets/generated/duel_effect_slash_hd.png"),
   shield: require("../../assets/generated/duel_effect_shield_hd.png"),
@@ -122,6 +123,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   const [tradeError, setTradeError] = useState("");
   const [showLocked, setShowLocked] = useState(false);
   const [tradeExpanded, setTradeExpanded] = useState(false);
+  const [upgradeExpanded, setUpgradeExpanded] = useState(false);
   const [upgradeBusy, setUpgradeBusy] = useState("");
   const [upgradeError, setUpgradeError] = useState("");
   const [dailyUpgradeUsage, setDailyUpgradeUsage] = useState<DailyUpgradeUsage>(emptyDailyUpgradeUsage);
@@ -719,8 +721,8 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
       >
         <Image resizeMode="cover" source={bugDexWorkshopImage} style={styles.workshopFeatureImage} />
         <View style={styles.workshopFeatureBody}>
-          <Text style={styles.workshopFeatureTitle}>{t("bugdex.tradeAndUpgrades")}</Text>
-          <Text style={styles.workshopFeatureMeta}>{t("bugdex.tradeMeta", { incoming: incomingTrades.length, open: outgoingTrades.length, duplicate: duplicateCount })}</Text>
+          <Text style={styles.workshopFeatureTitle}>{t("bugdex.trade")}</Text>
+          <Text style={styles.workshopFeatureMeta}>{t("bugdex.tradeOpenMeta", { incoming: incomingTrades.length, open: outgoingTrades.length })}</Text>
         </View>
         <View style={styles.workshopFeatureAction}>
           <Text style={styles.workshopFeatureActionText}>{tradeExpanded ? t("common.close") : t("common.open")}</Text>
@@ -728,7 +730,6 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
       </Pressable>
 
       {tradeExpanded && (
-        <>
       <View style={styles.tradePanel}>
         <View style={styles.tradeHeader}>
           <Text style={styles.tradeTitle}>{t("bugdex.trade")}</Text>
@@ -874,7 +875,23 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         )}
         {!!tradeError && <Text style={sharedStyles.error}>{serviceErrorText(tradeError)}</Text>}
       </View>
+      )}
 
+      <Pressable
+        style={[styles.workshopFeatureCard, upgradeExpanded && styles.workshopFeatureCardActive]}
+        onPress={() => setUpgradeExpanded((current) => !current)}
+      >
+        <Image resizeMode="cover" source={bugDexUpgradeImage} style={styles.workshopFeatureImage} />
+        <View style={styles.workshopFeatureBody}>
+          <Text style={styles.workshopFeatureTitle}>{t("bugdex.upgrades")}</Text>
+          <Text style={styles.workshopFeatureMeta}>{t("bugdex.threeDifferent")}</Text>
+        </View>
+        <View style={styles.workshopFeatureAction}>
+          <Text style={styles.workshopFeatureActionText}>{upgradeExpanded ? t("common.close") : t("common.open")}</Text>
+        </View>
+      </Pressable>
+
+      {upgradeExpanded && (
       <View style={styles.upgradePanel}>
         <View style={styles.tradeHeader}>
           <Text style={styles.tradeTitle}>{t("bugdex.upgrades")}</Text>
@@ -941,7 +958,6 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         })}
         {!!upgradeError && <Text style={sharedStyles.error}>{serviceErrorText(upgradeError)}</Text>}
       </View>
-        </>
       )}
 
       <View style={styles.tierPanel}>

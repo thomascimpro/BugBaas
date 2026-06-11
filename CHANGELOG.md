@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.32
+
+- BugDex heeft nu aparte dropdowns voor Ruilen en Upgrades, zodat de twee flows niet meer samen in een lange workshop zitten.
+- Home toont de BugBaas Wiki als mooiere HD beeldknop.
+
 ## 2.2.31
 
 - Organisatieleden toevoegen werkt nu op de geselecteerde username/userId en doet geen brede invite-checks meer op verborgen e-mailvelden.
