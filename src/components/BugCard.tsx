@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BugReport, ReportType } from "../types";
 import { BugArtId } from "../services/bugArt";
 import { useI18n } from "../services/i18n";
+import { defaultOrganizationId } from "../services/organizationService";
 import { BugArtImage } from "./BugArtImage";
 import { SeverityBadge } from "./SeverityBadge";
 import { StatusBadge } from "./StatusBadge";
@@ -34,6 +35,8 @@ export function BugCard({ bug, onPress }: { bug: BugReport; onPress: () => void 
   const upvotes = bug.upvoteCount ?? 0;
   const reportType = bug.reportType ?? "bug";
   const meta = reportTypeMeta[reportType];
+  const isOrganizationReport = Boolean(bug.organizationId && bug.organizationId !== defaultOrganizationId);
+  const organizationName = bug.organizationName || bug.organizationId || "";
 
   return (
     <Pressable style={[styles.card, { borderColor: meta.color }]} onPress={onPress}>
@@ -51,6 +54,11 @@ export function BugCard({ bug, onPress }: { bug: BugReport; onPress: () => void 
           <View style={[styles.typeBadge, { backgroundColor: meta.background, borderColor: meta.color }]}>
             <Text style={[styles.typeBadgeText, { color: meta.color }]}>{t(meta.labelKey)}</Text>
           </View>
+          {isOrganizationReport && (
+            <View style={styles.organizationBadge}>
+              <Text style={styles.organizationBadgeText} numberOfLines={1}>{t("bug.organizationBadge", { name: organizationName })}</Text>
+            </View>
+          )}
           {reportType === "bug" && (
             <>
               <SeverityBadge severity={bug.severity} />
@@ -151,6 +159,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10
   },
   typeBadgeText: {
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  organizationBadge: {
+    alignItems: "center",
+    backgroundColor: "#102018",
+    borderColor: "#d7bd57",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    maxWidth: "100%",
+    minHeight: 30,
+    paddingHorizontal: 10
+  },
+  organizationBadgeText: {
+    color: "#d7bd57",
     fontSize: 11,
     fontWeight: "900"
   },

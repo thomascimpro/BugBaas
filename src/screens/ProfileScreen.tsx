@@ -311,8 +311,9 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
               ))}
             </View>
           )}
-          {isPublicUser && onCreateOrganization && (
+          {onCreateOrganization && (
             <View style={styles.organizationForm}>
+              <Text style={styles.organizationSectionTitle}>{t("profile.organizationCreateTitle")}</Text>
               <TextInput
                 autoCapitalize="words"
                 placeholder={t("profile.organizationNamePlaceholder")}
@@ -324,7 +325,6 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
               <Pressable style={[sharedStyles.button, organizationBusy && styles.disabledButton]} disabled={organizationBusy} onPress={submitOrganization}>
                 {organizationBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("profile.createOrganization")}</Text>}
               </Pressable>
-              {!!organizationError && <Text style={sharedStyles.error}>{tr(organizationError)}</Text>}
             </View>
           )}
           {!isPublicUser && (
@@ -332,7 +332,8 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
               <Text style={styles.organizationHelp}>{t("profile.organizationHelp")}</Text>
               {canManageOrganization && (
                 <View style={styles.organizationSection}>
-                  <Text style={styles.organizationSectionTitle}>{t("profile.organizationInvite")}</Text>
+                  <Text style={styles.organizationSectionTitle}>{t("profile.organizationManageMembers")}</Text>
+                  <Text style={styles.organizationHelp}>{t("profile.organizationManageMembersHelp")}</Text>
                   <TextInput
                     autoCapitalize="none"
                     keyboardType="email-address"
@@ -343,7 +344,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
                     onChangeText={setInviteEmail}
                   />
                   <Pressable style={[sharedStyles.button, inviteBusy === "invite" && styles.disabledButton]} disabled={Boolean(inviteBusy)} onPress={submitInvite}>
-                    {inviteBusy === "invite" ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("profile.organizationInviteSend")}</Text>}
+                    {inviteBusy === "invite" ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("profile.organizationAddMember")}</Text>}
                   </Pressable>
                 </View>
               )}
@@ -367,6 +368,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
               )}
               <View style={styles.organizationSection}>
                 <Text style={styles.organizationSectionTitle}>{t("profile.organizationMembers")}</Text>
+                {canManageOrganization && <Text style={styles.organizationHelp}>{t("profile.organizationRemoveHelp")}</Text>}
                 {organizationMembers.map((member) => (
                   <View key={member.uid} style={styles.organizationListItem}>
                     <View style={styles.organizationListText}>
@@ -381,9 +383,9 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
                   </View>
                 ))}
               </View>
-              {!!organizationError && <Text style={sharedStyles.error}>{tr(organizationError)}</Text>}
             </>
           )}
+          {!!organizationError && <Text style={sharedStyles.error}>{tr(organizationError)}</Text>}
         </View>
       )}
 

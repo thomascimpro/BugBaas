@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.20
+
+- Organisatiebeheer is zichtbaarer gemaakt: admins kunnen organisaties aanmaken, members beheren en org-meldingen herkennen op cards en details.
+- BugDex toont je drie actieve helpers weer als HD potjes in de Bug Squad kaart.
+- Arena toont helperpotjes ook bij actieve of wachtende duels.
+- Duel wacht-score verschijnt alleen nog voor je eigen verzonden duel zolang de tegenstander nog moet spelen.
+- Duel score-submit bewaart een veilige score op basis van gevangen bugs en voorkomt dat een late `0` een betere server-score overschrijft.
+
 ## 2.2.19
 
 - Organisaties ondersteunen nu meerdere members per organisatie en meerdere organisaties per gebruiker.

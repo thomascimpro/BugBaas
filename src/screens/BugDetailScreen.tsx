@@ -4,6 +4,7 @@ import { SeverityBadge } from "../components/SeverityBadge";
 import { StatusBadge } from "../components/StatusBadge";
 import { addBugComment, deleteOwnBug, listBugComments, toggleBugUpvote, updateBugStatus, updateOwnBug } from "../services/bugService";
 import { severityLabel, statusLabel, useI18n } from "../services/i18n";
+import { defaultOrganizationId } from "../services/organizationService";
 import { getUserById } from "../services/userService";
 import { upvotePointValue } from "../services/userService";
 import { BugComment, BugReport, BugStatus, ReportType, User } from "../types";
@@ -53,6 +54,8 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
   const canUpvote = user.uid !== bug.reporterId;
   const hasVoted = bug.upvoteUserIds?.includes(user.uid) ?? false;
   const upvoteCount = bug.upvoteCount ?? 0;
+  const isOrganizationReport = Boolean(bug.organizationId && bug.organizationId !== defaultOrganizationId);
+  const organizationName = bug.organizationName || bug.organizationId || "";
 
   useEffect(() => {
     listBugComments(bug.id).then(setComments).catch((nextError) => {
@@ -171,6 +174,12 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
             <StatusBadge status={bug.status} />
           </>
         )}
+      </View>
+      <View style={styles.organizationPanel}>
+        <Text style={styles.organizationLabel}>{t("bug.visibility")}</Text>
+        <Text style={styles.organizationValue}>
+          {isOrganizationReport ? t("bug.organizationVisibility", { name: organizationName }) : t("bug.publicVisibility")}
+        </Text>
       </View>
       {user.uid === bug.reporterId && !editing && (
         <Pressable style={sharedStyles.secondaryButton} onPress={() => setEditing(true)}>
@@ -343,6 +352,26 @@ const styles = StyleSheet.create({
   typeBadgeText: {
     fontSize: 11,
     fontWeight: "900"
+  },
+  organizationPanel: {
+    backgroundColor: "#fdfefb",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 14,
+    padding: 12
+  },
+  organizationLabel: {
+    color: "#53645d",
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
+  organizationValue: {
+    color: "#102018",
+    fontSize: 14,
+    fontWeight: "900",
+    marginTop: 3
   },
   profileLink: {
     color: "#15724f",
