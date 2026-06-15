@@ -22,6 +22,12 @@ const podiumStyles = [
   { border: "#b9c1c8", background: "#f3f6f7", shine: "#dfe5e8", text: "#4d5960", bugId: "boktor" },
   { border: "#b87842", background: "#fff0df", shine: "#e2a56d", text: "#6e3f1e", bugId: "duizendpoot" }
 ];
+type RankingMode = "score" | "duel";
+
+function duelRating(user: User): number {
+  const rating = Math.round(user.duelRating ?? 1000);
+  return Number.isFinite(rating) ? Math.max(100, rating) : 1000;
+}
 
 export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }: Props) {
   const { t } = useI18n();
@@ -29,6 +35,7 @@ export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }
   const [lastCatches, setLastCatches] = useState<Record<string, LastCatchSummary>>({});
   const [loading, setLoading] = useState(true);
   const [organizationPickerOpen, setOrganizationPickerOpen] = useState(false);
+  const [rankingMode, setRankingMode] = useState<RankingMode>("score");
   const [selectedOrganizationId, setSelectedOrganizationId] = useState(defaultOrganizationId);
   const organizationIds = organizationIdsForUser(currentUser);
   const organizationNames = organizationNamesForUser(currentUser);
@@ -37,9 +44,12 @@ export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }
     ...organizationIds.map((id) => ({ id, name: organizationNames[id] ?? id }))
   ];
   const selectedOrganizationName = organizationOptions.find((item) => item.id === selectedOrganizationId)?.name ?? t("leaderboard.globalRank");
-  const visibleUsers = selectedOrganizationId === defaultOrganizationId
+  const filteredUsers = selectedOrganizationId === defaultOrganizationId
     ? users
     : users.filter((item) => organizationIdsForUser(item).includes(selectedOrganizationId));
+  const visibleUsers = [...filteredUsers].sort((a, b) => rankingMode === "duel" ? duelRating(b) - duelRating(a) : b.totalPoints - a.totalPoints);
+  const metricLabel = rankingMode === "duel" ? t("leader.duelRating") : t("leader.score");
+  const metricValue = (user: User) => rankingMode === "duel" ? duelRating(user) : user.totalPoints;
 
   useEffect(() => {
     let active = true;
@@ -100,13 +110,23 @@ export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }
           )}
         </View>
       )}
+      <View style={styles.rankModeRow}>
+        {(["score", "duel"] as RankingMode[]).map((mode) => {
+          const active = rankingMode === mode;
+          return (
+            <Pressable key={mode} style={[styles.rankModeButton, active && styles.rankModeButtonActive]} onPress={() => setRankingMode(mode)}>
+              <Text style={[styles.rankModeText, active && styles.rankModeTextActive]}>{mode === "duel" ? t("leaderboard.duelRank") : t("leaderboard.scoreRank")}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
       {loading ? <ActivityIndicator /> : (
         <FlatList
           data={visibleUsers}
           keyExtractor={(user) => user.uid}
-          ListHeaderComponent={visibleUsers.length ? <Podium users={visibleUsers.slice(0, 3)} onSelectUser={onSelectUser} /> : null}
+          ListHeaderComponent={visibleUsers.length ? <Podium metricLabel={metricLabel} metricValue={metricValue} users={visibleUsers.slice(0, 3)} onSelectUser={onSelectUser} /> : null}
           ListEmptyComponent={<Text style={sharedStyles.subtitle}>{t("leaderboard.empty")}</Text>}
-          renderItem={({ item, index }) => <LeaderboardRow user={item} lastCatch={lastCatches[item.uid]} index={index} onPress={() => onSelectUser(item)} />}
+          renderItem={({ item, index }) => <LeaderboardRow metricLabel={metricLabel} metricValue={metricValue(item)} user={item} lastCatch={lastCatches[item.uid]} index={index} onPress={() => onSelectUser(item)} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
@@ -133,8 +153,7 @@ async function latestCatchForUser(user: User): Promise<LastCatchSummary | null> 
   }
 }
 
-function Podium({ users, onSelectUser }: { users: User[]; onSelectUser: (user: User) => void }) {
-  const { t } = useI18n();
+function Podium({ metricLabel, metricValue, users, onSelectUser }: { metricLabel: string; metricValue: (user: User) => number; users: User[]; onSelectUser: (user: User) => void }) {
   return (
     <View style={styles.podium}>
       {users.map((user, index) => {
@@ -147,7 +166,7 @@ function Podium({ users, onSelectUser }: { users: User[]; onSelectUser: (user: U
             <BugArtImage bugId={medal.bugId} size={index === 0 ? 42 : 34} />
             <Text style={[styles.podiumRank, { color: medal.text }]}>#{index + 1}</Text>
             <Text adjustsFontSizeToFit ellipsizeMode="tail" minimumFontScale={0.72} numberOfLines={1} style={[styles.podiumName, index === 0 && styles.podiumLeaderName, { color: medal.text }]}>{user.displayName}</Text>
-            <Text style={styles.podiumPoints}>{user.totalPoints} {t("leader.score")}</Text>
+            <Text style={styles.podiumPoints}>{metricValue(user)} {metricLabel}</Text>
           </Pressable>
         );
       })}
@@ -313,5 +332,31 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 120
+  },
+  rankModeButton: {
+    alignItems: "center",
+    backgroundColor: "#eef4ed",
+    borderColor: "#c6d3cc",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    paddingVertical: 9
+  },
+  rankModeButtonActive: {
+    backgroundColor: "#102018",
+    borderColor: "#d7bd57"
+  },
+  rankModeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12
+  },
+  rankModeText: {
+    color: "#102018",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  rankModeTextActive: {
+    color: "#ffffff"
   }
 });

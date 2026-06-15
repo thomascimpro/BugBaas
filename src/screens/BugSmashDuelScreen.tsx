@@ -1436,60 +1436,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               </View>
               <Text style={styles.modeBadge}>Duel</Text>
             </View>
-            <View style={styles.opponentGrid}>
-              {opponents.map((opponent) => {
-                const selected = selectedOpponentId === opponent.uid;
-                const activePairDuel = duels.find((duel) => isActiveDuelBetweenUsers(duel, user.uid, opponent.uid));
-                const blocked = Boolean(activePairDuel);
-                const pairOwnScore = activePairDuel ? activePairDuel.scores?.[user.uid] ?? localSubmittedScores[activePairDuel.id] : undefined;
-                const pairOpponentScore = activePairDuel ? activePairDuel.scores?.[opponent.uid] : undefined;
-                const incomingDuelAction = Boolean(activePairDuel?.status === "pending" && activePairDuel.toUserId === user.uid);
-                const needsPlayAction = Boolean(activePairDuel?.status === "accepted" && !pairOwnScore);
-                const outgoingWaitingAction = Boolean(activePairDuel && isBugSmashDuelActionForUser(activePairDuel, user.uid) && activePairDuel.fromUserId === user.uid && pairOwnScore && !pairOpponentScore);
-                const opponentActionCount = incomingDuelAction || needsPlayAction || outgoingWaitingAction ? 1 : 0;
-                const showOwnWaitingScore = Boolean(activePairDuel?.fromUserId === user.uid && (activePairDuel.status === "pending" || activePairDuel.status === "accepted") && pairOwnScore && !pairOpponentScore);
-                const showOpponentWaitingScore = Boolean(activePairDuel?.fromUserId === opponent.uid && (activePairDuel.status === "pending" || activePairDuel.status === "accepted") && pairOpponentScore && !pairOwnScore);
-                const dailyRewardClaimed = duelDailyRewardClaimedAgainstOpponent(duels, user.uid, opponent.uid);
-                const opponentMeta = incomingDuelAction
-                  ? t("duel.incomingStatus")
-                  : showOwnWaitingScore
-                  ? t("duel.yourScore", { score: displayDuelScore(pairOwnScore) })
-                  : showOpponentWaitingScore
-                    ? `${opponent.displayName}: ${displayDuelScore(pairOpponentScore)}`
-                  : blocked && activePairDuel
-                    ? statusLabel(activePairDuel, t)
-                    : dailyRewardClaimed
-                      ? t("duel.dailyRewardClaimed")
-                      : t("duel.dailyRewardAvailable");
-                const opponentPresence = incomingDuelAction ? t("duel.pendingBadge") : blocked ? t("duel.activeBetween") : dailyRewardClaimed ? t("duel.noDailyRewardShort") : presenceLabel(opponent, t);
-                return (
-                  <Pressable
-                    key={opponent.uid}
-                    style={[styles.opponentButton, selected && styles.opponentButtonSelected, blocked && !opponentActionCount && styles.opponentButtonBlocked]}
-                    onPress={() => {
-                      if (activePairDuel) {
-                        setActiveDuelId(activePairDuel.id);
-                        setActiveDuel(activePairDuel);
-                        return;
-                      }
-                      setSelectedOpponentId(opponent.uid);
-                    }}
-                  >
-                    {opponentActionCount > 0 && (
-                      <View style={styles.opponentActionBadge}>
-                        <Text style={styles.opponentActionBadgeText}>{opponentActionCount}</Text>
-                      </View>
-                    )}
-                    <Text style={[styles.opponentName, selected && styles.opponentNameSelected]} numberOfLines={1}>{opponent.displayName}</Text>
-                    <Text style={styles.opponentMeta}>{opponentMeta}</Text>
-                    <Text style={[styles.opponentPresence, selected && styles.opponentPresenceSelected]} numberOfLines={1}>{opponentPresence}</Text>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.duelRatingPanel}>
+              <Text style={styles.duelRatingValue}>{user.duelRating ?? 1000}</Text>
+              <Text style={styles.duelRatingMeta}>{t("duel.rating")} - {user.duelWins ?? 0}W / {user.duelLosses ?? 0}L / {user.duelDraws ?? 0}D</Text>
             </View>
-            <Pressable disabled={!canStartChallenge} style={[sharedStyles.button, !canStartChallenge && styles.disabled]} onPress={startChallenge}>
-              <Text style={sharedStyles.buttonText}>{busy ? "..." : t("duel.challenge")}</Text>
-            </Pressable>
+            {challengeNotice ? <Text style={styles.noticeText}>{challengeNotice}</Text> : null}
             <Pressable disabled={busy} style={[sharedStyles.secondaryButton, busy && styles.disabled]} onPress={startRandomChallenge}>
               <Text style={sharedStyles.secondaryButtonText}>{busy ? "..." : t("duel.randomChallenge")}</Text>
             </Pressable>
@@ -3404,6 +3355,25 @@ const styles = StyleSheet.create({
   },
   duelModePanel: {
     marginTop: 0
+  },
+  duelRatingMeta: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  duelRatingPanel: {
+    alignItems: "center",
+    backgroundColor: "#eef4ed",
+    borderColor: "#c6d3cc",
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12
+  },
+  duelRatingValue: {
+    color: "#102018",
+    fontSize: 32,
+    fontWeight: "900"
   },
   helperImpactLayer: {
     ...StyleSheet.absoluteFillObject,

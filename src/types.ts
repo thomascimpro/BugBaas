@@ -18,6 +18,12 @@ export type User = {
   activeBugSquad?: string[];
   bugLampActiveUntil?: string;
   bugLampCount?: number;
+  duelDraws?: number;
+  duelLosses?: number;
+  duelRating?: number;
+  duelRatingLastDuelId?: string;
+  duelRatingUpdatedAt?: string;
+  duelWins?: number;
   nameSet?: boolean;
   helpSeen?: boolean;
   lastReportRewardDay?: string;
@@ -185,6 +191,8 @@ export type BugSmashDuel = {
   winnerId?: string;
   rewardClaimedBy?: string[];
   resultSeenBy?: string[];
+  ratingAppliedAt?: string;
+  ratingDeltas?: Record<string, number>;
 };
 
 export type TradeStatus = "Open" | "Geaccepteerd" | "Afgewezen" | "Geannuleerd";

@@ -29,7 +29,7 @@ const rarityColors: Record<BugDexRarity, string> = {
   Mythisch: "#7c3aed"
 };
 
-export function LeaderboardRow({ index, lastCatch, user, onPress }: { index: number; lastCatch?: LastCatchSummary; user: User; onPress: () => void }) {
+export function LeaderboardRow({ index, lastCatch, metricLabel, metricValue, user, onPress }: { index: number; lastCatch?: LastCatchSummary; metricLabel?: string; metricValue?: number; user: User; onPress: () => void }) {
   const { t } = useI18n();
   const isLeader = index === 0;
   const medal = topThreeStyles[index];
@@ -72,8 +72,8 @@ export function LeaderboardRow({ index, lastCatch, user, onPress }: { index: num
         </View>
       </View>
       <View style={[styles.scorePill, medal && { backgroundColor: medal.pill }]}>
-        <Text style={[styles.points, medal && { color: medal.pillText }]}>{user.totalPoints}</Text>
-        <Text style={[styles.pointsLabel, medal && { color: medal.pillText }]}>{t("leader.score")}</Text>
+        <Text style={[styles.points, medal && { color: medal.pillText }]}>{metricValue ?? user.totalPoints}</Text>
+        <Text style={[styles.pointsLabel, medal && { color: medal.pillText }]}>{metricLabel ?? t("leader.score")}</Text>
       </View>
     </Pressable>
   );
