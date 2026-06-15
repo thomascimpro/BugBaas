@@ -45,7 +45,6 @@ export function BugCard({ bug, onPress }: { bug: BugReport; onPress: () => void 
       </View>
       <View style={styles.body}>
         <View style={styles.topLine}>
-          <Text style={styles.project} numberOfLines={1}>{bug.project}</Text>
           <Text style={styles.date}>{new Date(bug.createdAt).toLocaleDateString(t("date.locale"))}</Text>
         </View>
         <Text style={styles.title} numberOfLines={2}>{bug.title}</Text>

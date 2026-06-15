@@ -15,7 +15,6 @@ const reportFilters: Array<{ value: ReportType | "all"; labelKey: string }> = [
   { value: "workaround", labelKey: "filter.tricks" },
   { value: "idea", labelKey: "filter.idea" }
 ];
-const projectFilters = ["TBox", "TConnect", "SkySpark", "Infinite", "VTScada", "Alert", "Anders"];
 const timeFilters = [
   { value: "all", labelKey: "buglist.periodAll" },
   { value: "today", labelKey: "buglist.periodToday" },
@@ -39,19 +38,16 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
   const { t } = useI18n();
   const [filter, setFilter] = useState<BugStatus | undefined>();
   const [typeFilter, setTypeFilter] = useState<ReportType | "all">("all");
-  const [projectFilter, setProjectFilter] = useState<string | undefined>();
-  const [projectOpen, setProjectOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
   const [timeOpen, setTimeOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [reports, setReports] = useState<BugReport[]>([]);
   const [loading, setLoading] = useState(true);
   const normalizedSearch = normalizeSearch(searchQuery);
-  const hasActiveFilters = Boolean(filter || projectFilter || timeFilter !== "all" || typeFilter !== "all" || normalizedSearch);
+  const hasActiveFilters = Boolean(filter || timeFilter !== "all" || typeFilter !== "all" || normalizedSearch);
   const visibleReports = reports.filter((report) => {
     const reportType = report.reportType ?? "bug";
     if (typeFilter !== "all" && reportType !== typeFilter) return false;
-    if (projectFilter && report.project !== projectFilter) return false;
     if (!reportMatchesTimeFilter(report.createdAt, timeFilter)) return false;
     if (filter && reportType === "bug" && report.status !== filter) return false;
     if (filter && reportType !== "bug") return false;
@@ -72,8 +68,6 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
   function resetFilters() {
     setFilter(undefined);
     setTypeFilter("all");
-    setProjectFilter(undefined);
-    setProjectOpen(false);
     setTimeFilter("all");
     setTimeOpen(false);
     setSearchQuery("");
@@ -121,38 +115,6 @@ export function BugListScreen({ onBack, onNew, onSelect }: Props) {
           );
         })}
       </ScrollView>
-
-      <Pressable style={styles.projectButton} onPress={() => setProjectOpen((current) => !current)}>
-        <Text style={[styles.projectButtonText, !projectFilter && styles.projectButtonPlaceholder]}>{t("buglist.product", { value: projectFilter ?? t("common.all") })}</Text>
-      </Pressable>
-      {projectOpen && (
-        <View style={styles.projectMenu}>
-          <Pressable
-            style={[styles.projectOption, !projectFilter && styles.projectOptionActive]}
-            onPress={() => {
-              setProjectFilter(undefined);
-              setProjectOpen(false);
-            }}
-          >
-            <Text style={[styles.projectOptionText, !projectFilter && styles.projectOptionTextActive]}>{t("common.all")}</Text>
-          </Pressable>
-          {projectFilters.map((project) => {
-            const active = projectFilter === project;
-            return (
-              <Pressable
-                key={project}
-                style={[styles.projectOption, active && styles.projectOptionActive]}
-                onPress={() => {
-                  setProjectFilter(project);
-                  setProjectOpen(false);
-                }}
-              >
-                <Text style={[styles.projectOptionText, active && styles.projectOptionTextActive]}>{project}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
 
       <Pressable style={styles.projectButton} onPress={() => setTimeOpen((current) => !current)}>
         <Text style={[styles.projectButtonText, timeFilter === "all" && styles.projectButtonPlaceholder]}>
@@ -227,7 +189,6 @@ function reportMatchesSearch(report: BugReport, query: string): boolean {
   const reportType = report.reportType ?? "bug";
   const haystack = [
     report.title,
-    report.project,
     report.reporterName,
     report.description,
     report.steps,

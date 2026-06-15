@@ -719,7 +719,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
               <Pressable key={bug.id} style={styles.bugItem} onPress={() => onSelectBug?.(bug)}>
                 <View style={styles.bugText}>
                   <Text style={styles.bugTitle} numberOfLines={1}>{bug.title}</Text>
-                  <Text style={styles.bugMeta} numberOfLines={1}>{t("profile.bugMeta", { project: bug.project, points: bug.points, upvotes: bug.upvoteCount ?? 0 })}</Text>
+                  <Text style={styles.bugMeta} numberOfLines={1}>{t("profile.bugMeta", { points: bug.points, upvotes: bug.upvoteCount ?? 0 })}</Text>
                   <Text style={styles.bugBonus}>{t("profile.upvoteBonus", { points: upvotePointValue })}</Text>
                 </View>
                 <View style={styles.bugBadges}>
