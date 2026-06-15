@@ -84,9 +84,9 @@ const weeklyMissionTemplates: MissionTemplate[] = [
     progressFor: (user, { duels }, weekStart) => duels.filter((duel) => isUserDuel(duel, user) && isThisWeek(duel.scores?.[user.uid]?.submittedAt ?? "", weekStart)).length
   },
   {
-    id: "solo-wave-12",
-    title: "mission.soloWave12",
-    target: 12,
+    id: "solo-wave-20",
+    title: "mission.soloWave20",
+    target: 20,
     reward: "mission.rewardXp25",
     rewardType: "xp",
     rewardXp: 25,
@@ -199,14 +199,14 @@ export async function claimWeeklyMissionBonusWithReward(user: User, missions: We
     const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, weeklyMissionBonusXp));
     const updated = { ...user, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
-    const drop = await grantBugDexReward(updated, "weekly_mission");
+    const drop = await grantBugDexReward(updated, "weekly_mission_epic");
     demoWeeklyClaims.add(claimKey);
     return { drop, user: updated };
   }
 
   const userRef = doc(db, "users", user.uid);
   const claimRef = doc(db, "users", user.uid, "weeklyMissionClaims", bonusId);
-  const rewardEntry = pickBugDexRewardEntry(user, "weekly_mission");
+  const rewardEntry = pickBugDexRewardEntry(user, "weekly_mission_epic");
   const rewardRef = doc(db, "users", user.uid, "bugdex", rewardEntry.id);
 
   return runTransaction(db, async (transaction) => {
@@ -230,7 +230,7 @@ export async function claimWeeklyMissionBonusWithReward(user: User, missions: We
           ...existingReward,
           count: existingReward.count + 1,
           lastUnlockedAt: now,
-          sources: Array.from(new Set([...existingReward.sources, "weekly_mission"]))
+          sources: Array.from(new Set([...existingReward.sources, "weekly_mission_epic"]))
         }
       : {
           bugId: rewardEntry.id,
@@ -238,7 +238,7 @@ export async function claimWeeklyMissionBonusWithReward(user: User, missions: We
           firstUnlockedAt: now,
           lastUnlockedAt: now,
           rarity: rewardEntry.rarity,
-          sources: ["weekly_mission"]
+          sources: ["weekly_mission_epic"]
         };
 
     transaction.set(claimRef, {
@@ -261,7 +261,7 @@ export async function claimWeeklyMissionBonusWithReward(user: User, missions: We
     }
 
     return {
-      drop: { rewardType: "bug", entry: rewardEntry, item, isNew: !existingReward, source: "weekly_mission" },
+      drop: { rewardType: "bug", entry: rewardEntry, item, isNew: !existingReward, source: "weekly_mission_epic" },
       user: updated
     };
   });

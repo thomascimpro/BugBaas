@@ -19,6 +19,7 @@ export type BugDexDropSource =
   | "weekly_mission"
   | "weekly_mission_common"
   | "weekly_mission_rare"
+  | "weekly_mission_epic"
   | "solo_boss_common"
   | "solo_boss_rare"
   | "solo_campaign_clear"
@@ -67,6 +68,7 @@ const dropChances: Record<BugDexDropSource, number> = {
   weekly_mission: 1,
   weekly_mission_common: 1,
   weekly_mission_rare: 1,
+  weekly_mission_epic: 1,
   solo_boss_common: 1,
   solo_boss_rare: 1,
   solo_campaign_clear: 1,
@@ -86,6 +88,7 @@ const rarityWeights: Record<BugDexDropSource, Array<[BugDexRarity, number]>> = {
   weekly_mission: [["Gewoon", 72], ["Zeldzaam", 24], ["Episch", 3.5], ["Legendarisch", 0.5]],
   weekly_mission_common: [["Gewoon", 100]],
   weekly_mission_rare: [["Gewoon", 75], ["Zeldzaam", 24], ["Episch", 1]],
+  weekly_mission_epic: [["Episch", 100]],
   solo_boss_common: [["Gewoon", 100]],
   solo_boss_rare: [["Gewoon", 75], ["Zeldzaam", 24], ["Episch", 1]],
   solo_campaign_clear: [["Gewoon", 75], ["Zeldzaam", 24], ["Episch", 1]],
@@ -415,6 +418,13 @@ export async function grantBugDexReward(user: User, source: BugDexDropSource): P
   return grantSpecificBug(user, pickBugDexRewardEntry(user, source), source);
 }
 
+export async function hasBugDexRewardAvailable(user: User, source: BugDexDropSource): Promise<boolean> {
+  const dailyEventId = dailyLimitedRewardEventId(source);
+  if (!dailyEventId) return true;
+  if (!isFirebaseConfigured) return !demoEvents.has(`${user.uid}:${dailyEventId}`);
+  return !(await getDoc(doc(db, "users", user.uid, "bugdexEvents", dailyEventId))).exists();
+}
+
 export function pickBugDexRewardEntry(user: User, source: BugDexDropSource): BugDexEntry {
   const bonuses = activeBugSquadBonuses(user);
   const duelQuestBoost = source === "duel_win" ? bonuses.quest_boost * 0.35 : 0;
@@ -723,9 +733,12 @@ function ownedCount(item: BugDexInventoryItem): number {
   return Math.max(0, normalizeInventoryItem(item.bugId, item).count);
 }
 
+const reportActionRewardSources = new Set<BugDexDropSource>(["bug_reported", "comment", "status_update", "bug_fixed", "upvote_given"]);
+
 function dailyLimitedRewardEventId(source: BugDexDropSource): string | null {
-  if (source !== "solo_campaign_clear") return null;
-  return `${source}-${localDayId()}`;
+  if (source === "solo_campaign_clear") return `${source}-${localDayId()}`;
+  if (reportActionRewardSources.has(source)) return `report-action-${localDayId()}`;
+  return null;
 }
 
 function pickDailyCommonEntry(): BugDexEntry {
@@ -885,7 +898,7 @@ function sourceChanceBoost(source: BugDexDropSource, bonuses: ReturnType<typeof 
       ? base + bonuses.support_boost
       : source === "status_update" || source === "bug_fixed"
         ? base + bonuses.focus_boost
-        : source === "weekly_mission" || source === "weekly_mission_common" || source === "weekly_mission_rare"
+        : source === "weekly_mission" || source === "weekly_mission_common" || source === "weekly_mission_rare" || source === "weekly_mission_epic"
           ? base + bonuses.quest_boost
           : base;
   return Math.min(0.15, boost);

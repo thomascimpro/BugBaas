@@ -280,7 +280,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
           <Text style={styles.emptyComments}>{t("detail.noComments")}</Text>
         )}
       </View>
-      {canUpdateStatus && (
+      {canUpdateStatus && bug.status !== "Gefixt" && (
         <>
           <Text style={sharedStyles.label}>{t("detail.changeStatus")}</Text>
           {busy && <ActivityIndicator />}
@@ -299,7 +299,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
           </Pressable>
         </>
       )}
-      {!canUpdateStatus && user.uid === bug.reporterId && (
+      {(!canUpdateStatus || bug.status === "Gefixt") && user.uid === bug.reporterId && (
         <Pressable style={styles.deleteButton} disabled={deleteBusy} onPress={confirmDelete}>
           {deleteBusy ? <ActivityIndicator color="#ffffff" /> : <Text style={sharedStyles.buttonText}>{t("detail.deleteReport")}</Text>}
         </Pressable>
