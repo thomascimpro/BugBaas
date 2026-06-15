@@ -12,6 +12,8 @@ export const bugSmashDuelDurationMs = 30000;
 export const bugSmashDuelStartDelayMs = 5000;
 export const bugSmashDuelBugCount = 56;
 const randomDuelDailyLimit = 5;
+const defaultDuelRating = 1000;
+const minimumDuelRating = 100;
 
 const scoreByRarity = {
   Gewoon: 1,
@@ -57,6 +59,57 @@ function pickBugIds(seed: number): string[] {
 
 function duelRef(duelId: string) {
   return doc(db, "bugSmashDuels", duelId);
+}
+
+function userRef(userId: string) {
+  return doc(db, "users", userId);
+}
+
+export function duelRatingForUser(user: Pick<User, "duelRating">): number {
+  const rating = Math.round(user.duelRating ?? defaultDuelRating);
+  return Number.isFinite(rating) ? Math.max(minimumDuelRating, rating) : defaultDuelRating;
+}
+
+function duelGamesPlayed(user: Pick<User, "duelWins" | "duelLosses" | "duelDraws">): number {
+  return Math.max(0, user.duelWins ?? 0) + Math.max(0, user.duelLosses ?? 0) + Math.max(0, user.duelDraws ?? 0);
+}
+
+function duelKFactor(user: Pick<User, "duelRating" | "duelWins" | "duelLosses" | "duelDraws">): number {
+  if (duelGamesPlayed(user) < 10) return 40;
+  if (duelRatingForUser(user) > 1400) return 24;
+  return 32;
+}
+
+export function calculateDuelRatingDelta(playerRating: number, opponentRating: number, actualScore: 0 | 0.5 | 1, kFactor = 32): number {
+  const expectedScore = 1 / (1 + Math.pow(10, (opponentRating - playerRating) / 400));
+  return Math.round(kFactor * (actualScore - expectedScore));
+}
+
+function ratingResultForUser(duel: BugSmashDuel, userId: string): 0 | 0.5 | 1 {
+  if (!duel.winnerId) return 0.5;
+  return duel.winnerId === userId ? 1 : 0;
+}
+
+function ratingStatsForUser(user: User, duel: BugSmashDuel, delta: number) {
+  const result = ratingResultForUser(duel, user.uid);
+  return {
+    duelDraws: (user.duelDraws ?? 0) + (result === 0.5 ? 1 : 0),
+    duelLosses: (user.duelLosses ?? 0) + (result === 0 ? 1 : 0),
+    duelRating: Math.max(minimumDuelRating, duelRatingForUser(user) + delta),
+    duelRatingLastDuelId: duel.id,
+    duelRatingUpdatedAt: duel.ratingAppliedAt,
+    duelWins: (user.duelWins ?? 0) + (result === 1 ? 1 : 0)
+  };
+}
+
+function shouldApplyRandomDuelRating(before: BugSmashDuel, after: BugSmashDuel): boolean {
+  return after.matchType === "random"
+    && after.status === "completed"
+    && before.status !== "completed"
+    && !before.ratingAppliedAt
+    && Boolean(after.scores?.[after.fromUserId])
+    && Boolean(after.scores?.[after.toUserId])
+    && after.toUserId !== "random";
 }
 
 function duelDailyRewardEventId(opponentId: string, day = localDayId()) {
@@ -444,7 +497,10 @@ export async function submitBugSmashDuelScore(user: User, duelId: string, score:
   if (!isFirebaseConfigured) {
     const duel = demoDuels.get(duelId);
     if (!duel) throw new Error("Duel niet gevonden.");
-    const updated = submit(duel);
+    let updated = submit(duel);
+    if (shouldApplyRandomDuelRating(duel, updated)) {
+      updated = { ...updated, ratingAppliedAt: nowIso(), ratingDeltas: {} };
+    }
     demoDuels.set(duelId, updated);
     return updated;
   }
@@ -453,7 +509,32 @@ export async function submitBugSmashDuelScore(user: User, duelId: string, score:
     const ref = duelRef(duelId);
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error("Duel niet gevonden.");
-    const updated = submit(snapshot.data() as BugSmashDuel);
+    const currentDuel = snapshot.data() as BugSmashDuel;
+    let updated = submit(currentDuel);
+    if (shouldApplyRandomDuelRating(currentDuel, updated)) {
+      const fromRef = userRef(updated.fromUserId);
+      const toRef = userRef(updated.toUserId);
+      const fromSnapshot = await transaction.get(fromRef);
+      const toSnapshot = await transaction.get(toRef);
+      if (fromSnapshot.exists() && toSnapshot.exists()) {
+        const fromUser = fromSnapshot.data() as User;
+        const toUser = toSnapshot.data() as User;
+        const fromResult = ratingResultForUser(updated, updated.fromUserId);
+        const toResult = ratingResultForUser(updated, updated.toUserId);
+        const fromDelta = calculateDuelRatingDelta(duelRatingForUser(fromUser), duelRatingForUser(toUser), fromResult, duelKFactor(fromUser));
+        const toDelta = calculateDuelRatingDelta(duelRatingForUser(toUser), duelRatingForUser(fromUser), toResult, duelKFactor(toUser));
+        updated = {
+          ...updated,
+          ratingAppliedAt: nowIso(),
+          ratingDeltas: {
+            [updated.fromUserId]: fromDelta,
+            [updated.toUserId]: toDelta
+          }
+        };
+        transaction.update(fromRef, ratingStatsForUser(fromUser, updated, fromDelta));
+        transaction.update(toRef, ratingStatsForUser(toUser, updated, toDelta));
+      }
+    }
     transaction.update(ref, updated);
     return updated;
   });

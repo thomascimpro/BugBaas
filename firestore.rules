@@ -510,13 +510,33 @@ service cloud.firestore {
     function submitOwnDuelScore() {
       let otherUserId = resource.data.fromUserId == request.auth.uid ? resource.data.toUserId : resource.data.fromUserId;
       let ownScore = request.resource.data.scores[request.auth.uid];
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
       return signedIn()
         && isDuelParticipant(resource.data)
         && (
           resource.data.status in ['accepted', 'completed']
           || (resource.data.status == 'pending' && resource.data.fromUserId == request.auth.uid)
         )
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scores', 'status', 'winnerId', 'updatedAt'])
+        && (
+          changed.hasOnly(['scores', 'status', 'winnerId', 'updatedAt'])
+          || (
+            resource.data.matchType == 'random'
+            && resource.data.status != 'completed'
+            && request.resource.data.status == 'completed'
+            && !resource.data.keys().hasAny(['ratingAppliedAt'])
+            && changed.hasOnly(['scores', 'status', 'winnerId', 'updatedAt', 'ratingAppliedAt', 'ratingDeltas'])
+            && request.resource.data.ratingAppliedAt is string
+            && request.resource.data.ratingDeltas is map
+            && request.resource.data.ratingDeltas.keys().hasOnly([resource.data.fromUserId, resource.data.toUserId])
+            && request.resource.data.ratingDeltas.keys().hasAll([resource.data.fromUserId, resource.data.toUserId])
+            && request.resource.data.ratingDeltas[resource.data.fromUserId] is int
+            && request.resource.data.ratingDeltas[resource.data.fromUserId] >= -40
+            && request.resource.data.ratingDeltas[resource.data.fromUserId] <= 40
+            && request.resource.data.ratingDeltas[resource.data.toUserId] is int
+            && request.resource.data.ratingDeltas[resource.data.toUserId] >= -40
+            && request.resource.data.ratingDeltas[resource.data.toUserId] <= 40
+          )
+        )
         && (
           request.resource.data.status in ['accepted', 'completed']
           || (resource.data.status == 'pending' && request.resource.data.status == 'pending')
@@ -536,6 +556,52 @@ service cloud.firestore {
         && ownScore.bonusScore <= 100
         && ownScore.submittedAt is string
         && (!request.resource.data.keys().hasAny(['winnerId']) || request.resource.data.winnerId is string);
+    }
+
+    function currentDuelRating(data) {
+      return data.keys().hasAny(['duelRating']) ? data.duelRating : 1000;
+    }
+
+    function currentDuelWins(data) {
+      return data.keys().hasAny(['duelWins']) ? data.duelWins : 0;
+    }
+
+    function currentDuelLosses(data) {
+      return data.keys().hasAny(['duelLosses']) ? data.duelLosses : 0;
+    }
+
+    function currentDuelDraws(data) {
+      return data.keys().hasAny(['duelDraws']) ? data.duelDraws : 0;
+    }
+
+    function duelRatingAfterDelta(data, delta) {
+      return currentDuelRating(data) + delta < 100 ? 100 : currentDuelRating(data) + delta;
+    }
+
+    function randomDuelRatingUserUpdate(userId) {
+      let duel = getAfter(/databases/$(database)/documents/bugSmashDuels/$(request.resource.data.duelRatingLastDuelId)).data;
+      let delta = duel.ratingDeltas[userId];
+      let isWinner = duel.winnerId == userId;
+      let isDraw = !duel.keys().hasAny(['winnerId']) || duel.winnerId == '';
+      return signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['duelDraws', 'duelLosses', 'duelRating', 'duelRatingLastDuelId', 'duelRatingUpdatedAt', 'duelWins'])
+        && request.resource.data.duelRatingLastDuelId is string
+        && request.resource.data.duelRatingUpdatedAt is string
+        && duel.matchType == 'random'
+        && duel.status == 'completed'
+        && duel.ratingAppliedAt == request.resource.data.duelRatingUpdatedAt
+        && duel.ratingDeltas is map
+        && duel.ratingDeltas.keys().hasAll([userId])
+        && (duel.fromUserId == userId || duel.toUserId == userId)
+        && (duel.fromUserId == request.auth.uid || duel.toUserId == request.auth.uid)
+        && delta is int
+        && delta >= -40
+        && delta <= 40
+        && request.resource.data.duelRating is int
+        && request.resource.data.duelRating == duelRatingAfterDelta(resource.data, delta)
+        && request.resource.data.duelWins == currentDuelWins(resource.data) + (isWinner ? 1 : 0)
+        && request.resource.data.duelLosses == currentDuelLosses(resource.data) + (!isWinner && !isDraw ? 1 : 0)
+        && request.resource.data.duelDraws == currentDuelDraws(resource.data) + (isDraw ? 1 : 0);
     }
 
     function claimOwnDuelReward() {
@@ -596,7 +662,7 @@ service cloud.firestore {
         )
         && (!request.resource.data.keys().hasAny(['active']) || request.resource.data.active == true);
       allow update: if signedIn()
-        && (validUserUpdate(userId) || organizationCreateUserUpdate(userId) || organizationInviteUserUpdate(userId) || organizationRemoveMemberUpdate(userId));
+        && (validUserUpdate(userId) || randomDuelRatingUserUpdate(userId) || organizationCreateUserUpdate(userId) || organizationInviteUserUpdate(userId) || organizationRemoveMemberUpdate(userId));
       allow delete: if signedIn() && resource.data.reporterId == request.auth.uid;
 
       match /bugdex/{bugId} {
