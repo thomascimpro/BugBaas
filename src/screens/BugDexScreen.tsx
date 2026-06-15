@@ -70,7 +70,6 @@ const emptyDailyUpgradeUsage: DailyUpgradeUsage = {
 const activeBugSquadHeroImage = require("../../assets/generated/active-bug-squad-selection-hd.jpg");
 const bugDexWorkshopImage = require("../../assets/generated/bugdex-workshop-shortcut.png");
 const bugDexUpgradeImage = require("../../assets/generated/bugdex-upgrades-button-hd.png");
-const bugDexRarityTypesGuideImage = require("../../assets/generated/bugdex-rarity-types-guide.png");
 const attackIconImages: Record<BugSquadAttackKind, number> = {
   burst: require("../../assets/generated/duel_effect_slash_hd.png"),
   shield: require("../../assets/generated/duel_effect_shield_hd.png"),
@@ -1086,10 +1085,6 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         </View>
       </View>
 
-      <View style={styles.rarityGuideCard}>
-        <Image source={bugDexRarityTypesGuideImage} style={styles.rarityGuideImage} resizeMode="contain" />
-      </View>
-
       {dexList}
 
       <Pressable style={sharedStyles.secondaryButton} onPress={onBack}>
@@ -1473,18 +1468,6 @@ const styles = StyleSheet.create({
     color: "#52665d",
     fontSize: 12,
     fontWeight: "900"
-  },
-  rarityGuideCard: {
-    backgroundColor: "#102018",
-    borderColor: "#d7bd57",
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 12,
-    overflow: "hidden"
-  },
-  rarityGuideImage: {
-    aspectRatio: 1.5,
-    width: "100%"
   },
   squadDropdown: {
     alignItems: "center",
