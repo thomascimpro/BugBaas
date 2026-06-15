@@ -196,11 +196,12 @@ export async function listBugs(status?: BugStatus): Promise<BugReport[]> {
 
 export async function updateBugStatus(bug: BugReport, status: BugStatus): Promise<BugReport> {
   const current = normalizeBug(bug);
+  if (current.status === "Gefixt" && status !== "Gefixt") {
+    throw new Error("Deze melding is al gefixt.");
+  }
   const fixPointDelta = status === "Gefixt" && current.status !== "Gefixt"
     ? 10
-    : status !== "Gefixt" && current.status === "Gefixt"
-      ? -10
-      : 0;
+    : 0;
   const nextPoints = Math.max(0, current.points + fixPointDelta);
   const updated = { ...current, status, points: nextPoints, updatedAt: new Date().toISOString() };
   await applyUserPoints(current.reporterId, nextPoints - current.points, 0);
