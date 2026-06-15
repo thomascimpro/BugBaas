@@ -4,7 +4,7 @@ import * as Application from "expo-application";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Image, ImageSourcePropType, Linking, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppNotification, BugComment, BugReport, BugSeverity, NotificationSettings, User } from "./src/types";
+import { AppNotification, BugComment, BugReport, NotificationSettings, User } from "./src/types";
 import { activateBugLamp, applyUserPoints, createOrganizationForUser, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, syncMovementKilometers, touchUserActivity, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
 import { activeBugSquadBonuses } from "./src/services/bugSquadService";
 import { movementBoostWithBugLamp } from "./src/services/bugLampService";
@@ -35,7 +35,7 @@ import { bugDexEntryName, LanguageProvider, rarityLabel, useI18n } from "./src/s
 import { listBugs } from "./src/services/bugService";
 import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, entryByBugId, pickBugDexRewardEntry, pickQueuedBugDexRewardEntry, prepareDailyLoginBug, rollSpecificBugDexDrop } from "./src/services/bugDexService";
 import { badgeDefinitions, getTierForPoints, type BadgeDefinition, type BugDexEntry, type UserTier } from "./src/services/pointsService";
-import { claimMovementRadarBonuses } from "./src/services/movementRadarService";
+import { claimMovementRadarBonuses, requestHealthConnectPermissions } from "./src/services/movementRadarService";
 import { movementRadarXpPerBug } from "./src/services/rewardBalanceService";
 import { checkLatestVersion, VersionNotice } from "./src/services/versionService";
 import { isStarterBoostActive } from "./src/services/starterBoostService";
@@ -790,12 +790,11 @@ function AppContent() {
 
   function queueForegroundBug(chance = 1) {
     if (Math.random() > chance) return;
-    const bugId = allBugArtIds[Math.floor(Math.random() * allBugArtIds.length)];
-    if (!bugId) return;
     const currentUser = userRef.current;
     if (!currentUser) return;
     const entry = pickQueuedBugDexRewardEntry(currentUser, "bug_splat");
     if (!entry) return;
+    const bugId = entry.id as BugArtId;
     queueForegroundReward({
       bugId,
       entry,
@@ -806,10 +805,7 @@ function AppContent() {
 
   function rewardBugFixed(bug: BugReport) {
     if (!user) return;
-    const attempts = fixedRewardAttempts(bug.severity);
-    for (let index = 0; index < attempts; index += 1) {
-      queueGuaranteedBugDexReward("bug_fixed", user);
-    }
+    queueGuaranteedBugDexReward("bug_fixed", user);
   }
 
   async function handleBugSplat() {
@@ -849,7 +845,7 @@ function AppContent() {
           }
           return;
         }
-        const rewardDrop = await rollSpecificBugDexDrop(splatResult.user, pendingReward.bugId, pendingReward.source, 1);
+        const rewardDrop = await rollSpecificBugDexDrop(splatResult.user, pendingReward.entry.id, pendingReward.source, 1);
         if (rewardDrop?.updatedUser) setUser(rewardDrop.updatedUser);
         if (rewardDrop) {
           presentBugDexDrop(rewardDrop);
@@ -876,7 +872,6 @@ function AppContent() {
     try {
       const result = await claimMovementRadarBonuses(currentUser.uid, movementBoostForUser(currentUser));
       await registerMovementKilometers(result.estimatedKm);
-      if (result.bugIds.length > 0) await showClaimedRadarBugs(result.bugIds);
       if (result.awarded > 0 && notificationSettingsRef.current.movement) {
         await showMovementRewardNotification(result.awarded);
       }
@@ -1079,12 +1074,14 @@ function AppContent() {
             onSaved={(bug) => {
               void notifyNewBug(bug, user).catch(() => undefined);
               void refreshUser();
-              queueForegroundBug();
-              if ((bug.reportType ?? "bug") === "bug") {
-                queueGuaranteedBugDexReward("bug_reported", user);
-                setSplatBonusVisible(true);
-              } else {
-                rewardActivity("comment");
+              if (bug.points > 0) {
+                queueForegroundBug();
+                if ((bug.reportType ?? "bug") === "bug") {
+                  queueGuaranteedBugDexReward("bug_reported", user);
+                  setSplatBonusVisible(true);
+                } else {
+                  rewardActivity("comment");
+                }
               }
               setRoute("bugs");
             }}
@@ -1167,7 +1164,13 @@ function AppContent() {
           />
         )}
         {route === "settings" && (
-          <SettingsScreen settings={notificationSettings} onBack={() => setRoute("home")} onChange={updateNotificationSettings} onShowHelp={showHelpTour} />
+          <SettingsScreen
+            settings={notificationSettings}
+            onBack={() => setRoute("home")}
+            onChange={updateNotificationSettings}
+            onHealthPermissionOpen={async () => { await requestHealthConnectPermissions(user.uid); }}
+            onShowHelp={showHelpTour}
+          />
         )}
       </View>
       {!(duelRouteActive && duelFullscreen) && <BottomNav activeRoute={route} badges={{ bugdex: requestTabBadges.trade, duel: requestTabBadges.duel }} onNavigate={navigateMain} />}
@@ -1258,12 +1261,6 @@ function VersionToast({ notice, onDismiss }: { notice: VersionNotice | null; onD
       </View>
     </View>
   );
-}
-
-function fixedRewardAttempts(severity: BugSeverity): number {
-  if (severity === "Kritiek") return 3;
-  if (severity === "Hoog") return 2;
-  return 1;
 }
 
 function radarBugIdFromUrl(url: string | null): BugArtId | null {

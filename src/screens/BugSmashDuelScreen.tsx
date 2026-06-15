@@ -14,6 +14,8 @@ import {
   cancelBugSmashDuel,
   claimBugSmashDuelReward,
   createBugSmashDuel,
+  createOpenRandomBugSmashDuel,
+  claimOpenRandomBugSmashDuel,
   isBugSmashDuelActionForUser,
   listBugSmashDuels,
   respondBugSmashDuel,
@@ -676,6 +678,50 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     }
   }
 
+  async function startRandomChallenge() {
+    if (busy) return;
+    setTrainingDuel(null);
+    setSoloRun(null);
+    setBusy(true);
+    setError("");
+    setChallengeNotice(t("duel.randomFinding"));
+    try {
+      const latestDuels = await listBugSmashDuels(user);
+      setDuels(latestDuels);
+      const claimedRandomDuel = await claimOpenRandomBugSmashDuel(user);
+      if (claimedRandomDuel) {
+        const duel = claimedRandomDuel;
+        await dismissPresentedNotificationsForTarget({ duelId: duel.id, type: "duel" }).catch(() => undefined);
+        await onDuelAccepted?.(duel.fromUserId, duel.id);
+        const startAt = duel.startAt ?? new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString();
+        resetRunState();
+        setSelectedOpponentId(duel.fromUserId);
+        setActiveDuelId(duel.id);
+        setActiveDuel(duel);
+        setLocalStartAtByDuelId((current) => ({ ...current, [duel.id]: startAt }));
+        setNow(Date.now());
+        setChallengeNotice(t("duel.randomMatched", { name: duel.fromUserName }));
+        await refreshDuels();
+        return;
+      }
+      const duel = await createOpenRandomBugSmashDuel(user);
+      const startAt = duel.startAt ?? new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString();
+      resetRunState();
+      setSelectedOpponentId("");
+      setActiveDuelId(duel.id);
+      setActiveDuel(duel);
+      setLocalStartAtByDuelId((current) => ({ ...current, [duel.id]: startAt }));
+      setNow(Date.now());
+      setChallengeNotice(t("duel.randomFinding"));
+      await refreshDuels();
+    } catch (event) {
+      setError(event instanceof Error ? event.message : t("duel.createFailed"));
+      setChallengeNotice("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function toggleActiveSquadBug(bugId: string) {
     if (squadBusyId) return;
     const selected = activeSquadIds.includes(bugId);
@@ -747,17 +793,23 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         return;
       }
       if (claim.rewardGranted) onUserUpdated?.(claim.user);
+      if (!claim.rewardGranted) {
+        setChallengeNotice(t("duel.dailyRewardAlreadyClaimed"));
+      }
       if (claim.rewardGranted && claim.result === "win") {
         try {
           const drop = await grantBugDexReward(claim.user, "duel_win");
           onRewardDrop?.(drop);
+          setChallengeNotice(t("duel.rewardClaimed"));
         } catch {
-          setError(t("duel.rewardFailed"));
+          setChallengeNotice(t("duel.rewardClaimedBugDexFailed"));
         }
+      } else if (claim.rewardGranted) {
+        setChallengeNotice(t("duel.rewardClaimed"));
       }
       await refreshDuels();
-    } catch {
-      setError(t("duel.rewardFailed"));
+    } catch (event) {
+      setError(event instanceof Error && event.message ? event.message : t("duel.rewardFailed"));
     } finally {
       setBusy(false);
     }
@@ -1438,6 +1490,9 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             <Pressable disabled={!canStartChallenge} style={[sharedStyles.button, !canStartChallenge && styles.disabled]} onPress={startChallenge}>
               <Text style={sharedStyles.buttonText}>{busy ? "..." : t("duel.challenge")}</Text>
             </Pressable>
+            <Pressable disabled={busy} style={[sharedStyles.secondaryButton, busy && styles.disabled]} onPress={startRandomChallenge}>
+              <Text style={sharedStyles.secondaryButtonText}>{busy ? "..." : t("duel.randomChallenge")}</Text>
+            </Pressable>
           </View>
           )}
           {arenaMode === "training" && (
@@ -1471,6 +1526,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                   <Text style={styles.soloCampaignMeta}>{t("duel.soloContinueWave", { wave: soloCampaignUnlockedWave, maxWave: soloCampaignMaxWave })}</Text>
                   <Text style={styles.soloCampaignMeta}>{t("duel.soloLives", { lives: soloCampaignLives, max: soloCampaignStartingLives })}</Text>
                 </View>
+                <Text style={styles.soloCampaignFinePrint}>{t("duel.soloWeeklyReset")}</Text>
                 <View style={styles.soloPowerupPanel}>
                   <View style={styles.soloPowerupItem}>
                     <Image accessibilityIgnoresInvertColors resizeMode="cover" source={soloPowerupLampImage} style={styles.soloPowerupImage} />
@@ -2836,9 +2892,13 @@ function targetMotion(index: number, seed: number, elapsedMs: number, rarity: Bu
   const rarityLifetime = rarity === "Gewoon" ? 3900 : rarity === "Zeldzaam" ? 5000 : rarity === "Episch" ? 6200 : rarity === "Legendarisch" ? 7400 : 8600;
   const duration = rarityLifetime * assist.speedMultiplier * (bossLevel > 0 ? 2.8 + bossLevel * 0.25 : 1);
   const lastSpawnAt = Math.max(0, duelDurationMs - duelTargetFinalSpawnBufferMs);
-  const spawnSpacing = (targetCount > 1 ? lastSpawnAt / (targetCount - 1) : lastSpawnAt) * Math.max(0.5, Math.min(1.1, spawnSpacingMultiplier));
+  const spawnMultiplier = Math.max(0.5, Math.min(1.1, spawnSpacingMultiplier));
+  const spawnProgress = targetCount > 1 ? Math.max(0, Math.min(1, index / (targetCount - 1))) : 0;
+  const spawnCurve = spawnMultiplier < 1 ? Math.pow(spawnProgress, 1 / spawnMultiplier) : spawnProgress;
+  const spawnSpacing = targetCount > 1 ? lastSpawnAt / (targetCount - 1) : lastSpawnAt;
   const spawnJitter = Math.min(260, Math.max(0, spawnSpacing * 0.35));
-  const spawnStart = bossLevel > 0 ? 260 : Math.min(lastSpawnAt, index * spawnSpacing + ((seed + index * 173) % Math.max(1, Math.round(spawnJitter))));
+  const jitter = index >= targetCount - 1 ? 0 : ((seed + index * 173) % Math.max(1, Math.round(spawnJitter)));
+  const spawnStart = bossLevel > 0 ? 260 : Math.min(lastSpawnAt, lastSpawnAt * spawnCurve + jitter);
   const progress = (elapsedMs - spawnStart) / duration;
   if (progress < 0 || progress > 1) return { visible: false, progress, x: 0, y: 0, rotate: 0 };
   if (bossLevel > 0) {
@@ -2866,7 +2926,7 @@ function soloBossLevelForTarget(duel: BugSmashDuel, targetIndex: number, soloCam
 }
 
 function soloBossTapMultiplier(level: number) {
-  return level > 0 ? 2.8 + level * 0.9 : 1;
+  return level > 0 ? (2.8 + level * 0.9) * 2 : 1;
 }
 
 function soloBossScoreBonus(level: number) {
@@ -3012,6 +3072,22 @@ function duelDailyRewardClaimedAgainstOpponent(duels: BugSmashDuel[], userId: st
     if (!samePair || duel.status !== "completed" || !(duel.rewardClaimedBy ?? []).includes(userId)) return false;
     return localDayIdFromIso(duel.updatedAt) === localDayIdFromIso(new Date().toISOString());
   });
+}
+
+function canPlayRandomDuelToday(candidate: BugSmashDuel, duels: BugSmashDuel[], userId: string) {
+  const today = localDayIdFromIso(new Date().toISOString());
+  const opponentId = candidate.fromUserId === userId ? candidate.toUserId : candidate.fromUserId;
+  const randomToday = duels.filter((duel) =>
+    duel.matchType === "random"
+    && localDayIdFromIso(duel.createdAt) === today
+    && (duel.fromUserId === userId || duel.toUserId === userId)
+  );
+  const sameOpponentToday = randomToday.some((duel) => {
+    if (duel.id === candidate.id) return false;
+    const rowOpponentId = duel.fromUserId === userId ? duel.toUserId : duel.fromUserId;
+    return rowOpponentId === opponentId;
+  });
+  return randomToday.length <= 5 && !sameOpponentToday;
 }
 
 function localDayIdFromIso(iso: string) {
@@ -4230,6 +4306,13 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
     marginTop: 9
+  },
+  soloCampaignFinePrint: {
+    color: "#9fb7ac",
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 14,
+    marginTop: 6
   },
   soloTargetBoard: {
     backgroundColor: "rgba(3,14,18,0.34)",

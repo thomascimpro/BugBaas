@@ -35,7 +35,7 @@ export function soloCampaignConfig(wave: number): SoloCampaignConfig {
   const boss = waveInLevel === soloCampaignWavesPerLevel;
   const targetScore = soloCampaignTargetsByLevel[level - 1]?.[waveInLevel - 1] ?? 60;
   const pcScore = Math.max(60, targetScore - (boss ? 6 : 10));
-  const bugCount = safeWave >= 17 ? 64 : safeWave >= 13 ? 60 : bugSmashDuelBugCount;
+  const bugCount = safeWave >= 17 ? 96 : safeWave >= 13 ? 80 : bugSmashDuelBugCount;
   const spawnSpacingMultiplier = safeWave >= 17 ? 0.56 : safeWave >= 13 ? 0.68 : safeWave >= 9 ? 0.86 : 1;
   return { boss, bugCount, level, pcScore, spawnSpacingMultiplier, targetScore, wave: safeWave };
 }
@@ -59,7 +59,13 @@ export function soloCampaignBugIds(seed: number, config: SoloCampaignConfig) {
     .map((entry, index) => ({ id: entry.id, sort: stableHash(`${seed}:fallback:${entry.id}:${index}`) }))
     .sort((a, b) => a.sort - b.sort)
     .map((item) => item.id);
-  return [...ids, ...fallback.filter((id) => !ids.includes(id))].slice(0, config.bugCount);
+  const pool = [...ids, ...fallback.filter((id) => !ids.includes(id))];
+  if (!pool.length) return [];
+  const result: string[] = [];
+  for (let index = 0; result.length < config.bugCount; index += 1) {
+    result.push(pool[index % pool.length]);
+  }
+  return result;
 }
 
 export function bugDexRarityRank(rarity: BugDexRarity) {

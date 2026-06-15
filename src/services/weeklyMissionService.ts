@@ -32,123 +32,82 @@ type WeeklyMissionContext = {
   bugs: BugReport[];
   duels: BugSmashDuel[];
   inventory: BugDexInventoryItem[];
+  soloCampaignWave: number;
 };
 
 const demoWeeklyClaims = new Set<string>();
 
-const bugMissionPool: MissionTemplate[] = [
+const weeklyMissionTemplates: MissionTemplate[] = [
   {
-    id: "fresh-finds",
-    title: "mission.reportFive",
-    target: 5,
+    id: "walk-15k",
+    title: "mission.walk15Week",
+    target: 15,
     reward: "mission.rewardXp25",
     rewardType: "xp",
     rewardXp: 25,
-    progressFor: (user, { bugs }, weekStart) => bugs.filter((bug) => isBugReport(bug) && bug.reporterId === user.uid && isThisWeek(bug.createdAt, weekStart)).length
+    progressFor: (user, _context, weekStart) => weeklyWalkingKm(user, weekStart)
   },
   {
-    id: "team-votes",
-    title: "mission.upvotesFive",
-    target: 5,
-    reward: "mission.rewardXp20",
+    id: "walk-30k",
+    title: "mission.walk30Week",
+    target: 30,
+    reward: "mission.rewardXp40",
     rewardType: "xp",
-    rewardXp: 20,
-    progressFor: (user, { bugs }, weekStart) => bugs
-      .filter((bug) => isBugReport(bug) && bug.reporterId === user.uid && isThisWeek(bug.updatedAt, weekStart))
-      .reduce((total, bug) => total + (bug.upvoteCount ?? 0), 0)
+    rewardXp: 40,
+    progressFor: (user, _context, weekStart) => weeklyWalkingKm(user, weekStart)
   },
   {
-    id: "fix-hunter",
-    title: "mission.fixedTwo",
-    target: 2,
-    reward: "mission.rewardRareBug",
-    rewardSource: "weekly_mission_rare",
-    rewardType: "bug",
-    rewardXp: 0,
-    progressFor: (user, { bugs }, weekStart) => bugs.filter((bug) => isBugReport(bug) && bug.reporterId === user.uid && bug.status === "Gefixt" && isThisWeek(bug.updatedAt, weekStart)).length
-  },
-  {
-    id: "critical-eye",
-    title: "mission.highTwo",
-    target: 2,
-    reward: "mission.rewardXp25",
+    id: "walk-45k",
+    title: "mission.walk45Week",
+    target: 45,
+    reward: "mission.rewardXp55",
     rewardType: "xp",
-    rewardXp: 25,
-    progressFor: (user, { bugs }, weekStart) => bugs.filter((bug) => isBugReport(bug) && bug.reporterId === user.uid && isThisWeek(bug.createdAt, weekStart) && (bug.severity === "Hoog" || bug.severity === "Kritiek")).length
-  }
-];
-
-const featureMissionPool: MissionTemplate[] = [
+    rewardXp: 55,
+    progressFor: (user, _context, weekStart) => weeklyWalkingKm(user, weekStart)
+  },
+  {
+    id: "walk-60k",
+    title: "mission.walk60Week",
+    target: 60,
+    reward: "mission.rewardXp70",
+    rewardType: "xp",
+    rewardXp: 70,
+    progressFor: (user, _context, weekStart) => weeklyWalkingKm(user, weekStart)
+  },
   {
     id: "duel-player",
-    title: "mission.duelPlayThree",
-    target: 3,
-    reward: "mission.rewardXp20",
+    title: "mission.duelPlayFive",
+    target: 5,
+    reward: "mission.rewardXp25",
     rewardType: "xp",
-    rewardXp: 20,
+    rewardXp: 25,
     progressFor: (user, { duels }, weekStart) => duels.filter((duel) => isUserDuel(duel, user) && isThisWeek(duel.scores?.[user.uid]?.submittedAt ?? "", weekStart)).length
   },
   {
-    id: "duel-winner",
-    title: "mission.duelWinTwo",
-    target: 2,
-    reward: "mission.rewardRareBug",
-    rewardSource: "weekly_mission_rare",
-    rewardType: "bug",
-    rewardXp: 0,
-    progressFor: (user, { duels }, weekStart) => duels.filter((duel) => duel.winnerId === user.uid && isThisWeek(duel.updatedAt, weekStart)).length
-  },
-  {
-    id: "bugdex-week",
-    title: "mission.bugdexWeekFive",
-    target: 5,
-    reward: "mission.rewardRareBug",
-    rewardSource: "weekly_mission_rare",
-    rewardType: "bug",
-    rewardXp: 0,
-    progressFor: (_user, { inventory }, weekStart) => inventory.filter((item) => isThisWeek(item.lastUnlockedAt, weekStart)).length
-  },
-  {
-    id: "squad-ready",
-    title: "mission.squadReady",
-    target: 3,
-    reward: "mission.rewardCommonBug",
-    rewardSource: "weekly_mission_common",
-    rewardType: "bug",
-    rewardXp: 0,
-    progressFor: (user) => new Set(user.activeBugSquad ?? []).size
+    id: "solo-wave-12",
+    title: "mission.soloWave12",
+    target: 12,
+    reward: "mission.rewardXp25",
+    rewardType: "xp",
+    rewardXp: 25,
+    progressFor: (_user, { soloCampaignWave }) => Math.max(1, soloCampaignWave)
   }
 ];
 
-const movementMission: MissionTemplate = {
-  id: "walk-week",
-  title: "mission.walkWeek",
-  target: 7.5,
-  reward: "mission.rewardXp20",
-  rewardType: "xp",
-  rewardXp: 20,
-  progressFor: (user, _context, weekStart) => user.movementRegisteredWeek === isoWeekId(weekStart) ? Math.floor(((user.movementRegisteredWeekKm ?? 0) + 0.0001) * 10) / 10 : 0
-};
-
-export function weeklyMissionSet(user: User, bugs: BugReport[], options: { duels?: BugSmashDuel[]; inventory?: BugDexInventoryItem[]; now?: Date } = {}): WeeklyMission[] {
+export function weeklyMissionSet(user: User, bugs: BugReport[], options: { duels?: BugSmashDuel[]; inventory?: BugDexInventoryItem[]; now?: Date; soloCampaignWave?: number } = {}): WeeklyMission[] {
   const now = options.now ?? new Date();
   const weekStart = startOfIsoWeek(now);
   const seed = weekNumber(now);
   const context: WeeklyMissionContext = {
     bugs,
     duels: options.duels ?? [],
-    inventory: options.inventory ?? []
+    inventory: options.inventory ?? [],
+    soloCampaignWave: options.soloCampaignWave ?? 1
   };
-  const templates = [
-    bugMissionPool[seed % bugMissionPool.length],
-    featureMissionPool[seed % featureMissionPool.length],
-    movementMission,
-    bugMissionPool[(seed + 2) % bugMissionPool.length]
-  ];
-  return templates.map((template) => {
+  return weeklyMissionTemplates.map((template) => {
     const progress = Math.min(template.target, template.progressFor(user, context, weekStart));
     return {
-      id: `weekly-v2-${template.id}-${seed}`,
+      id: `weekly-v3-${template.id}-${seed}`,
       title: template.title,
       target: template.target,
       progress,
@@ -417,8 +376,8 @@ function isoWeekId(date = new Date()): string {
   return `${next.getUTCFullYear()}-${String(week).padStart(2, "0")}`;
 }
 
-function isBugReport(bug: BugReport): boolean {
-  return (bug.reportType ?? "bug") === "bug";
+function weeklyWalkingKm(user: User, weekStart: Date): number {
+  return user.movementRegisteredWeek === isoWeekId(weekStart) ? Math.floor(((user.movementRegisteredWeekKm ?? 0) + 0.0001) * 10) / 10 : 0;
 }
 
 function isUserDuel(duel: BugSmashDuel, user: User): boolean {

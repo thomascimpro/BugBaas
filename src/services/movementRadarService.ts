@@ -47,8 +47,6 @@ const nativeModule = NativeModules.BugBaasNative as {
 } | undefined;
 
 const walkingMetersPerRadarBug = 1500;
-const runningMetersPerRadarBug = 3000;
-const cyclingMetersPerRadarBug = 5000;
 const maxMovementRadarBugsPerDay = 10;
 
 export async function claimMovementRadarBonuses(uid: string, movementBoost = 0): Promise<MovementRadarResult> {
@@ -91,16 +89,20 @@ export async function setRadarRequestCounts(tradeCount: number, duelCount: numbe
 export async function getMovementRadarProgress(_uid: string, movementBoost = 0): Promise<MovementRadarProgress> {
   if (Platform.OS !== "android") return emptyProgress("platform");
   if (!nativeModule?.getMovementRadarProgress) return emptyProgress("native");
-  return nativeModule.getMovementRadarProgress(clampBoost(movementBoost));
+  return walkingOnlyProgress(await nativeModule.getMovementRadarProgress(clampBoost(movementBoost)));
 }
 
 async function requestHealthConnectPermissionsOnce(uid: string): Promise<boolean> {
-  if (!nativeModule?.requestHealthPermissions) return false;
   const key = `movement-radar-health-permission-requested:${uid}`;
   const alreadyRequested = await AsyncStorage.getItem(key);
   if (alreadyRequested === "true") return false;
+  return requestHealthConnectPermissions(uid);
+}
+
+export async function requestHealthConnectPermissions(uid: string): Promise<boolean> {
+  if (Platform.OS !== "android" || !nativeModule?.requestHealthPermissions) return false;
   const opened = await nativeModule.requestHealthPermissions();
-  if (opened) await AsyncStorage.setItem(key, "true");
+  if (opened) await AsyncStorage.setItem(`movement-radar-health-permission-requested:${uid}`, "true");
   return opened;
 }
 
@@ -118,11 +120,7 @@ function emptyProgress(reason: string): MovementRadarProgress {
       { available: false, id: "distance", label: "Afstand", reason },
       { available: false, id: "exercise", label: "Trainingen", reason }
     ],
-    goals: [
-      makeGoal("walking", "Lopen", 0, walkingMetersPerRadarBug, 0),
-      makeGoal("running", "Hardlopen", 0, runningMetersPerRadarBug, 0),
-      makeGoal("cycling", "Fietsen", 0, cyclingMetersPerRadarBug, 0)
-    ],
+    goals: [makeGoal("walking", "Lopen", 0, walkingMetersPerRadarBug, 0)],
     maxRewards: maxMovementRadarBugsPerDay,
     reason
   };
@@ -135,6 +133,13 @@ function makeGoal(id: MovementRadarGoal["id"], label: string, meters: number, ta
     km: Math.max(0, meters) / 1000,
     label,
     targetKm: targetMeters / 1000
+  };
+}
+
+function walkingOnlyProgress(progress: MovementRadarProgress): MovementRadarProgress {
+  return {
+    ...progress,
+    goals: progress.goals.filter((goal) => goal.id === "walking")
   };
 }
 

@@ -91,6 +91,16 @@ service cloud.firestore {
         && request.resource.data.sources is list;
     }
 
+    function validBugDexUnlockData(bugId) {
+      return request.resource.data.keys().hasOnly(['bugId', 'firstUnlockedAt', 'lastTradeId', 'lastUnlockedAt', 'rarity', 'sources'])
+        && request.resource.data.bugId == bugId
+        && request.resource.data.firstUnlockedAt is string
+        && request.resource.data.lastUnlockedAt is string
+        && request.resource.data.rarity is string
+        && request.resource.data.sources is list
+        && (!request.resource.data.keys().hasAny(['lastTradeId']) || request.resource.data.lastTradeId is string);
+    }
+
     function acceptedTradeData() {
       return request.resource.data.lastTradeId is string
         && getAfter(/databases/$(database)/documents/trades/$(request.resource.data.lastTradeId)).data.status == 'Geaccepteerd'
@@ -134,6 +144,21 @@ service cloud.firestore {
           (tradeGain(userId, bugId) && request.resource.data.count == resource.data.count + 1)
           || (tradeLoss(userId, bugId) && resource.data.count >= 1 && request.resource.data.count == resource.data.count - 1)
         );
+    }
+
+    function tradeUnlockCreate(userId, bugId) {
+      return signedIn()
+        && validBugDexUnlockData(bugId)
+        && acceptedTradeData()
+        && tradeGain(userId, bugId);
+    }
+
+    function tradeUnlockUpdate(userId, bugId) {
+      return signedIn()
+        && validBugDexUnlockData(bugId)
+        && acceptedTradeData()
+        && tradeGain(userId, bugId)
+        && request.resource.data.firstUnlockedAt == resource.data.firstUnlockedAt;
     }
 
     function validUpvotes(data) {
@@ -230,6 +255,7 @@ service cloud.firestore {
           'displayName',
           'helpSeen',
           'lastActiveAt',
+          'lastReportRewardDay',
           'legendaryBugDexCount',
           'movementKmTotal',
           'movementRegisteredDay',
@@ -254,6 +280,7 @@ service cloud.firestore {
           'upvoteReceivedPointCount'
         ])
         && (!request.resource.data.keys().hasAny(['lastActiveAt']) || request.resource.data.lastActiveAt is string)
+        && (!request.resource.data.keys().hasAny(['lastReportRewardDay']) || request.resource.data.lastReportRewardDay is string)
         && (!request.resource.data.keys().hasAny(['notificationPushToken']) || request.resource.data.notificationPushToken is string)
         && (!request.resource.data.keys().hasAny(['starterBoostActiveUntil']) || request.resource.data.starterBoostActiveUntil is string)
         && (!request.resource.data.keys().hasAny(['starterBoostGrantedAt']) || request.resource.data.starterBoostGrantedAt is string)
@@ -395,10 +422,12 @@ service cloud.firestore {
           'fromUserId',
           'fromUserName',
           'id',
+          'matchType',
           'rewardClaimedBy',
           'resultSeenBy',
           'scores',
           'seed',
+          'startAt',
           'status',
           'toUserId',
           'toUserName',
@@ -409,8 +438,10 @@ service cloud.firestore {
         && request.resource.data.toUserId is string
         && request.resource.data.toUserId != request.auth.uid
         && request.resource.data.fromUserName is string
+        && (!request.resource.data.keys().hasAny(['matchType']) || request.resource.data.matchType in ['direct', 'random'])
         && request.resource.data.toUserName is string
         && request.resource.data.status == 'pending'
+        && (!request.resource.data.keys().hasAny(['startAt']) || request.resource.data.startAt is string)
         && request.resource.data.seed is int
         && request.resource.data.bugIds is list
         && request.resource.data.bugIds.size() == duelBugCount()
@@ -437,6 +468,20 @@ service cloud.firestore {
           request.resource.data.status == 'declined'
           || (request.resource.data.keys().hasAny(['startAt']) && request.resource.data.startAt is string)
         );
+    }
+
+    function claimOpenRandomDuel() {
+      return signedIn()
+        && resource.data.matchType == 'random'
+        && resource.data.status == 'pending'
+        && resource.data.toUserId == 'random'
+        && resource.data.fromUserId != request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['startAt', 'status', 'toUserId', 'toUserName', 'updatedAt'])
+        && request.resource.data.status == 'accepted'
+        && request.resource.data.toUserId == request.auth.uid
+        && request.resource.data.toUserName is string
+        && request.resource.data.startAt is string
+        && request.resource.data.updatedAt is string;
     }
 
     function cancelOwnDuel() {
@@ -553,6 +598,19 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /bugdexUnlocks/{bugId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if (signedIn()
+          && request.auth.uid == userId
+          && validBugDexUnlockData(bugId))
+          || tradeUnlockCreate(userId, bugId);
+        allow update: if (signedIn()
+          && request.auth.uid == userId
+          && validBugDexUnlockData(bugId))
+          || tradeUnlockUpdate(userId, bugId);
+        allow delete: if false;
+      }
+
       match /bugdexEvents/{eventId} {
         allow read: if signedIn() && request.auth.uid == userId;
         allow create: if signedIn()
@@ -630,12 +688,14 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
             'lives',
             'updatedAt',
-            'wave'
+            'wave',
+            'weekId'
           ])
           && request.resource.data.lives is int
           && request.resource.data.lives >= 1
           && request.resource.data.lives <= 3
           && request.resource.data.updatedAt is string
+          && request.resource.data.weekId is string
           && request.resource.data.wave is int
           && request.resource.data.wave >= 1
           && request.resource.data.wave <= 20;
@@ -806,33 +866,43 @@ service cloud.firestore {
         && request.resource.data.updatedAt is string;
       allow update: if signedIn()
         && resource.data.status == 'Open'
-        && resource.data.toUserId == request.auth.uid
-        && request.resource.data.status in ['Geaccepteerd', 'Afgewezen']
         && request.resource.data.updatedAt is string
         && (
           (
-            request.resource.data.status == 'Afgewezen'
+            resource.data.fromUserId == request.auth.uid
+            && request.resource.data.status == 'Geannuleerd'
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
           )
           || (
-            request.resource.data.status == 'Geaccepteerd'
-            && !multiTrade(resource.data)
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
-          )
-          || (
-            request.resource.data.status == 'Geaccepteerd'
-            && multiTrade(resource.data)
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'acceptedBugCount'])
-            && request.resource.data.acceptedBugCount == resource.data.offerBugIds.size() + resource.data.requestBugIds.size()
+            resource.data.toUserId == request.auth.uid
+            && request.resource.data.status in ['Geaccepteerd', 'Afgewezen']
+            && (
+              (
+                request.resource.data.status == 'Afgewezen'
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+              )
+              || (
+                request.resource.data.status == 'Geaccepteerd'
+                && !multiTrade(resource.data)
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+              )
+              || (
+                request.resource.data.status == 'Geaccepteerd'
+                && multiTrade(resource.data)
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'acceptedBugCount'])
+                && request.resource.data.acceptedBugCount == resource.data.offerBugIds.size() + resource.data.requestBugIds.size()
+              )
+            )
           )
         );
       allow delete: if false;
     }
 
     match /bugSmashDuels/{duelId} {
-      allow read: if signedIn() && isDuelParticipant(resource.data);
+      allow read: if signedIn() && (isDuelParticipant(resource.data) || (resource.data.matchType == 'random' && resource.data.status == 'pending' && resource.data.toUserId == 'random'));
       allow create: if validDuelCreate(duelId);
       allow update: if acceptOrDeclineDuel()
+        || claimOpenRandomDuel()
         || cancelOwnDuel()
         || submitOwnDuelScore()
         || claimOwnDuelReward()

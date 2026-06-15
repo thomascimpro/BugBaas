@@ -7,6 +7,7 @@ export type SoloCampaignProgress = {
   lives: number;
   updatedAt: string;
   wave: number;
+  weekId: string;
 };
 
 const soloCampaignStartingLives = 3;
@@ -17,7 +18,8 @@ export function defaultSoloCampaignProgress(): SoloCampaignProgress {
   return {
     lives: soloCampaignStartingLives,
     updatedAt: new Date(0).toISOString(),
-    wave: 1
+    wave: 1,
+    weekId: currentWeekId()
   };
 }
 
@@ -26,8 +28,9 @@ export async function loadSoloCampaignProgress(uid: string): Promise<SoloCampaig
     try {
       const snapshot = await getDoc(progressRef(uid));
       if (snapshot.exists()) {
-        const progress = normalize(snapshot.data());
+        const progress = resetIfExpired(normalize(snapshot.data()));
         await saveLocal(uid, progress);
+        if (progress.wave === 1 && progress.weekId === currentWeekId()) await setDoc(progressRef(uid), progress).catch(() => undefined);
         return progress;
       }
     } catch {
@@ -35,7 +38,7 @@ export async function loadSoloCampaignProgress(uid: string): Promise<SoloCampaig
     }
   }
 
-  const local = await loadLocal(uid);
+  const local = resetIfExpired(await loadLocal(uid));
   if (isFirebaseConfigured) await saveSoloCampaignProgress(uid, local).catch(() => undefined);
   return local;
 }
@@ -43,7 +46,8 @@ export async function loadSoloCampaignProgress(uid: string): Promise<SoloCampaig
 export async function saveSoloCampaignProgress(uid: string, progress: Partial<SoloCampaignProgress>): Promise<SoloCampaignProgress> {
   const next = normalize({
     ...progress,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    weekId: currentWeekId()
   });
   await saveLocal(uid, next);
   if (isFirebaseConfigured) await setDoc(progressRef(uid), next);
@@ -70,7 +74,8 @@ async function loadLegacyLocal(uid: string): Promise<SoloCampaignProgress> {
   return normalize({
     lives: soloCampaignStartingLives,
     updatedAt: new Date(0).toISOString(),
-    wave: Number.isFinite(wave) ? wave : 1
+    wave: Number.isFinite(wave) ? wave : 1,
+    weekId: weekIdForIso(new Date(0).toISOString())
   });
 }
 
@@ -79,9 +84,39 @@ async function saveLocal(uid: string, progress: SoloCampaignProgress): Promise<v
 }
 
 function normalize(value: Partial<SoloCampaignProgress>): SoloCampaignProgress {
+  const updatedAt = typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString();
   return {
     lives: Math.max(1, Math.min(soloCampaignStartingLives, Math.floor(Number(value.lives) || soloCampaignStartingLives))),
-    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString(),
-    wave: Math.max(1, Math.min(soloCampaignMaxWave, Math.floor(Number(value.wave) || 1)))
+    updatedAt,
+    wave: Math.max(1, Math.min(soloCampaignMaxWave, Math.floor(Number(value.wave) || 1))),
+    weekId: typeof value.weekId === "string" ? value.weekId : weekIdForIso(updatedAt)
   };
+}
+
+function resetIfExpired(progress: SoloCampaignProgress): SoloCampaignProgress {
+  if (progress.weekId === currentWeekId()) return progress;
+  return {
+    lives: soloCampaignStartingLives,
+    updatedAt: new Date().toISOString(),
+    wave: 1,
+    weekId: currentWeekId()
+  };
+}
+
+function currentWeekId(): string {
+  return weekIdForDate(new Date());
+}
+
+function weekIdForIso(iso: string): string {
+  const date = new Date(iso);
+  return weekIdForDate(Number.isNaN(date.getTime()) ? new Date() : date);
+}
+
+function weekIdForDate(date: Date): string {
+  const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((utc.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${utc.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }

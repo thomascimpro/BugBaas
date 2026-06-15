@@ -2,7 +2,7 @@ import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDo
 import { auth, db, isFirebaseConfigured } from "../firebase";
 import { BugComment, BugReport, BugStatus, NewBugInput, ReportType, User } from "../types";
 import { defaultOrganizationId, defaultOrganizationName, isPublicOrganization, organizationIdsForUser, organizationNamesForUser } from "./organizationService";
-import { badgesForUser, calculateBugPoints, titleForPoints } from "./pointsService";
+import { badgesForUser, titleForPoints } from "./pointsService";
 import { starterBoostedXp } from "./starterBoostService";
 import { applyUserPoints, commentPointValue, syncEngagementPoints, upvoteGivenPointValue } from "./userService";
 
@@ -28,11 +28,20 @@ function bugCollectionName(bug: BugReport): "bugs" | "organizationBugs" {
   return current.collectionName ?? (current.organizationId === defaultOrganizationId ? "bugs" : "organizationBugs");
 }
 
-function calculateReportPoints(reportType: ReportType, severity: NewBugInput["severity"], status: BugStatus): number {
-  if (reportType === "bug") return calculateBugPoints(severity, status);
-  if (status === "Afgekeurd" || status === "Dubbel") return 0;
-  if (reportType === "workaround") return 8;
-  if (reportType === "tip") return 6;
+function localDayId(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function calculateReportPoints(reportType: ReportType, severity: NewBugInput["severity"]): number {
+  if (reportType === "bug") {
+    if (severity === "Kritiek") return 15;
+    if (severity === "Hoog") return 12;
+    if (severity === "Normaal") return 8;
+    return 5;
+  }
   return 5;
 }
 
@@ -90,7 +99,8 @@ export async function createBug(input: NewBugInput, user: User): Promise<BugRepo
 
   const now = new Date().toISOString();
   const reportType = input.reportType ?? "bug";
-  const points = calculateReportPoints(reportType, input.severity, "Nieuw");
+  const basePoints = calculateReportPoints(reportType, input.severity);
+  const today = localDayId();
   const userOrganizationIds = organizationIdsForUser(user);
   const userOrganizationNames = organizationNamesForUser(user);
   const inputOrganizationId = input.organizationId ?? defaultOrganizationId;
@@ -114,7 +124,7 @@ export async function createBug(input: NewBugInput, user: User): Promise<BugRepo
     reporterTestAccount: user.testAccount === true,
     organizationId: requestedOrganizationId,
     organizationName: requestedOrganizationName,
-    points,
+    points: basePoints,
     upvoteCount: 0,
     upvoteUserIds: [],
     createdAt: now,
@@ -122,9 +132,15 @@ export async function createBug(input: NewBugInput, user: User): Promise<BugRepo
   };
 
   if (!isFirebaseConfigured) {
-    const bug = { ...baseBug, screenshotDataUrl: input.screenshotDataUrl };
+    const alreadyRewardedToday = user.lastReportRewardDay === today;
+    const awardedPoints = alreadyRewardedToday ? 0 : basePoints;
+    const bugCountDelta = reportType === "bug" ? 1 : 0;
+    const bug = { ...baseBug, points: awardedPoints, screenshotDataUrl: input.screenshotDataUrl };
     demoBugs.unshift(bug);
-    await applyUserPoints(user.uid, points, reportType === "bug" ? 1 : 0);
+    if (awardedPoints > 0) user.lastReportRewardDay = today;
+    if (awardedPoints > 0 || bugCountDelta > 0) {
+      await applyUserPoints(user.uid, awardedPoints, bugCountDelta);
+    }
     return bug;
   }
 
@@ -132,9 +148,32 @@ export async function createBug(input: NewBugInput, user: User): Promise<BugRepo
   const docRef = doc(collection(db, collectionName));
   const bug: BugReport = { ...baseBug, collectionName, id: docRef.id };
   if (input.screenshotDataUrl) bug.screenshotDataUrl = input.screenshotDataUrl;
-  await setDoc(docRef, bug);
-  await applyUserPoints(user.uid, points, reportType === "bug" ? 1 : 0);
-  return bug;
+  const userRef = doc(db, "users", user.uid);
+  return runTransaction(db, async (transaction) => {
+    const userSnapshot = await transaction.get(userRef);
+    if (!userSnapshot.exists()) throw new Error("Gebruiker niet gevonden.");
+    const currentUser = userSnapshot.data() as User;
+    const alreadyRewardedToday = currentUser.lastReportRewardDay === today;
+    const awardedPoints = alreadyRewardedToday ? 0 : basePoints;
+    const bugCountDelta = reportType === "bug" ? 1 : 0;
+    const nextBug = { ...bug, points: awardedPoints };
+    transaction.set(docRef, nextBug);
+    if (awardedPoints > 0 || bugCountDelta > 0) {
+      const totalPoints = Math.max(0, currentUser.totalPoints + starterBoostedXp(currentUser, awardedPoints));
+      const bugCount = currentUser.bugCount + bugCountDelta;
+      const updatedUser = { ...currentUser, totalPoints, bugCount, lastReportRewardDay: awardedPoints > 0 ? today : currentUser.lastReportRewardDay, title: titleForPoints(totalPoints) };
+      updatedUser.badges = badgesForUser(updatedUser);
+      const userUpdate: Partial<User> = {
+        badges: updatedUser.badges,
+        bugCount,
+        title: updatedUser.title,
+        totalPoints
+      };
+      if (awardedPoints > 0) userUpdate.lastReportRewardDay = today;
+      transaction.update(userRef, userUpdate);
+    }
+    return nextBug;
+  });
 }
 
 export async function listBugs(status?: BugStatus): Promise<BugReport[]> {
@@ -157,7 +196,12 @@ export async function listBugs(status?: BugStatus): Promise<BugReport[]> {
 
 export async function updateBugStatus(bug: BugReport, status: BugStatus): Promise<BugReport> {
   const current = normalizeBug(bug);
-  const nextPoints = calculateReportPoints(current.reportType ?? "bug", current.severity, status);
+  const fixPointDelta = status === "Gefixt" && current.status !== "Gefixt"
+    ? 10
+    : status !== "Gefixt" && current.status === "Gefixt"
+      ? -10
+      : 0;
+  const nextPoints = Math.max(0, current.points + fixPointDelta);
   const updated = { ...current, status, points: nextPoints, updatedAt: new Date().toISOString() };
   await applyUserPoints(current.reporterId, nextPoints - current.points, 0);
 
@@ -184,7 +228,7 @@ export async function updateOwnBug(
   if (current.reporterId !== user.uid) throw new Error("Je kunt alleen je eigen melding wijzigen.");
 
   const nextSeverity = (current.reportType ?? "bug") === "bug" ? changes.severity : "Laag";
-  const nextPoints = calculateReportPoints(current.reportType ?? "bug", nextSeverity, current.status);
+  const nextPoints = current.points;
   const updated = {
     ...current,
     description: changes.description.trim(),
@@ -213,7 +257,7 @@ export async function updateOwnBug(
     const fresh = normalizeBug(bugSnapshot.data() as BugReport, bugSnapshot.id);
     if (fresh.reporterId !== user.uid) throw new Error("Je kunt alleen je eigen melding wijzigen.");
     const freshSeverity = (fresh.reportType ?? "bug") === "bug" ? changes.severity : "Laag";
-    const freshPoints = calculateReportPoints(fresh.reportType ?? "bug", freshSeverity, fresh.status);
+    const freshPoints = fresh.points;
     const next = {
       ...fresh,
       description: changes.description.trim(),

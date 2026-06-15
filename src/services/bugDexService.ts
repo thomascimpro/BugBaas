@@ -1,6 +1,6 @@
-import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, writeBatch } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, runTransaction, setDoc, writeBatch, type Transaction } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
-import { BugDexInventoryItem, User } from "../types";
+import { BugDexInventoryItem, BugDexUnlock, User } from "../types";
 import { bugLampStatus, shouldAwardBugLamp, withAwardedBugLamp } from "./bugLampService";
 import { activeBugSquadBonuses } from "./bugSquadService";
 import { badgesForUser, BugDexEntry, BugDexRarity, bugDexEntries, isBugDexEntryUnlocked, titleForPoints } from "./pointsService";
@@ -45,6 +45,7 @@ export type BugDexDropResult = {
 };
 
 const demoInventory = new Map<string, Map<string, BugDexInventoryItem>>();
+const demoUnlocks = new Map<string, Map<string, BugDexUnlock>>();
 const demoEvents = new Set<string>();
 const demoDailyStreaks = new Map<string, number>();
 
@@ -115,13 +116,49 @@ export function bugDexInventoryMap(items: BugDexInventoryItem[]): Record<string,
 
 export async function listBugDexInventory(user: User): Promise<BugDexInventoryItem[]> {
   if (!isFirebaseConfigured) {
-    return Array.from(demoInventory.get(user.uid)?.values() ?? [])
-      .filter((item) => item.count > 0)
+    return mergeLegacyInventory(user, Array.from(demoInventory.get(user.uid)?.values() ?? []))
+      .map((item) => normalizeInventoryItem(item.bugId, item))
+      .filter(hasOwnedCount)
       .sort((a, b) => b.lastUnlockedAt.localeCompare(a.lastUnlockedAt));
   }
 
-  const snapshot = await getDocs(query(collection(db, "users", user.uid, "bugdex"), orderBy("lastUnlockedAt", "desc")));
-  return snapshot.docs.map((item) => item.data() as BugDexInventoryItem).filter((item) => item.count > 0);
+  const snapshot = await getDocs(collection(db, "users", user.uid, "bugdex"));
+  return mergeLegacyInventory(user, snapshot.docs.map((item) => normalizeInventoryItem(item.id, item.data() as Partial<BugDexInventoryItem>)))
+    .map((item) => normalizeInventoryItem(item.bugId, item))
+    .filter(hasOwnedCount)
+    .sort((a, b) => b.lastUnlockedAt.localeCompare(a.lastUnlockedAt));
+}
+
+export async function listBugDexUnlocks(user: User): Promise<BugDexUnlock[]> {
+  if (!isFirebaseConfigured) {
+    const unlocks = demoUnlocks.get(user.uid) ?? new Map<string, BugDexUnlock>();
+    for (const item of mergeLegacyInventory(user, Array.from(demoInventory.get(user.uid)?.values() ?? [])).map((item) => normalizeInventoryItem(item.bugId, item)).filter(hasOwnedCount)) {
+      if (!unlocks.has(item.bugId)) unlocks.set(item.bugId, bugDexUnlockFromInventory(item));
+    }
+    demoUnlocks.set(user.uid, unlocks);
+    return Array.from(unlocks.values())
+      .sort((a, b) => b.lastUnlockedAt.localeCompare(a.lastUnlockedAt));
+  }
+
+  const [inventorySnapshot, unlockSnapshot] = await Promise.all([
+    getDocs(collection(db, "users", user.uid, "bugdex")),
+    getDocs(collection(db, "users", user.uid, "bugdexUnlocks"))
+  ]);
+  const unlocks = new Map(unlockSnapshot.docs.map((item) => [item.id, normalizeUnlockItem(item.id, item.data() as Partial<BugDexUnlock>)]));
+  const missingUnlocks = mergeLegacyInventory(user, inventorySnapshot.docs.map((item) => normalizeInventoryItem(item.id, item.data() as Partial<BugDexInventoryItem>)))
+    .filter((item) => hasOwnedCount(item) && !unlocks.has(item.bugId))
+    .map(bugDexUnlockFromInventory);
+
+  if (missingUnlocks.length) {
+    const batch = writeBatch(db);
+    for (const item of missingUnlocks) {
+      unlocks.set(item.bugId, item);
+      batch.set(doc(db, "users", user.uid, "bugdexUnlocks", item.bugId), item);
+    }
+    await batch.commit().catch(() => undefined);
+  }
+
+  return Array.from(unlocks.values()).sort((a, b) => b.lastUnlockedAt.localeCompare(a.lastUnlockedAt));
 }
 
 export async function syncPointUnlockedBugDex(user: Pick<User, "uid" | "totalPoints" | "bugCount">): Promise<void> {
@@ -141,6 +178,7 @@ export async function syncPointUnlockedBugDex(user: Pick<User, "uid" | "totalPoi
         rarity: entry.rarity,
         sources: ["rank_unlock"]
       });
+      updateDemoUnlock(user.uid, entry, "rank_unlock", now);
     }
     demoInventory.set(user.uid, inventory);
     return;
@@ -153,6 +191,9 @@ export async function syncPointUnlockedBugDex(user: Pick<User, "uid" | "totalPoi
 
   const batch = writeBatch(db);
   for (const entry of missingEntries) {
+    const unlockRef = doc(db, "users", user.uid, "bugdexUnlocks", entry.id);
+    const unlockSnapshot = await getDoc(unlockRef);
+    const existingUnlock = unlockSnapshot.exists() ? unlockSnapshot.data() as BugDexUnlock : null;
     batch.set(doc(db, "users", user.uid, "bugdex", entry.id), {
       bugId: entry.id,
       count: 1,
@@ -161,6 +202,7 @@ export async function syncPointUnlockedBugDex(user: Pick<User, "uid" | "totalPoi
       rarity: entry.rarity,
       sources: ["rank_unlock"]
     } satisfies BugDexInventoryItem);
+    batch.set(unlockRef, bugDexUnlockItem(entry, "rank_unlock", now, existingUnlock));
   }
   await batch.commit();
 }
@@ -168,13 +210,12 @@ export async function syncPointUnlockedBugDex(user: Pick<User, "uid" | "totalPoi
 export async function countBugDexInventory(userOrUid: Pick<User, "uid"> | string): Promise<number> {
   const uid = typeof userOrUid === "string" ? userOrUid : userOrUid.uid;
   if (!isFirebaseConfigured) {
-    return Array.from(demoInventory.get(uid)?.values() ?? []).filter((item) => item.count > 0).length;
+    return Array.from(demoInventory.get(uid)?.values() ?? []).map((item) => normalizeInventoryItem(item.bugId, item)).filter(hasOwnedCount).length;
   }
 
   const snapshot = await getDocs(collection(db, "users", uid, "bugdex"));
   return snapshot.docs.filter((item) => {
-    const data = item.data() as BugDexInventoryItem;
-    return data.count > 0;
+    return hasOwnedCount(normalizeInventoryItem(item.id, item.data() as Partial<BugDexInventoryItem>));
   }).length;
 }
 
@@ -250,7 +291,7 @@ export async function claimDailyLoginBug(user: User, preparedDrop?: BugDexDropRe
 
   const eventRef = doc(db, "users", user.uid, "bugdexEvents", eventId);
   const previousEventRef = doc(db, "users", user.uid, "bugdexEvents", previousEventId);
-  return runTransaction(db, async (transaction) => {
+  const result: BugDexDropResult | null = await runTransaction(db, async (transaction) => {
     const eventSnapshot = await transaction.get(eventRef);
     if (eventSnapshot.exists()) return null;
 
@@ -275,7 +316,6 @@ export async function claimDailyLoginBug(user: User, preparedDrop?: BugDexDropRe
     const inventorySnapshot = await transaction.get(inventoryRef);
     const existing = inventorySnapshot.exists() ? inventorySnapshot.data() as BugDexInventoryItem : null;
     const item = dailyRewardItem(entry, existing, now);
-
     transaction.set(inventoryRef, item);
     transaction.set(eventRef, {
       id: eventId,
@@ -295,6 +335,10 @@ export async function claimDailyLoginBug(user: User, preparedDrop?: BugDexDropRe
     });
     return { rewardType: "bug", entry, item, isNew: !existing, source: "daily_login", streakDay, daysUntilBetterReward, updatedUser };
   });
+  if (result?.rewardType === "bug") {
+    await writeBugDexUnlockBestEffort(user.uid, result.entry, "daily_login", new Date().toISOString());
+  }
+  return result;
 }
 
 export async function rollBugDexDrop(user: User, source: BugDexDropSource): Promise<BugDexDropResult | null> {
@@ -310,7 +354,7 @@ export async function rollBugDexDrop(user: User, source: BugDexDropSource): Prom
     const item = existing
       ? {
           ...existing,
-          count: existing.count + 1,
+          count: ownedCount(existing) + 1,
           lastUnlockedAt: now,
           sources: Array.from(new Set([...existing.sources, source]))
         }
@@ -323,18 +367,19 @@ export async function rollBugDexDrop(user: User, source: BugDexDropSource): Prom
           sources: [source]
         };
     inventory.set(entry.id, item);
+    updateDemoUnlock(user.uid, entry, source, now);
     demoInventory.set(user.uid, inventory);
     return { rewardType: "bug", entry, item, isNew: !existing, source };
   }
 
   const ref = doc(db, "users", user.uid, "bugdex", entry.id);
-  return runTransaction(db, async (transaction) => {
+  const result: BugDexDropResult = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
-    const existing = snapshot.exists() ? snapshot.data() as BugDexInventoryItem : null;
+    const existing = snapshot.exists() ? normalizeInventoryItem(entry.id, snapshot.data() as Partial<BugDexInventoryItem>) : null;
     const item: BugDexInventoryItem = existing
       ? {
           ...existing,
-          count: existing.count + 1,
+          count: ownedCount(existing) + 1,
           lastUnlockedAt: now,
           sources: Array.from(new Set([...existing.sources, source]))
         }
@@ -349,6 +394,8 @@ export async function rollBugDexDrop(user: User, source: BugDexDropSource): Prom
     transaction.set(ref, item);
     return { rewardType: "bug", entry, item, isNew: !existing, source };
   });
+  await writeBugDexUnlockBestEffort(user.uid, entry, source, now);
+  return result;
 }
 
 export function pickQueuedBugDexRewardEntry(user: User, source: BugDexDropSource): BugDexEntry | null {
@@ -390,14 +437,15 @@ export async function combineBugDexDuplicates(user: User, bugId: string): Promis
     if (hasDemoUpgradeUsedToday(user.uid, day)) throw new Error("Vandaag is al een upgrade gebruikt.");
     const inventory = demoInventory.get(user.uid) ?? new Map<string, BugDexInventoryItem>();
     const sourceItem = inventory.get(bugId);
-    if (!sourceItem || sourceItem.count < requiredCount) throw new Error(`Je hebt x${requiredCount} nodig om te combineren.`);
-    const nextSourceCount = Math.max(1, sourceItem.count - requiredCount + 1);
+    if (!sourceItem || ownedCount(sourceItem) < requiredCount) throw new Error(`Je hebt x${requiredCount} nodig om te combineren.`);
+    const nextSourceCount = Math.max(1, ownedCount(sourceItem) - requiredCount + 1);
     inventory.set(bugId, { ...sourceItem, count: nextSourceCount, lastUnlockedAt: now });
     const existingTarget = inventory.get(targetEntry.id);
     const targetItem: BugDexInventoryItem = existingTarget
-      ? { ...existingTarget, count: existingTarget.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existingTarget.sources, "combine"])) }
+      ? { ...existingTarget, count: ownedCount(existingTarget) + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existingTarget.sources, "combine"])) }
       : { bugId: targetEntry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: targetEntry.rarity, sources: ["combine"] };
     inventory.set(targetEntry.id, targetItem);
+    updateDemoUnlock(user.uid, targetEntry, "combine", now);
     demoEvents.add(`${user.uid}:${dailyEventId}`);
     demoInventory.set(user.uid, inventory);
     return { rewardType: "bug", entry: targetEntry, item: targetItem, isNew: !existingTarget, source: "combine" };
@@ -413,14 +461,15 @@ export async function combineBugDexDuplicates(user: User, bugId: string): Promis
     const sourceSnapshot = await transaction.get(sourceRef);
     if (!sourceSnapshot.exists()) throw new Error("Bug niet gevonden.");
     const sourceItem = sourceSnapshot.data() as BugDexInventoryItem;
-    if (sourceItem.count < requiredCount) throw new Error(`Je hebt x${requiredCount} nodig om te combineren.`);
+    if (ownedCount(sourceItem) < requiredCount) throw new Error(`Je hebt x${requiredCount} nodig om te combineren.`);
 
     const targetSnapshot = await transaction.get(targetRef);
     const existingTarget = targetSnapshot.exists() ? targetSnapshot.data() as BugDexInventoryItem : null;
-    const nextSourceCount = Math.max(1, sourceItem.count - requiredCount + 1);
+    const nextSourceCount = Math.max(1, ownedCount(sourceItem) - requiredCount + 1);
     const targetItem: BugDexInventoryItem = existingTarget
-      ? { ...existingTarget, count: existingTarget.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existingTarget.sources, "combine"])) }
+      ? { ...existingTarget, count: ownedCount(existingTarget) + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existingTarget.sources, "combine"])) }
       : { bugId: targetEntry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: targetEntry.rarity, sources: ["combine"] };
+    await upsertBugDexUnlock(transaction, user.uid, targetEntry, "combine", now);
     transaction.set(sourceRef, { ...sourceItem, count: nextSourceCount, lastUnlockedAt: now });
     transaction.set(targetRef, targetItem);
     transaction.set(dailyEventRef, upgradeEventPayload(dailyEventId, sourceEntry.rarity, targetRarity, targetEntry.id, now));
@@ -450,18 +499,19 @@ export async function combineDifferentBugDexUpgrade(user: User, bugIds: string[]
     const inventory = demoInventory.get(user.uid) ?? new Map<string, BugDexInventoryItem>();
     for (const bugId of uniqueBugIds) {
       const item = inventory.get(bugId);
-      if (!item || item.count < 1) throw new Error("Je mist een gekozen bug.");
+      if (!item || ownedCount(item) < 1) throw new Error("Je mist een gekozen bug.");
     }
     for (const bugId of uniqueBugIds) {
       const item = inventory.get(bugId);
       if (!item) continue;
-      inventory.set(bugId, { ...item, count: item.count - 1, lastUnlockedAt: now });
+      inventory.set(bugId, { ...item, count: ownedCount(item) - 1, lastUnlockedAt: now });
     }
     const existingTarget = inventory.get(targetEntry.id);
     const targetItem: BugDexInventoryItem = existingTarget
-      ? { ...existingTarget, count: existingTarget.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existingTarget.sources, "combine"])) }
+      ? { ...existingTarget, count: ownedCount(existingTarget) + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existingTarget.sources, "combine"])) }
       : { bugId: targetEntry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: targetEntry.rarity, sources: ["combine"] };
     inventory.set(targetEntry.id, targetItem);
+    updateDemoUnlock(user.uid, targetEntry, "combine", now);
     demoEvents.add(`${user.uid}:${dailyEventId}`);
     demoInventory.set(user.uid, inventory);
     return { rewardType: "bug", entry: targetEntry, item: targetItem, isNew: !existingTarget, source: "combine" };
@@ -476,17 +526,18 @@ export async function combineDifferentBugDexUpgrade(user: User, bugIds: string[]
     if (upgradeEventSnapshots.some((snapshot) => snapshot.exists())) throw new Error("Vandaag is al een upgrade gebruikt.");
     const sourceSnapshots = await Promise.all(sourceRefs.map((ref) => transaction.get(ref)));
     const sourceItems = sourceSnapshots.map((snapshot) => snapshot.exists() ? snapshot.data() as BugDexInventoryItem : null);
-    if (sourceItems.some((item) => !item || item.count < 1)) throw new Error("Je mist een gekozen bug.");
+    if (sourceItems.some((item) => !item || ownedCount(item) < 1)) throw new Error("Je mist een gekozen bug.");
 
     const targetSnapshot = await transaction.get(targetRef);
     const existingTarget = targetSnapshot.exists() ? targetSnapshot.data() as BugDexInventoryItem : null;
     const targetItem: BugDexInventoryItem = existingTarget
-      ? { ...existingTarget, count: existingTarget.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existingTarget.sources, "combine"])) }
+      ? { ...existingTarget, count: ownedCount(existingTarget) + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existingTarget.sources, "combine"])) }
       : { bugId: targetEntry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: targetEntry.rarity, sources: ["combine"] };
+    await upsertBugDexUnlock(transaction, user.uid, targetEntry, "combine", now);
 
     sourceItems.forEach((item, index) => {
       if (!item) return;
-      transaction.set(sourceRefs[index], { ...item, count: item.count - 1, lastUnlockedAt: now });
+      transaction.set(sourceRefs[index], { ...item, count: ownedCount(item) - 1, lastUnlockedAt: now });
     });
     transaction.set(targetRef, targetItem);
     transaction.set(dailyEventRef, upgradeEventPayload(dailyEventId, sourceRarity, targetRarity, targetEntry.id, now));
@@ -514,8 +565,9 @@ function previewDailyReward(user: User, streakDay: number): BugDexDropResult {
 }
 
 function dailyRewardItem(entry: BugDexEntry, existing: BugDexInventoryItem | null, now: string): BugDexInventoryItem {
+  const current = existing ? normalizeInventoryItem(entry.id, existing) : null;
   return existing
-    ? { ...existing, count: existing.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, "daily_login"])) }
+    ? { ...current!, count: ownedCount(current!) + 1, lastUnlockedAt: now, sources: Array.from(new Set([...current!.sources, "daily_login"])) }
     : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: ["daily_login"] };
 }
 
@@ -526,11 +578,12 @@ async function grantSpecificBug(user: User, entry: BugDexEntry, source: BugDexDr
   if (!isFirebaseConfigured) {
     if (dailyEventId && demoEvents.has(`${user.uid}:${dailyEventId}`)) throw new Error("Daily reward already claimed.");
     const inventory = demoInventory.get(user.uid) ?? new Map<string, BugDexInventoryItem>();
-    const existing = inventory.get(entry.id);
+    const existing = inventory.has(entry.id) ? normalizeInventoryItem(entry.id, inventory.get(entry.id) ?? {}) : null;
     const item = existing
-      ? { ...existing, count: existing.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
+      ? { ...existing, count: ownedCount(existing) + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
       : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
     inventory.set(entry.id, item);
+    updateDemoUnlock(user.uid, entry, source, now);
     demoInventory.set(user.uid, inventory);
     if (dailyEventId) demoEvents.add(`${user.uid}:${dailyEventId}`);
     return { rewardType: "bug", entry, item, isNew: !existing, source };
@@ -538,18 +591,136 @@ async function grantSpecificBug(user: User, entry: BugDexEntry, source: BugDexDr
 
   const ref = doc(db, "users", user.uid, "bugdex", entry.id);
   const eventRef = dailyEventId ? doc(db, "users", user.uid, "bugdexEvents", dailyEventId) : null;
-  return runTransaction(db, async (transaction) => {
+  const result: BugDexDropResult = await runTransaction(db, async (transaction) => {
     const eventSnapshot = eventRef ? await transaction.get(eventRef) : null;
     if (eventSnapshot?.exists()) throw new Error("Daily reward already claimed.");
     const snapshot = await transaction.get(ref);
-    const existing = snapshot.exists() ? snapshot.data() as BugDexInventoryItem : null;
+    const existing = snapshot.exists() ? normalizeInventoryItem(entry.id, snapshot.data() as Partial<BugDexInventoryItem>) : null;
     const item: BugDexInventoryItem = existing
-      ? { ...existing, count: existing.count + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
+      ? { ...existing, count: ownedCount(existing) + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
       : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
     transaction.set(ref, item);
     if (eventRef && dailyEventId) transaction.set(eventRef, { id: dailyEventId, source, createdAt: now });
     return { rewardType: "bug", entry, item, isNew: !existing, source };
   });
+  await writeBugDexUnlockBestEffort(user.uid, entry, source, now);
+  return result;
+}
+
+function updateDemoUnlock(uid: string, entry: BugDexEntry, source: string, now: string): void {
+  const unlocks = demoUnlocks.get(uid) ?? new Map<string, BugDexUnlock>();
+  unlocks.set(entry.id, bugDexUnlockItem(entry, source, now, unlocks.get(entry.id) ?? null));
+  demoUnlocks.set(uid, unlocks);
+}
+
+async function upsertBugDexUnlock(transaction: Transaction, uid: string, entry: BugDexEntry, source: string, now: string): Promise<void> {
+  const ref = doc(db, "users", uid, "bugdexUnlocks", entry.id);
+  const snapshot = await transaction.get(ref);
+  const existing = snapshot.exists() ? snapshot.data() as BugDexUnlock : null;
+  transaction.set(ref, bugDexUnlockItem(entry, source, now, existing));
+}
+
+async function writeBugDexUnlockBestEffort(uid: string, entry: BugDexEntry, source: string, now: string): Promise<void> {
+  if (!isFirebaseConfigured) return;
+  try {
+    const ref = doc(db, "users", uid, "bugdexUnlocks", entry.id);
+    const snapshot = await getDoc(ref);
+    const existing = snapshot.exists() ? snapshot.data() as BugDexUnlock : null;
+    await setDoc(ref, bugDexUnlockItem(entry, source, now, existing));
+  } catch {
+    // Inventory is the source of truth; unlock history is best-effort.
+  }
+}
+
+function bugDexUnlockItem(entry: BugDexEntry, source: string, now: string, existing: BugDexUnlock | null): BugDexUnlock {
+  return {
+    bugId: entry.id,
+    firstUnlockedAt: existing?.firstUnlockedAt ?? now,
+    lastUnlockedAt: now,
+    rarity: entry.rarity,
+    sources: Array.from(new Set([...(existing?.sources ?? []), source]))
+  };
+}
+
+function bugDexUnlockFromInventory(item: BugDexInventoryItem): BugDexUnlock {
+  return {
+    bugId: item.bugId,
+    firstUnlockedAt: item.firstUnlockedAt,
+    lastUnlockedAt: item.lastUnlockedAt,
+    rarity: item.rarity,
+    sources: Array.from(new Set([...(item.sources ?? []), "inventory_backfill"]))
+  };
+}
+
+function normalizeInventoryItem(docId: string, item: Partial<BugDexInventoryItem>): BugDexInventoryItem {
+  const entry = entryByBugId(item.bugId ?? docId);
+  const fallbackDate = item.lastUnlockedAt ?? item.firstUnlockedAt ?? "1970-01-01T00:00:00.000Z";
+  const count = typeof item.count === "number" && Number.isFinite(item.count) ? item.count : 1;
+  const sources = Array.isArray(item.sources) ? item.sources.filter((source): source is string => typeof source === "string") : [];
+  return {
+    bugId: item.bugId ?? docId,
+    count,
+    firstUnlockedAt: item.firstUnlockedAt ?? fallbackDate,
+    lastUnlockedAt: item.lastUnlockedAt ?? fallbackDate,
+    rarity: item.rarity ?? entry?.rarity ?? "Gewoon",
+    sources: sources.length ? sources : ["legacy_backfill"]
+  };
+}
+
+function normalizeUnlockItem(docId: string, item: Partial<BugDexUnlock>): BugDexUnlock {
+  const entry = entryByBugId(item.bugId ?? docId);
+  const fallbackDate = item.lastUnlockedAt ?? item.firstUnlockedAt ?? "1970-01-01T00:00:00.000Z";
+  const sources = Array.isArray(item.sources) ? item.sources.filter((source): source is string => typeof source === "string") : [];
+  return {
+    bugId: item.bugId ?? docId,
+    firstUnlockedAt: item.firstUnlockedAt ?? fallbackDate,
+    lastUnlockedAt: item.lastUnlockedAt ?? fallbackDate,
+    rarity: item.rarity ?? entry?.rarity ?? "Gewoon",
+    sources: sources.length ? sources : ["legacy_backfill"]
+  };
+}
+
+function mergeLegacyInventory(user: User, items: BugDexInventoryItem[]): BugDexInventoryItem[] {
+  const byId = new Map(items.map((item) => {
+    const normalized = normalizeInventoryItem(item.bugId, item);
+    return [normalized.bugId, normalized] as const;
+  }));
+
+  for (const item of legacyInventoryFromUser(user)) {
+    if (!byId.has(item.bugId)) byId.set(item.bugId, item);
+  }
+
+  return Array.from(byId.values());
+}
+
+function legacyInventoryFromUser(user: User): BugDexInventoryItem[] {
+  const now = user.lastActiveAt ?? "1970-01-01T00:00:00.000Z";
+  const ids = new Set<string>();
+  for (const bugId of user.activeBugSquad ?? []) {
+    if (entryByBugId(bugId)) ids.add(bugId);
+  }
+  for (const entry of bugDexEntries) {
+    if (entry.rarity !== "Mythisch" && isBugDexEntryUnlocked(entry, user)) ids.add(entry.id);
+  }
+  return Array.from(ids).map((bugId) => {
+    const entry = entryByBugId(bugId);
+    return {
+      bugId,
+      count: 1,
+      firstUnlockedAt: now,
+      lastUnlockedAt: now,
+      rarity: entry?.rarity ?? "Gewoon",
+      sources: ["legacy_user_backfill"]
+    };
+  });
+}
+
+function hasOwnedCount(item: BugDexInventoryItem): boolean {
+  return item.count > 0;
+}
+
+function ownedCount(item: BugDexInventoryItem): number {
+  return Math.max(0, normalizeInventoryItem(item.bugId, item).count);
 }
 
 function dailyLimitedRewardEventId(source: BugDexDropSource): string | null {
@@ -638,7 +809,7 @@ function nextRarity(rarity: BugDexRarity): BugDexRarity | null {
 }
 
 function pickCombineTarget(rarity: BugDexRarity, inventory: BugDexInventoryItem[]): BugDexEntry {
-  const ownedIds = new Set(inventory.filter((item) => item.count > 0).map((item) => item.bugId));
+  const ownedIds = new Set(inventory.map((item) => normalizeInventoryItem(item.bugId, item)).filter(hasOwnedCount).map((item) => item.bugId));
   const candidates = bugDexEntries.filter((entry) => entry.rarity === rarity);
   const undiscovered = candidates.filter((entry) => !ownedIds.has(entry.id));
   return pickFrom(undiscovered) ?? pickFrom(candidates) ?? bugDexEntries[0];

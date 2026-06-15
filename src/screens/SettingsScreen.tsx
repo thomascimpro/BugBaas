@@ -18,13 +18,25 @@ type Props = {
   settings: NotificationSettings;
   onBack: () => void;
   onChange: (settings: NotificationSettings) => void;
+  onHealthPermissionOpen?: () => Promise<void>;
   onShowHelp: () => void;
 };
 
-export function SettingsScreen({ settings, onBack, onChange, onShowHelp }: Props) {
+export function SettingsScreen({ settings, onBack, onChange, onHealthPermissionOpen, onShowHelp }: Props) {
   const { t } = useI18n();
+  const [healthPermissionOpening, setHealthPermissionOpening] = React.useState(false);
   function toggle(type: NotificationType) {
     onChange({ ...settings, [type]: !settings[type] });
+  }
+
+  async function openHealthPermissions() {
+    if (!onHealthPermissionOpen || healthPermissionOpening) return;
+    setHealthPermissionOpening(true);
+    try {
+      await onHealthPermissionOpen();
+    } finally {
+      setHealthPermissionOpening(false);
+    }
   }
 
   return (
@@ -49,6 +61,10 @@ export function SettingsScreen({ settings, onBack, onChange, onShowHelp }: Props
       </View>
       <Pressable style={styles.helpButton} onPress={onShowHelp}>
         <Text style={styles.helpButtonText}>{t("settings.help")}</Text>
+      </Pressable>
+      <Pressable disabled={healthPermissionOpening} style={[styles.healthButton, healthPermissionOpening && styles.healthButtonDisabled]} onPress={openHealthPermissions}>
+        <Text style={styles.healthButtonText}>{healthPermissionOpening ? "..." : t("health.reopen")}</Text>
+        <Text style={styles.healthButtonBody}>{t("settings.healthBody")}</Text>
       </Pressable>
       <Pressable style={sharedStyles.secondaryButton} onPress={onBack}>
         <Text style={sharedStyles.secondaryButtonText}>{t("common.back")}</Text>
@@ -75,6 +91,31 @@ const styles = StyleSheet.create({
   },
   helpButtonText: {
     color: "#ffffff",
+    fontWeight: "900"
+  },
+  healthButton: {
+    alignItems: "center",
+    backgroundColor: "#fdfefb",
+    borderColor: "#15724f",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    marginBottom: 10,
+    minHeight: 56,
+    padding: 10
+  },
+  healthButtonBody: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
+    textAlign: "center"
+  },
+  healthButtonDisabled: {
+    opacity: 0.6
+  },
+  healthButtonText: {
+    color: "#15724f",
     fontWeight: "900"
   },
   row: {
