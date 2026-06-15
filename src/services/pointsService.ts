@@ -458,6 +458,7 @@ export type BadgeDefinition = {
   id: string;
   name: string;
   descriptionKey: string;
+  bugDexSetId?: string;
   minBugDexCaught?: number;
   minBugReports?: number;
   minComments?: number;
@@ -490,6 +491,17 @@ export const badgeDefinitions: BadgeDefinition[] = [
   { id: "legendary-collector", name: "Legendarische collectie", descriptionKey: "badge.legendaryCollector.description", minLegendaryBugDex: 5 },
   { id: "mythic-catch", name: "Mythische vangst", descriptionKey: "badge.mythicCatch.description", minMythicBugDex: 1 },
   { id: "mythic-master", name: "Mythische meester", descriptionKey: "badge.mythicMaster.description", minMythicBugDex: 3 },
+  { id: "bugdex-set-beetle-brigade", name: "Keverbende", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "beetle_brigade" },
+  { id: "bugdex-set-wings-of-color", name: "Vlinders & motten", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "wings_of_color" },
+  { id: "bugdex-set-buzz-squad", name: "Vliegers & muggen", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "buzz_squad" },
+  { id: "bugdex-set-sting-team", name: "Steekteam", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "sting_team" },
+  { id: "bugdex-set-pattern-warnings", name: "Wantsen & cicades", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "pattern_warnings" },
+  { id: "bugdex-set-web-and-sting", name: "Web & angel", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "web_and_sting" },
+  { id: "bugdex-set-jump-and-hide", name: "Springers & camo", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "jump_and_hide" },
+  { id: "bugdex-set-water-hunters", name: "Waterjagers", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "water_hunters" },
+  { id: "bugdex-set-house-raiders", name: "Huisplaagjes", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "house_raiders" },
+  { id: "bugdex-set-mythic-showcase", name: "Mythische vondsten", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "mythic_showcase" },
+  { id: "bugdex-set-night-crew", name: "Nachtbeesten", descriptionKey: "badge.bugdexSet.description", bugDexSetId: "night_crew" },
   { id: "trader", name: "Ruilkever", descriptionKey: "badge.trader.description", minTradedBugDex: 1 },
   { id: "upgrade-smith", name: "Upgrade-smid", descriptionKey: "badge.upgradeSmith.description", minUpgradedBugDex: 1 },
   { id: "splat-hunter", name: "Splatjager", descriptionKey: "badge.splatHunter.description", minSplats: 10 },
@@ -513,6 +525,7 @@ export function badgesForUser(user: Partial<Pick<User,
 >>): string[] {
   return badgeDefinitions
     .filter((badge) =>
+      badge.bugDexSetId === undefined &&
       (badge.minBugReports === undefined || (user.bugCount ?? 0) >= badge.minBugReports) &&
       (badge.minBugDexCaught === undefined || (user.bugDexCount ?? 0) >= badge.minBugDexCaught) &&
       (badge.minLegendaryBugDex === undefined || (user.legendaryBugDexCount ?? 0) >= badge.minLegendaryBugDex) &&

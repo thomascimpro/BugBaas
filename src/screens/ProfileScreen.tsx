@@ -9,6 +9,7 @@ import { TierBadge } from "../components/TierBadge";
 import { getBadgeArtSource } from "../services/badgeArt";
 import { listBugs } from "../services/bugService";
 import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
+import { bugDexSetById } from "../services/bugDexSetService";
 import { bugSquadBonusForEntry, BugSquadBonusCategory } from "../services/bugSquadService";
 import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
 import { presenceLabel } from "../services/presenceService";
@@ -102,7 +103,8 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
     .filter((candidate) => !memberIds.has(candidate.uid))
     .filter((candidate) => !openInviteUserIds.has(candidate.uid));
   const selectedInviteUser = inviteCandidates.find((candidate) => candidate.uid === selectedInviteUserId) ?? null;
-  const unlockedBadges = badgeDefinitions.filter((badge) => badgeUnlocked(user, badge));
+  const ownedBugDexIds = new Set(inventory.filter((item) => item.count > 0).map((item) => item.bugId));
+  const unlockedBadges = badgeDefinitions.filter((badge) => badgeUnlocked(user, badge, ownedBugDexIds));
   const bugDexItems = inventory
     .map((item) => {
       const entry = entryByBugId(item.bugId);
@@ -331,7 +333,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   }
 
   const renderBadge = (badge: BadgeDefinition) => {
-    const unlocked = badgeUnlocked(user, badge);
+    const unlocked = badgeUnlocked(user, badge, ownedBugDexIds);
     const badgeArt = getBadgeArtSource(badge.id);
     return (
       <View key={badge.id} style={[styles.badge, !unlocked && styles.badgeLocked]}>
@@ -815,7 +817,11 @@ function rarityColor(rarity: BugDexRarity): string {
   return colors[rarity];
 }
 
-function badgeUnlocked(user: User, badge: BadgeDefinition): boolean {
+function badgeUnlocked(user: User, badge: BadgeDefinition, ownedBugDexIds: Set<string>): boolean {
+  if (badge.bugDexSetId) {
+    const set = bugDexSetById(badge.bugDexSetId);
+    return Boolean(set && set.bugIds.every((bugId) => ownedBugDexIds.has(bugId)));
+  }
   return (badge.minBugReports === undefined || user.bugCount >= badge.minBugReports) &&
     (badge.minBugDexCaught === undefined || (user.bugDexCount ?? 0) >= badge.minBugDexCaught) &&
     (badge.minComments === undefined || (user.commentPointCount ?? 0) >= badge.minComments) &&
@@ -830,6 +836,10 @@ function badgeUnlocked(user: User, badge: BadgeDefinition): boolean {
 }
 
 function badgeRequirementText(badge: BadgeDefinition, t: (key: string, params?: Record<string, string | number>) => string): string {
+  if (badge.bugDexSetId) {
+    const set = bugDexSetById(badge.bugDexSetId);
+    return t("profile.badgeNeedBugDexSet", { count: set?.bugIds.length ?? 0 });
+  }
   if (badge.minBugReports !== undefined) return t("profile.badgeNeedBugs", { count: badge.minBugReports });
   if (badge.minBugDexCaught !== undefined) return t("profile.badgeNeedBugDex", { count: badge.minBugDexCaught });
   if (badge.minComments !== undefined) return t("profile.badgeNeedComments", { count: badge.minComments });

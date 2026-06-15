@@ -7,14 +7,15 @@ import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugDexUnlockModal } from "../components/BugDexUnlockModal";
 import { MythicRarityFrame } from "../components/MythicRarityFrame";
 import { TradeAnimationModal } from "../components/TradeAnimationModal";
-import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineBugDexDuplicates, combineDifferentBugDexUpgrade, combineRequiredCount, differentUpgradeRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory } from "../services/bugDexService";
+import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineBugDexDuplicates, combineDifferentBugDexUpgrade, combineRequiredCount, differentUpgradeRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory, listBugDexUnlocks } from "../services/bugDexService";
+import { allBugDexSetId, bugDexSetById, bugDexSets } from "../services/bugDexSetService";
 import { activeBugSquadBonusList, bugSquadAttackKindForCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad, BugSquadAttackKind, BugSquadBonusCategory } from "../services/bugSquadService";
 import { bugDexEntryName, bugDexEntryNote, bugDexEntryTitle, rarityLabel, useI18n } from "../services/i18n";
 import { notifyTradeAccepted, notifyTradeRequest } from "../services/notificationService";
 import { bugDexEntries, BugDexEntry, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { cancelTradeRequest, createTradeRequest, listTradeRequests, markTradeRequesterSeen, respondToTradeRequest } from "../services/tradeService";
 import { listUsers, updateUserBugSquad } from "../services/userService";
-import { BugDexInventoryItem, TradeRequest, User } from "../types";
+import { BugDexInventoryItem, BugDexUnlock, TradeRequest, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
@@ -104,6 +105,7 @@ function VisibilityIcon({ active, slashed }: { active: boolean; slashed: boolean
 export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack }: Props) {
   const { t, tr } = useI18n();
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
+  const [unlockHistory, setUnlockHistory] = useState<BugDexUnlock[]>([]);
   const [inventoriesByUserId, setInventoriesByUserId] = useState<Record<string, BugDexInventoryItem[]>>({});
   const [users, setUsers] = useState<User[]>([]);
   const [trades, setTrades] = useState<TradeRequest[]>([]);
@@ -122,6 +124,8 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   const [tradeBusy, setTradeBusy] = useState("");
   const [tradeError, setTradeError] = useState("");
   const [showLocked, setShowLocked] = useState(false);
+  const [selectedSetId, setSelectedSetId] = useState(allBugDexSetId);
+  const [setPickerOpen, setSetPickerOpen] = useState(false);
   const [tradeExpanded, setTradeExpanded] = useState(false);
   const [upgradeExpanded, setUpgradeExpanded] = useState(false);
   const [upgradeBusy, setUpgradeBusy] = useState("");
@@ -131,10 +135,20 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   const scrollRef = useRef<ScrollView | null>(null);
   const tradeSectionY = useRef(0);
   const inventoryById = bugDexInventoryMap(inventory);
+  const unlockById = Object.fromEntries(unlockHistory.map((item) => [item.bugId, item]));
   const tier = getTierForPoints(user.totalPoints);
   const unlockedCount = inventory.length;
+  const everUnlockedCount = new Set([...inventory.map((item) => item.bugId), ...unlockHistory.map((item) => item.bugId)]).size;
   const totalCount = bugDexEntries.length;
   const progress = Math.round((unlockedCount / totalCount) * 100);
+  const selectedSet = selectedSetId === allBugDexSetId ? null : bugDexSetById(selectedSetId);
+  const selectedSetBugIds = selectedSet ? new Set(selectedSet.bugIds) : null;
+  const selectedEntries = selectedSetBugIds ? bugDexEntries.filter((entry) => selectedSetBugIds.has(entry.id)) : bugDexEntries;
+  const selectedSetOwnedCount = selectedSetBugIds ? inventory.filter((item) => item.count > 0 && selectedSetBugIds.has(item.bugId)).length : unlockedCount;
+  const selectedSetTotalCount = selectedEntries.length;
+  const selectedSetProgress = selectedSetTotalCount ? Math.round((selectedSetOwnedCount / selectedSetTotalCount) * 100) : 0;
+  const selectedSetLabel = selectedSet ? t(selectedSet.labelKey) : t("bugdex.set.all");
+  const selectedSetDescription = selectedSet ? t(selectedSet.descriptionKey) : t("bugdex.set.all.description");
   const unlockedEntries = inventory.map((item) => entryByBugId(item.bugId)).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   const activeSquadEntries = activeSquadIds.map((bugId) => entryByBugId(bugId)).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   const activeSquadIdSet = new Set(activeSquadIds);
@@ -143,10 +157,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
     return counts;
   }, {});
   const headerEntry = unlockedEntries[unlockedEntries.length - 1];
-  const dexCards = bugDexEntries
-    .map((entry, index) => ({ entry, index, inventoryItem: inventoryById[entry.id] }))
+  const dexCards = selectedEntries
+    .map((entry) => ({ entry, index: bugDexEntries.findIndex((item) => item.id === entry.id), inventoryItem: inventoryById[entry.id], unlockItem: unlockById[entry.id] }))
     .filter(({ inventoryItem }) => showLocked || Boolean(inventoryItem));
-  const duplicateCount = inventory.reduce((total, item) => total + Math.max(0, item.count - 1), 0);
   const tradeInventory = sortTradeInventory(inventory.filter((item) => item.count > 0));
   const squadChoiceInventory = [...tradeInventory].sort((a, b) => {
     const firstEntry = entryByBugId(a.bugId);
@@ -271,7 +284,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
 
   async function refreshInventory() {
     const items = await listBugDexInventory(user);
+    const unlocks = await listBugDexUnlocks(user).catch(() => []);
     setInventory(items);
+    setUnlockHistory(unlocks);
     const storedSquad = sanitizeActiveBugSquad(user.activeBugSquad);
     const availableSquad = sanitizeActiveBugSquad(storedSquad, items);
     setActiveSquadIds(availableSquad);
@@ -525,6 +540,43 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
 
   const dexList = (
     <>
+      <View style={styles.setCard}>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.setPickerButton}
+          onPress={() => setSetPickerOpen((current) => !current)}
+        >
+          <View style={styles.setPickerTextBlock}>
+            <Text style={styles.setLabel}>{selectedSetLabel}</Text>
+            <Text style={styles.setMeta}>
+              {t("bugdex.setProgress", { owned: selectedSetOwnedCount, total: selectedSetTotalCount, progress: selectedSetProgress })}
+            </Text>
+          </View>
+          <Text style={styles.setChevron}>{setPickerOpen ? "^" : "v"}</Text>
+        </Pressable>
+        <Text style={styles.setDescription}>{selectedSetDescription}</Text>
+        {setPickerOpen && (
+          <View style={styles.setOptions}>
+            {[{ id: allBugDexSetId, labelKey: "bugdex.set.all" }, ...bugDexSets].map((set) => {
+              const active = selectedSetId === set.id;
+              return (
+                <Pressable
+                  key={set.id}
+                  accessibilityRole="button"
+                  style={[styles.setOption, active && styles.setOptionActive]}
+                  onPress={() => {
+                    setSelectedSetId(set.id);
+                    setSetPickerOpen(false);
+                  }}
+                >
+                  <Text style={[styles.setOptionText, active && styles.setOptionTextActive]}>{t(set.labelKey)}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
       <View style={styles.dexToolbar}>
         <View>
           <Text style={styles.dexToolbarTitle}>{t("bugdex.discovered")}</Text>
@@ -543,34 +595,36 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
 
       {dexCards.length ? (
         <View style={styles.grid}>
-          {dexCards.map(({ entry, index, inventoryItem }) => {
+          {dexCards.map(({ entry, index, inventoryItem, unlockItem }) => {
             const color = rarityColors[entry.rarity];
             const requiredCount = combineRequiredCount(entry.rarity);
-            const unlocked = Boolean(inventoryItem);
+            const owned = Boolean(inventoryItem);
+            const everHad = !owned && Boolean(unlockItem);
+            const revealed = owned || everHad;
             const upgradeRarity = entry.rarity === "Mythisch" ? null : entry.rarity as UpgradeRarity;
             const routeUsedToday = upgradeRarity ? upgradeRouteUsedToday(upgradeRarity) : false;
-            const hasEnoughToCombine = unlocked && Number.isFinite(requiredCount) && inventoryItem.count >= requiredCount;
-            const activeSquadLocked = unlocked && activeSquadIdSet.has(entry.id) && !canCombineItem(inventoryItem, requiredCount);
+            const hasEnoughToCombine = owned && Number.isFinite(requiredCount) && inventoryItem.count >= requiredCount;
+            const activeSquadLocked = owned && activeSquadIdSet.has(entry.id) && !canCombineItem(inventoryItem, requiredCount);
             const canCombine = hasEnoughToCombine && !routeUsedToday && canCombineItem(inventoryItem, requiredCount);
-            const isMythic = unlocked && entry.rarity === "Mythisch";
+            const isMythic = owned && entry.rarity === "Mythisch";
             return (
-              <View key={entry.id} style={[styles.card, !unlocked && styles.lockedCard, isMythic && styles.mythicCard, { borderColor: unlocked ? color : "#cbd8d1" }]}>
+              <View key={entry.id} style={[styles.card, !revealed && styles.lockedCard, everHad && styles.everHadCard, isMythic && styles.mythicCard, { borderColor: revealed ? color : "#cbd8d1" }]}>
                 <View style={styles.cardTop}>
-                  <View style={[styles.numberPill, { backgroundColor: unlocked ? color : "#87958e" }]}>
+                  <View style={[styles.numberPill, { backgroundColor: revealed ? color : "#87958e" }]}>
                     <Text style={styles.numberText}>{String(index + 1).padStart(2, "0")}</Text>
                   </View>
-                  <Text style={[styles.rarity, { color: unlocked ? color : "#87958e" }]}>{unlocked ? rarityLabel(entry.rarity, t) : "???"}</Text>
+                  <Text style={[styles.rarity, { color: revealed ? color : "#87958e" }]}>{revealed ? rarityLabel(entry.rarity, t) : "???"}</Text>
                 </View>
-                <View style={[styles.bugWrap, !unlocked && styles.lockedBugWrap, isMythic && styles.mythicBugWrap]}>
-                  {unlocked ? <BugArtImage bugId={entry.id} size={92} /> : <Text style={styles.lockedMark}>?</Text>}
+                <View style={[styles.bugWrap, !revealed && styles.lockedBugWrap, everHad && styles.everHadBugWrap, isMythic && styles.mythicBugWrap]}>
+                  {revealed ? <BugArtImage bugId={entry.id} size={92} /> : <Text style={styles.lockedMark}>?</Text>}
                 </View>
                 <View style={styles.nameRow}>
-                  <Text style={[styles.name, !unlocked && styles.lockedName]} numberOfLines={1}>{unlocked ? bugDexEntryName(entry, t) : t("bugdex.unknown")}</Text>
-                  {unlocked && inventoryItem.count > 1 && <Text style={styles.countPill}>x{inventoryItem.count}</Text>}
+                  <Text style={[styles.name, !revealed && styles.lockedName, everHad && styles.everHadText]} numberOfLines={1}>{revealed ? bugDexEntryName(entry, t) : t("bugdex.unknown")}</Text>
+                  {owned && inventoryItem.count > 1 && <Text style={styles.countPill}>x{inventoryItem.count}</Text>}
                 </View>
-                <Text style={[styles.title, !unlocked && styles.lockedText]}>{unlocked ? bugDexEntryTitle(entry, t) : t("bugdex.notDiscovered")}</Text>
-                <Text style={[styles.note, !unlocked && styles.lockedText]}>
-                  {unlocked ? bugDexEntryNote(entry, t) : t("bugdex.findHint")}
+                <Text style={[styles.title, !revealed && styles.lockedText, everHad && styles.everHadText]}>{owned ? bugDexEntryTitle(entry, t) : everHad ? t("bugdex.everHadNotOwned") : t("bugdex.notDiscovered")}</Text>
+                <Text style={[styles.note, !revealed && styles.lockedText, everHad && styles.everHadText]}>
+                  {revealed ? bugDexEntryNote(entry, t) : t("bugdex.findHint")}
                 </Text>
                 {hasEnoughToCombine && (
                   <Pressable style={[styles.combineButton, !canCombine && styles.combineButtonDisabled]} disabled={!canCombine || combineBusyId === entry.id} onPress={() => combine(entry.id)}>
@@ -1003,8 +1057,8 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
           <Text style={styles.summaryLabel}>{t("bugdex.caught")}</Text>
         </View>
         <View style={styles.summaryTile}>
-          <Text style={styles.summaryValue}>{duplicateCount}</Text>
-          <Text style={styles.summaryLabel}>{t("bugdex.duplicateShort")}</Text>
+          <Text style={styles.summaryValue}>{everUnlockedCount}</Text>
+          <Text style={styles.summaryLabel}>{t("bugdex.unlockedShort")}</Text>
         </View>
         <View style={styles.summaryTile}>
           <Text style={styles.summaryValue}>{totalCount - unlockedCount}</Text>
@@ -2105,6 +2159,72 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 2
   },
+  setCard: {
+    backgroundColor: "#fdfefb",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+    padding: 12
+  },
+  setPickerButton: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between"
+  },
+  setPickerTextBlock: {
+    flex: 1
+  },
+  setLabel: {
+    color: "#102018",
+    fontSize: 17,
+    fontWeight: "900"
+  },
+  setMeta: {
+    color: "#15724f",
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 3
+  },
+  setChevron: {
+    color: "#102018",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  setDescription: {
+    color: "#52665d",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+    marginTop: 8
+  },
+  setOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12
+  },
+  setOption: {
+    backgroundColor: "#eef4ed",
+    borderColor: "#c6d3cc",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  setOptionActive: {
+    backgroundColor: "#15724f",
+    borderColor: "#15724f"
+  },
+  setOptionText: {
+    color: "#52665d",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  setOptionTextActive: {
+    color: "#ffffff"
+  },
   lockedToggle: {
     alignItems: "center",
     backgroundColor: "#eef4ed",
@@ -2180,6 +2300,10 @@ const styles = StyleSheet.create({
   lockedCard: {
     backgroundColor: "#f3f7f2"
   },
+  everHadCard: {
+    backgroundColor: "#eef4ef",
+    opacity: 0.78
+  },
   mythicCard: {
     backgroundColor: "#fbf5ff",
     borderWidth: 2,
@@ -2227,6 +2351,9 @@ const styles = StyleSheet.create({
   lockedBugWrap: {
     opacity: 0.86
   },
+  everHadBugWrap: {
+    opacity: 0.55
+  },
   lockedMark: {
     color: "#87958e",
     fontSize: 44,
@@ -2269,6 +2396,9 @@ const styles = StyleSheet.create({
   },
   lockedText: {
     color: "#87958e"
+  },
+  everHadText: {
+    color: "#64746c"
   },
   emptyDexCard: {
     alignItems: "center",

@@ -54,7 +54,7 @@ export function LeaderboardRow({ index, lastCatch, user, onPress }: { index: num
           <Text adjustsFontSizeToFit ellipsizeMode="tail" minimumFontScale={0.78} numberOfLines={1} style={[styles.name, medal && styles.topThreeName]}>{user.displayName}</Text>
           <Text style={[styles.status, medal && { backgroundColor: medal.pill, color: medal.pillText }]}>{status}</Text>
         </View>
-        <Text style={styles.subMeta}>{t("leader.bugsDex", { bugs: user.bugCount, caught: user.bugDexCount ?? 0, total: bugDexEntries.length })}</Text>
+        <Text style={styles.subMeta}>{t("leader.bugDex", { caught: user.bugDexCount ?? 0, total: bugDexEntries.length })}</Text>
         <View style={styles.lastCatchRow}>
           {lastCatch && lastCatchEntry ? (
             <>

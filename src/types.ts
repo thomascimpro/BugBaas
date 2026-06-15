@@ -19,7 +19,8 @@ export type User = {
   bugLampActiveUntil?: string;
   bugLampCount?: number;
   nameSet?: boolean;
-    helpSeen?: boolean;
+  helpSeen?: boolean;
+  lastReportRewardDay?: string;
     notificationPushToken?: string;
     splatCount?: number;
   starterBoostActiveUntil?: string;
@@ -131,6 +132,15 @@ export type BugDexInventoryItem = {
   lastTradeId?: string;
 };
 
+export type BugDexUnlock = {
+  bugId: string;
+  firstUnlockedAt: string;
+  lastTradeId?: string;
+  lastUnlockedAt: string;
+  rarity: string;
+  sources: string[];
+};
+
 export type NotificationType = "trade" | "new_bug" | "comment" | "bug_update" | "bugdex" | "movement" | "duel";
 
 export type NotificationSettings = Record<NotificationType, boolean>;
@@ -161,6 +171,7 @@ export type BugSmashDuel = {
   id: string;
   fromUserId: string;
   fromUserName: string;
+  matchType?: "direct" | "random";
   toUserId: string;
   toUserName: string;
   status: BugSmashDuelStatus;

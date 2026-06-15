@@ -11,6 +11,7 @@ const demoDuelRewardEvents = new Set<string>();
 export const bugSmashDuelDurationMs = 30000;
 export const bugSmashDuelStartDelayMs = 5000;
 export const bugSmashDuelBugCount = 56;
+const randomDuelDailyLimit = 5;
 
 const scoreByRarity = {
   Gewoon: 1,
@@ -76,7 +77,35 @@ function isActiveDuelBetween(duel: BugSmashDuel, firstUserId: string, secondUser
   return samePair && (duel.status === "pending" || duel.status === "accepted");
 }
 
-export async function createBugSmashDuel(fromUser: User, toUser: User): Promise<BugSmashDuel> {
+function duelCreatedToday(duel: BugSmashDuel, day = localDayId()): boolean {
+  return localDayId(new Date(duel.createdAt)) === day;
+}
+
+function isRandomDuelTodayForUser(duel: BugSmashDuel, userId: string, day = localDayId()): boolean {
+  return duel.matchType === "random" && duelCreatedToday(duel, day) && (duel.fromUserId === userId || duel.toUserId === userId);
+}
+
+function isRandomDuelTodayBetween(duel: BugSmashDuel, firstUserId: string, secondUserId: string, day = localDayId()): boolean {
+  const samePair = (duel.fromUserId === firstUserId && duel.toUserId === secondUserId)
+    || (duel.fromUserId === secondUserId && duel.toUserId === firstUserId);
+  return duel.matchType === "random" && duelCreatedToday(duel, day) && samePair;
+}
+
+function pickRandomOpponent(fromUser: User, candidates: User[], duels: BugSmashDuel[]): User {
+  const day = localDayId();
+  const ownRandomCount = duels.filter((duel) => isRandomDuelTodayForUser(duel, fromUser.uid, day)).length;
+  if (ownRandomCount >= randomDuelDailyLimit) throw new Error("Je hebt vandaag al 5 random duels gestart.");
+  const eligible = candidates.filter((candidate) =>
+    candidate.uid !== fromUser.uid
+    && candidate.active !== false
+    && !duels.some((duel) => isActiveDuelBetween(duel, fromUser.uid, candidate.uid))
+    && !duels.some((duel) => isRandomDuelTodayBetween(duel, fromUser.uid, candidate.uid, day))
+  );
+  if (!eligible.length) throw new Error("Geen random tegenstander beschikbaar.");
+  return eligible[Math.floor(Math.random() * eligible.length)];
+}
+
+export async function createBugSmashDuel(fromUser: User, toUser: User, matchType: "direct" | "random" = "direct"): Promise<BugSmashDuel> {
   if (fromUser.uid === toUser.uid) throw new Error("Je kunt jezelf niet uitdagen.");
   if (!isFirebaseConfigured) {
     const existing = Array.from(demoDuels.values()).find((duel) => isActiveDuelBetween(duel, fromUser.uid, toUser.uid));
@@ -95,6 +124,7 @@ export async function createBugSmashDuel(fromUser: User, toUser: User): Promise<
     id,
     fromUserId: fromUser.uid,
     fromUserName: fromUser.displayName,
+    matchType,
     toUserId: toUser.uid,
     toUserName: toUser.displayName,
     status: "pending",
@@ -115,6 +145,113 @@ export async function createBugSmashDuel(fromUser: User, toUser: User): Promise<
 
   await setDoc(duelRef(id), duel);
   return duel;
+}
+
+export async function createRandomBugSmashDuel(fromUser: User, candidates: User[]): Promise<BugSmashDuel> {
+  const duels = await listBugSmashDuels(fromUser);
+  const opponent = pickRandomOpponent(fromUser, candidates, duels);
+  return createBugSmashDuel(fromUser, opponent, "random");
+}
+
+export async function createOpenRandomBugSmashDuel(fromUser: User): Promise<BugSmashDuel> {
+  const duels = await listBugSmashDuels(fromUser);
+  const ownRandomCount = duels.filter((duel) => isRandomDuelTodayForUser(duel, fromUser.uid)).length;
+  if (ownRandomCount >= randomDuelDailyLimit) throw new Error("Je hebt vandaag al 5 random duels gestart.");
+  const id = isFirebaseConfigured ? doc(collection(db, "bugSmashDuels")).id : makeId();
+  const seed = Date.now() + Math.floor(Math.random() * 100000);
+  const startAt = new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString();
+  const duel: BugSmashDuel = {
+    id,
+    fromUserId: fromUser.uid,
+    fromUserName: fromUser.displayName,
+    matchType: "random",
+    toUserId: "random",
+    toUserName: "Random",
+    status: "pending",
+    seed,
+    bugIds: pickBugIds(seed),
+    createdAt: nowIso(),
+    startAt,
+    updatedAt: nowIso(),
+    durationMs: bugSmashDuelDurationMs,
+    scores: {},
+    rewardClaimedBy: [],
+    resultSeenBy: []
+  };
+
+  if (!isFirebaseConfigured) {
+    demoDuels.set(id, duel);
+    return duel;
+  }
+
+  await setDoc(duelRef(id), duel);
+  return duel;
+}
+
+export async function claimOpenRandomBugSmashDuel(user: User): Promise<BugSmashDuel | null> {
+  const ownDuels = await listBugSmashDuels(user);
+  const ownRandomCount = ownDuels.filter((duel) => isRandomDuelTodayForUser(duel, user.uid)).length;
+  if (ownRandomCount >= randomDuelDailyLimit) throw new Error("Je hebt vandaag al 5 random duels gedaan.");
+
+  if (!isFirebaseConfigured) {
+    const openDuel = Array.from(demoDuels.values()).find((duel) =>
+      duel.matchType === "random"
+      && duel.status === "pending"
+      && duel.toUserId === "random"
+      && duel.fromUserId !== user.uid
+      && !ownDuels.some((ownDuel) => isRandomDuelTodayBetween(ownDuel, user.uid, duel.fromUserId))
+    );
+    if (!openDuel) return null;
+    const updated: BugSmashDuel = {
+      ...openDuel,
+      startAt: new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString(),
+      status: "accepted",
+      toUserId: user.uid,
+      toUserName: user.displayName,
+      updatedAt: nowIso()
+    };
+    demoDuels.set(openDuel.id, updated);
+    return updated;
+  }
+
+  const openSnapshot = await getDocs(query(
+    collection(db, "bugSmashDuels"),
+    where("matchType", "==", "random"),
+    where("status", "==", "pending"),
+    where("toUserId", "==", "random")
+  ));
+  const candidate = openSnapshot.docs
+    .map((item) => item.data() as BugSmashDuel)
+    .filter((duel) =>
+      duel.fromUserId !== user.uid
+      && !ownDuels.some((ownDuel) => isRandomDuelTodayBetween(ownDuel, user.uid, duel.fromUserId))
+    )
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+  if (!candidate) return null;
+
+  return runTransaction(db, async (transaction) => {
+    const ref = duelRef(candidate.id);
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return null;
+    const duel = snapshot.data() as BugSmashDuel;
+    if (duel.matchType !== "random" || duel.status !== "pending" || duel.toUserId !== "random" || duel.fromUserId === user.uid) return null;
+    const updated: BugSmashDuel = {
+      ...duel,
+      startAt: new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString(),
+      status: "accepted",
+      toUserId: user.uid,
+      toUserName: user.displayName,
+      updatedAt: nowIso()
+    };
+    transaction.update(ref, {
+      startAt: updated.startAt,
+      status: updated.status,
+      toUserId: updated.toUserId,
+      toUserName: updated.toUserName,
+      updatedAt: updated.updatedAt
+    });
+    return updated;
+  });
 }
 
 export async function listBugSmashDuels(user: User): Promise<BugSmashDuel[]> {

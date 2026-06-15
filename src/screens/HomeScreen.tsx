@@ -14,6 +14,7 @@ import { claimMovementRadarBonusesForApp, claimQueuedRadarBugs, getMovementRadar
 import { bugDexEntries, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { languages, useI18n } from "../services/i18n";
 import { listLeaderboardUsers } from "../services/userService";
+import { loadSoloCampaignProgress } from "../services/soloCampaignProgressService";
 import { starterBoostRemainingDays } from "../services/starterBoostService";
 import { claimedWeeklyMissionIds, claimWeeklyMissionBonusWithReward, claimWeeklyMissionReward, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
 import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
@@ -54,6 +55,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [queuedRadarBugIds, setQueuedRadarBugIds] = useState<BugArtId[]>([]);
   const [bugLampActivating, setBugLampActivating] = useState(false);
   const [movementClaiming, setMovementClaiming] = useState(false);
+  const [soloCampaignWave, setSoloCampaignWave] = useState(1);
   const [claimedMissionIds, setClaimedMissionIds] = useState<Set<string>>(new Set());
   const [claimingMissionId, setClaimingMissionId] = useState("");
   const [weeklyBonusClaimed, setWeeklyBonusClaimed] = useState(false);
@@ -67,7 +69,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const activeSquadEntries = sanitizeActiveBugSquad(user.activeBugSquad, inventory)
     .map((bugId) => entryByBugId(bugId))
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-  const missions = weeklyMissionSet(user, bugs, { duels, inventory });
+  const missions = weeklyMissionSet(user, bugs, { duels, inventory, soloCampaignWave });
   const missionIdsKey = missions.map((mission) => mission.id).join("|");
   const canClaimMovement = Boolean((movementProgress && movementProgress.claimableRewards > 0) || queuedRadarBugIds.length > 0);
   const selectedLanguage = languages.find((item) => item.value === language) ?? languages[0];
@@ -80,6 +82,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     listBugs().then(setBugs);
     listBugSmashDuels(user).then(setDuels).catch(() => setDuels([]));
     listBugDexInventory(user).then(setInventory);
+    loadSoloCampaignProgress(user.uid).then((progress) => setSoloCampaignWave(progress.wave)).catch(() => setSoloCampaignWave(1));
     refreshMovementProgress();
   }, [movementBoost, user.uid, user.totalPoints]);
 
@@ -115,7 +118,10 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
 
       const result = await claimMovementRadarBonusesForApp(user.uid, movementBoost);
       if (result.estimatedKm > 0) await onMovementRegistered?.(result.estimatedKm);
-      if (result.bugIds.length > 0) onMovementRadarClaimed?.(result.bugIds);
+      if (result.bugIds.length > 0) {
+        onMovementRadarClaimed?.(result.bugIds);
+        await claimQueuedRadarBugs().catch(() => []);
+      }
       await refreshMovementProgress();
     } catch {
       await refreshMovementProgress();
@@ -716,6 +722,20 @@ const styles = StyleSheet.create({
   movementFill: {
     backgroundColor: "#15724f",
     height: "100%"
+  },
+  movementPermissionButton: {
+    alignSelf: "flex-start",
+    borderColor: "#9fb7aa",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  movementPermissionText: {
+    color: "#15724f",
+    fontSize: 12,
+    fontWeight: "900"
   },
   movementClaimButton: {
     backgroundColor: "#15724f",

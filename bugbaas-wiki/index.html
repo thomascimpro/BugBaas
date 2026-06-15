@@ -115,6 +115,30 @@
       width: 40px;
     }
     .topbar-actions { align-items: center; display: flex; gap: 10px; }
+    .mobile-nav { display: none; }
+    .utility-actions {
+      align-items: center;
+      display: flex;
+      gap: 6px;
+    }
+    .utility-button {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--ink);
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 900;
+      min-height: 36px;
+      padding: 0 12px;
+    }
+    .utility-button:hover,
+    .utility-button.copied {
+      border-color: var(--active-border);
+      color: var(--green);
+      box-shadow: var(--card-shadow);
+    }
     .side-nav {
       display: flex;
       gap: 4px;
@@ -407,6 +431,69 @@
       transform: translateY(-1px);
     }
     .overview-tile.is-hidden { display: none; }
+    .empty-state {
+      background: var(--panel-soft);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      font-weight: 850;
+      margin: -4px 0 18px;
+      padding: 14px;
+      text-align: center;
+    }
+    .drop-art {
+      align-items: center;
+      aspect-ratio: 16 / 9;
+      background:
+        radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--mythic) 28%, transparent), transparent 33%),
+        radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--gold) 20%, transparent), transparent 30%),
+        linear-gradient(145deg, var(--deep), var(--panel-soft));
+      display: grid;
+      justify-items: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .drop-art .frame {
+      height: 96%;
+      object-fit: contain;
+      position: absolute;
+      width: 96%;
+      z-index: 2;
+    }
+    .drop-art .bug {
+      filter: drop-shadow(0 16px 18px rgba(0, 0, 0, .3));
+      height: 68%;
+      object-fit: contain;
+      position: relative;
+      width: 68%;
+      z-index: 1;
+    }
+    .drop-art .chance {
+      background: color-mix(in srgb, var(--panel) 88%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink);
+      font-size: 11px;
+      font-weight: 950;
+      padding: 5px 8px;
+      position: absolute;
+      z-index: 3;
+    }
+    .drop-art .chance.rare { left: 12px; top: 12px; }
+    .drop-art .chance.epic { bottom: 12px; right: 12px; }
+    .button .drop-button-art {
+      aspect-ratio: 1;
+      border-radius: 6px;
+      height: 28px;
+      overflow: hidden;
+      width: 28px;
+    }
+    .button .drop-button-art .frame,
+    .button .drop-button-art .chance { display: none; }
+    .button .drop-button-art .bug {
+      height: 100%;
+      width: 100%;
+    }
     .action-grid {
       display: grid;
       gap: 14px;
@@ -448,6 +535,33 @@
       font-weight: 750;
       line-height: 1.35;
       margin-top: 4px;
+    }
+    .release-strip {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--card-shadow);
+      display: grid;
+      gap: 10px;
+      grid-template-columns: auto 1fr;
+      margin: 0 0 18px;
+      padding: 14px;
+    }
+    .release-strip b {
+      color: var(--green);
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+    .release-strip ul {
+      color: var(--muted);
+      display: grid;
+      gap: 5px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.35;
+      list-style: none;
+      margin: 0;
+      padding: 0;
     }
     .wiki-layout {
       align-items: start;
@@ -508,17 +622,17 @@
       padding: 9px 10px 9px 18px;
       white-space: nowrap;
     }
-    .side-nav a::after {
-      color: #9aa9a0;
-      content: ">";
-      font-weight: 950;
+    .side-nav a:hover,
+    .side-nav a.active {
+      background: var(--panel);
+      box-shadow: inset 3px 0 0 var(--green), var(--card-shadow);
+      color: var(--green);
     }
-    .side-nav a.active::after { color: var(--green); }
-    .tab-content {
+    .wiki-panels {
       min-height: 680px;
     }
-    .tab-content > section { display: none; }
-    .tab-content > section.active-panel { display: block; }
+    .wiki-panels > section { display: none; }
+    .wiki-panels > section.active-panel { display: block; }
     section {
       scroll-margin-top: 90px;
       margin: 0 0 32px;
@@ -539,6 +653,29 @@
       margin: 0;
       max-width: 700px;
     }
+    .breadcrumb {
+      align-items: center;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      font-size: 12px;
+      font-weight: 900;
+      gap: 8px;
+      margin: 0 0 12px;
+      text-transform: uppercase;
+    }
+    .breadcrumb span:first-child {
+      color: var(--green);
+    }
+    .breadcrumb span + span::before {
+      background: var(--line);
+      border-radius: 999px;
+      content: "";
+      display: inline-block;
+      height: 6px;
+      margin: 0 8px 1px 0;
+      width: 6px;
+    }
 
     .cards {
       display: grid;
@@ -556,6 +693,32 @@
     .card-body { padding: 16px; }
     .card h3 { font-size: 19px; margin: 0 0 8px; }
     .card p { color: var(--muted); font-weight: 700; line-height: 1.45; margin: 0; }
+    .upgrade-art {
+      align-items: center;
+      aspect-ratio: 16 / 9;
+      background:
+        radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--mythic) 24%, transparent), transparent 34%),
+        linear-gradient(145deg, var(--panel-soft), var(--panel));
+      display: grid;
+      justify-items: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .upgrade-art .frame {
+      height: 94%;
+      object-fit: contain;
+      position: absolute;
+      width: 94%;
+      z-index: 2;
+    }
+    .upgrade-art .bug {
+      filter: drop-shadow(0 14px 18px rgba(0, 0, 0, .22));
+      height: 72%;
+      object-fit: contain;
+      position: relative;
+      width: 72%;
+      z-index: 1;
+    }
 
     .two-col {
       display: grid;
@@ -576,23 +739,114 @@
     .panel.dark p,
     .panel.dark li { color: #cfe0d5; }
     .panel h3 { margin: 0 0 10px; }
+    .panel img {
+      aspect-ratio: 16 / 9;
+      border-radius: 6px;
+      margin: 0 0 14px;
+      object-fit: cover;
+      width: 100%;
+    }
     .panel p,
     .panel li { color: var(--muted); font-weight: 720; line-height: 1.5; }
     .panel ul { margin: 10px 0 0; padding-left: 20px; }
+
+    .mini-flow,
+    .compact-card-grid,
+    .chance-grid,
+    .rarity-grid {
+      display: grid;
+      gap: 12px;
+      margin: 0 0 16px;
+    }
+    .mini-flow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .compact-card-grid,
+    .chance-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .rarity-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .mini-step,
+    .compact-card,
+    .chance-card,
+    .rarity-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--card-shadow);
+      padding: 14px;
+    }
+    .mini-step span,
+    .compact-card span,
+    .chance-card span,
+    .rarity-card span:first-child {
+      color: var(--green);
+      display: block;
+      font-size: 11px;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+    .mini-step b,
+    .compact-card h3,
+    .chance-card b,
+    .rarity-card b {
+      color: var(--ink);
+      display: block;
+      font-size: 16px;
+      line-height: 1.2;
+      margin-top: 5px;
+    }
+    .mini-step p,
+    .compact-card p,
+    .chance-card p,
+    .rarity-card p {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.4;
+      margin: 7px 0 0;
+    }
+    .compact-card img,
+    .tips-hero img {
+      aspect-ratio: 16 / 9;
+      border-radius: 6px;
+      object-fit: cover;
+      width: 100%;
+    }
+    .compact-card img { margin-bottom: 10px; }
+    .chance-card strong {
+      color: var(--gold);
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+      margin-top: 8px;
+    }
+    .rarity-card .rarity {
+      margin-bottom: 8px;
+      width: fit-content;
+    }
+    .tips-hero {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1.12fr .88fr;
+      margin-bottom: 16px;
+    }
 
     .table-wrap {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
-      overflow: auto;
+      overflow: hidden;
     }
-    table { border-collapse: collapse; min-width: 760px; width: 100%; }
+    table {
+      border-collapse: collapse;
+      table-layout: fixed;
+      width: 100%;
+    }
     th, td {
       border-bottom: 1px solid var(--line);
       font-size: 14px;
+      overflow-wrap: anywhere;
       padding: 12px 13px;
       text-align: left;
-      white-space: nowrap;
+      vertical-align: top;
+      white-space: normal;
     }
     th {
       background: var(--panel-soft);
@@ -770,24 +1024,104 @@
       .hero,
       .two-col,
       .wiki-layout { grid-template-columns: 1fr; }
+      .release-strip { grid-template-columns: 1fr; }
       .side-nav {
-        display: grid;
-        gap: 8px;
-        grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
-        overflow: visible;
-        position: static;
+        display: none;
       }
-      .side-nav strong { grid-column: 1 / -1; }
-      .nav-group {
+      .mobile-nav {
+        display: block;
+        position: fixed;
+        right: 12px;
+        top: 82px;
+        z-index: 11;
+      }
+      .mobile-nav summary {
+        align-items: center;
+        background: var(--green);
+        border: 1px solid var(--active-border);
+        border-radius: 999px;
+        box-shadow: var(--card-shadow-strong);
+        color: #fff;
+        cursor: pointer;
+        display: inline-flex;
+        font-size: 13px;
+        font-weight: 950;
+        gap: 7px;
+        justify-content: center;
+        list-style: none;
+        min-height: 40px;
+        padding: 0 13px;
+      }
+      .mobile-nav summary::-webkit-details-marker { display: none; }
+      .mobile-nav summary::before {
+        content: "";
+        background:
+          linear-gradient(#fff, #fff) 0 0 / 18px 2px no-repeat,
+          linear-gradient(#fff, #fff) 0 7px / 18px 2px no-repeat,
+          linear-gradient(#fff, #fff) 0 14px / 18px 2px no-repeat;
+        display: block;
+        height: 16px;
+        width: 18px;
+      }
+      .mobile-nav-panel {
+        background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 8px;
+        box-shadow: var(--card-shadow-strong);
+        display: grid;
+        gap: 8px;
+        margin-top: 8px;
+        max-height: min(68svh, 520px);
+        overflow-y: auto;
         padding: 10px;
+        width: min(292px, calc(100vw - 24px));
       }
-      .side-nav a { white-space: normal; }
+      .mobile-nav-group {
+        border-bottom: 1px solid var(--line);
+        display: grid;
+        gap: 4px;
+        padding-bottom: 8px;
+      }
+      .mobile-nav-group:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+      }
+      .mobile-nav-label {
+        align-items: center;
+        color: var(--green);
+        display: flex;
+        font-size: 11px;
+        font-weight: 950;
+        gap: 7px;
+        text-transform: uppercase;
+      }
+      .mobile-nav-label img {
+        border-radius: 6px;
+        height: 22px;
+        object-fit: cover;
+        width: 22px;
+      }
+      .mobile-nav a {
+        border-radius: 8px;
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 850;
+        padding: 8px 10px;
+      }
+      .mobile-nav a.active,
+      .mobile-nav a:hover {
+        background: var(--active-bg);
+        color: var(--green);
+      }
       .quick-grid,
       .cards,
       .overview-links,
-      .action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .action-grid,
+      .mini-flow,
+      .compact-card-grid,
+      .chance-grid,
+      .rarity-grid,
+      .tips-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .wiki-search { grid-template-columns: 1fr; }
       .gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .boss-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -796,19 +1130,176 @@
     }
     @media (max-width: 560px) {
       .shell { width: min(100% - 20px, 1180px); }
-      .topbar-inner { align-items: start; flex-direction: column; gap: 2px; padding: 10px 0; }
-      .topbar-actions { align-items: start; flex-direction: column; width: 100%; }
-      .language-switch { align-self: flex-end; }
+      .topbar { position: sticky; }
+      .topbar-inner {
+        align-items: center;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-height: auto;
+        padding: 8px 0;
+      }
+      .brand {
+        flex: 1 1 auto;
+        font-size: 15px;
+        min-width: 150px;
+      }
+      .brand-mark {
+        font-size: 16px;
+        height: 32px;
+        width: 32px;
+      }
+      .topbar-actions {
+        align-items: center;
+        display: grid;
+        flex: 1 1 100%;
+        gap: 6px;
+        grid-template-columns: 1fr auto auto;
+        width: 100%;
+      }
+      .utility-actions {
+        display: grid;
+        gap: 6px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .utility-button {
+        min-height: 34px;
+        padding: 0 8px;
+      }
+      .theme-switch,
+      .language-switch {
+        justify-self: end;
+      }
+      .theme-switch button,
+      .language-switch button {
+        min-height: 32px;
+        min-width: 34px;
+        padding: 3px 5px;
+      }
+      main {
+        padding-bottom: 34px;
+        padding-top: 12px;
+      }
+      .hero {
+        gap: 14px;
+        padding: 16px 0 18px;
+      }
+      h1 {
+        font-size: 36px;
+        line-height: 1;
+        margin-bottom: 10px;
+      }
+      h2 { font-size: 26px; }
+      .hero p {
+        font-size: 15px;
+        line-height: 1.45;
+      }
+      .hero-actions {
+        display: grid;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .button {
+        justify-content: center;
+        min-height: 42px;
+        width: 100%;
+      }
+      .hero-art img { aspect-ratio: 16 / 10; }
+      .mobile-nav {
+        right: 10px;
+        top: 96px;
+      }
+      .mobile-nav summary {
+        min-height: 38px;
+        padding: 0 12px;
+      }
+      .section-head {
+        margin-bottom: 10px;
+      }
+      .section-head p,
+      .lead {
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      .wiki-search {
+        gap: 8px;
+        padding: 12px;
+      }
+      .wiki-search label { font-size: 16px; }
+      .release-strip,
+      .panel,
+      .note,
+      .card-body,
+      .mythic-body {
+        padding: 12px;
+      }
       .quick-grid,
       .cards,
       .overview-links,
       .action-grid,
+      .mini-flow,
+      .compact-card-grid,
+      .chance-grid,
+      .rarity-grid,
+      .tips-hero,
       .gallery,
       .boss-grid,
       .mythic-special-grid { grid-template-columns: 1fr; }
-      h1 { font-size: 44px; }
-      .hero { padding-top: 24px; }
-      table { min-width: 680px; }
+      .overview-links,
+      .action-grid,
+      .cards {
+        gap: 10px;
+      }
+      .overview-tile-body { padding: 12px; }
+      .overview-tile b,
+      .card h3 { font-size: 16px; }
+      .overview-tile p,
+      .card p,
+      .mythic-body p,
+      .mythic-stat span {
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      .gallery {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .boss-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      th, td {
+        font-size: 12px;
+        padding: 10px 8px;
+      }
+    }
+    @media (max-width: 380px) {
+      .shell { width: min(100% - 16px, 1180px); }
+      .brand span:last-child { display: none; }
+      .topbar-actions {
+        grid-template-columns: 1fr auto;
+      }
+      .language-switch {
+        grid-column: 2;
+      }
+      .theme-switch {
+        grid-column: 2;
+        grid-row: 1;
+      }
+      .utility-actions {
+        grid-column: 1;
+        grid-row: 1 / span 2;
+      }
+      h1 { font-size: 32px; }
+      .mobile-nav { top: 86px; }
+      .mobile-nav summary span { display: none; }
+      .mobile-nav summary {
+        border-radius: 999px;
+        min-width: 42px;
+        padding: 0 11px;
+      }
+      th, td {
+        font-size: 11px;
+        padding: 8px 6px;
+      }
     }
   </style>
 </head>
@@ -820,6 +1311,10 @@
         <span>BugBaas Wiki</span>
       </a>
       <div class="topbar-actions">
+        <div class="utility-actions">
+          <button class="utility-button" type="button" id="copySectionLink" aria-label="Kopieer huidige sectielink">Kopieer link</button>
+          <button class="utility-button" type="button" id="printWiki" aria-label="Print wiki">Print</button>
+        </div>
         <div class="theme-switch" aria-label="Theme">
           <button class="active" type="button" data-theme-value="light" aria-label="Light mode"><span class="theme-icon light" aria-hidden="true"></span></button>
           <button type="button" data-theme-value="dark" aria-label="Dark mode"><span class="theme-icon dark" aria-hidden="true"></span></button>
@@ -833,47 +1328,79 @@
     </div>
   </header>
 
+  <details class="mobile-nav" aria-label="Mobiele wiki navigatie">
+    <summary><span>Menu</span></summary>
+    <nav class="mobile-nav-panel" aria-label="Mobiele wiki links">
+      <div class="mobile-nav-group">
+        <span class="mobile-nav-label"><img src="assets/movement-radar-hd.png" alt="">Home</span>
+        <a href="#overview">Overzicht</a>
+        <a href="#radar">Movement radar</a>
+      </div>
+      <div class="mobile-nav-group">
+        <span class="mobile-nav-label"><img src="assets/bugdex.jpg" alt="">Bugs</span>
+        <a href="#features">Snel starten</a>
+      </div>
+      <div class="mobile-nav-group">
+        <span class="mobile-nav-label"><img src="assets/duel.jpg" alt="">Arena</span>
+        <a href="#arena">Duel</a>
+        <a href="#campaign">Solo Campaign</a>
+        <a href="#helpers">Squad helpers</a>
+        <a href="#tips">Speeltips</a>
+      </div>
+      <div class="mobile-nav-group">
+        <span class="mobile-nav-label"><img src="assets/jar.jpg" alt="">BugDex</span>
+        <a href="#bugdex">Collectie</a>
+        <a href="#kansen">Drop-kansen</a>
+        <a href="#workshop">Ruilen/upgraden</a>
+      </div>
+      <div class="mobile-nav-group">
+        <span class="mobile-nav-label"><img src="assets/lamp.jpg" alt="">Rank</span>
+        <a href="#rewards">XP & weekly</a>
+      </div>
+    </nav>
+  </details>
+
   <main id="top" class="shell">
     <div class="wiki-layout">
-      <aside class="side-nav" aria-label="Wiki tabs">
-        <strong>Game tabs</strong>
+      <aside class="side-nav" aria-label="Wiki onderdelen">
+        <strong>Onderdelen</strong>
         <div class="nav-group">
-          <span class="nav-group-title">Home tab</span>
+          <span class="nav-group-title"><img src="assets/movement-radar-hd.png" alt="">Home</span>
           <a href="#overview">Overzicht</a>
           <a href="#radar">Movement radar</a>
         </div>
         <div class="nav-group">
-          <span class="nav-group-title">Bugs tab</span>
+          <span class="nav-group-title"><img src="assets/bugdex.jpg" alt="">Bugs</span>
           <a href="#features">Snel starten</a>
         </div>
         <div class="nav-group">
-          <span class="nav-group-title">Arena tab</span>
+          <span class="nav-group-title"><img src="assets/duel.jpg" alt="">Arena</span>
           <a href="#arena">Duel</a>
           <a href="#campaign">Solo Campaign</a>
           <a href="#helpers">Squad helpers</a>
           <a href="#tips">Speeltips</a>
         </div>
         <div class="nav-group">
-          <span class="nav-group-title">BugDex tab</span>
+          <span class="nav-group-title"><img src="assets/jar.jpg" alt="">BugDex</span>
           <a href="#bugdex">Collectie</a>
           <a href="#kansen">Drop-kansen</a>
           <a href="#workshop">Ruilen/upgraden</a>
         </div>
         <div class="nav-group">
-          <span class="nav-group-title">Rank tab</span>
+          <span class="nav-group-title"><img src="assets/lamp.jpg" alt="">Rank</span>
           <a href="#rewards">XP & weekly</a>
         </div>
       </aside>
-      <div class="tab-content">
+      <div class="wiki-panels">
     <section id="overview" class="active-panel">
       <div class="hero">
         <div class="hero-copy">
           <p class="eyebrow">Game guide voor spelers die alles willen snappen</p>
           <h1>BugBaas Wiki</h1>
-          <p>Gebruik deze wiki als korte handleiding voor de tabs in BugBaas: waar je iets vindt, wat je daar kunt doen en welke regels achter rewards, battles en upgrades zitten.</p>
+          <p>Korte uitleg per onderdeel: waar je iets vindt, wat je doet en welke regels belangrijk zijn.</p>
           <div class="hero-actions">
             <a class="button" href="#features"><img src="assets/bugdex.jpg" alt=""><span>Start hier</span></a>
-            <a class="button secondary" href="#kansen"><img src="assets/mythic-frame.png" alt=""><span>Bekijk drop-kansen</span></a>
+            <a class="button secondary" href="#kansen"><span class="drop-art drop-button-art" aria-hidden="true"><img class="bug" src="assets/zonsondergangsmot.png" alt=""></span><span>Bekijk drop-kansen</span></a>
           </div>
         </div>
         <div class="hero-art">
@@ -884,98 +1411,105 @@
       <div class="action-grid" aria-label="Populaire acties">
         <a class="action-card" href="#features">
           <img src="assets/bugdex.jpg" alt="">
-          <div><b>Ik wil een bug melden</b><span>Start bij Bugs: melden, prioriteit geven en updates volgen.</span></div>
+          <div><b>Bug melden</b><span>Melden, prioriteit en updates.</span></div>
         </a>
         <a class="action-card" href="#arena">
           <img src="assets/duel.jpg" alt="">
-          <div><b>Ik wil een duel spelen</b><span>Leer score, seed, rewards en wanneer helpers meetellen.</span></div>
+          <div><b>Duel spelen</b><span>Score, seed en helpers.</span></div>
         </a>
         <a class="action-card" href="#workshop">
           <img src="assets/workshop.png" alt="">
-          <div><b>Ik wil bugs ruilen</b><span>Bekijk hoe offers, historie, locks en upgrades werken.</span></div>
+          <div><b>Bugs ruilen</b><span>Offers, locks en upgrades.</span></div>
         </a>
         <a class="action-card" href="#radar">
-          <img src="assets/radar.png" alt="">
-          <div><b>Ik wil daily progressie</b><span>Gebruik login, movement, radar-widget en lampboosts.</span></div>
+          <img src="assets/movement-radar-hd.png" alt="">
+          <div><b>Daily progressie</b><span>Login, movement en radar.</span></div>
         </a>
       </div>
 
+      <div class="release-strip">
+        <b>Nieuw in 2.2.28</b>
+        <ul>
+          <li>Starter boost geldt nu tot 80 XP.</li>
+          <li>Duel- en movement rewards blijven beter klaarstaan als foreground catch.</li>
+          <li>Badges tellen alleen inkomende duels en ruilverzoeken.</li>
+          <li>Movement verwerkt lopen, hardlopen en fietsen beter apart.</li>
+        </ul>
+      </div>
+
       <div class="section-head">
-        <h2>Pagina's</h2>
-        <p>Kies eerst het onderdeel waar je in de app bent. Elke pagina legt kort uit wat je daar doet en welke regels belangrijk zijn.</p>
+        <h2>Wiki</h2>
+        <p>Kies een onderwerp. De koppen links zijn hoofdgroepen; de links eronder openen de uitleg.</p>
       </div>
       <div class="wiki-search">
         <div>
           <label for="wikiFilter">Zoek in de wiki</label>
-          <span>Filter op termen zoals duel, drop, upgrade, lamp, helper of weekly.</span>
+          <span>Bijvoorbeeld: duel, drop, upgrade, lamp, helper of weekly.</span>
         </div>
         <input id="wikiFilter" type="search" autocomplete="off" placeholder="duel, drop, upgrade...">
       </div>
       <div class="overview-links" aria-label="Alle wiki pagina's">
         <a class="overview-tile" href="#features">
-          <img src="assets/bugdex.jpg" alt="Bugs tab">
-          <div class="overview-tile-body"><span>Bugs tab</span><b>Snel starten</b><p>Bug melden, status volgen en zien hoe acties rewards kunnen geven.</p></div>
+          <img src="assets/bugdex.jpg" alt="Bugs">
+          <div class="overview-tile-body"><span>Bugs</span><b>Snel starten</b><p>Melden, status en rewards.</p></div>
         </a>
         <a class="overview-tile" href="#radar">
-          <img src="assets/radar.png" alt="Movement radar">
-          <div class="overview-tile-body"><span>Home tab</span><b>Movement radar</b><p>Dagelijkse signals, bewegen, Bug Lamp en solo-powerups.</p></div>
+          <img src="assets/movement-radar-hd.png" alt="Movement radar">
+          <div class="overview-tile-body"><span>Home</span><b>Movement radar</b><p>Signals, bewegen en lamp.</p></div>
         </a>
         <a class="overview-tile" href="#arena">
           <img src="assets/duel.jpg" alt="Arena Duel">
-          <div class="overview-tile-body"><span>Arena tab</span><b>Duel</b><p>Speel dezelfde seed tegen een collega en vergelijk score eerlijk.</p></div>
+          <div class="overview-tile-body"><span>Arena</span><b>Duel</b><p>Eerlijke score-run met seed.</p></div>
         </a>
         <a class="overview-tile" href="#campaign">
           <img src="assets/campaign.jpg" alt="Solo Campaign">
-          <div class="overview-tile-body"><span>Arena tab</span><b>Solo Campaign</b><p>Oefen waves, versla bosses en claim dagelijkse boss rewards.</p></div>
+          <div class="overview-tile-body"><span>Arena</span><b>Solo Campaign</b><p>Waves, bosses en rewards.</p></div>
         </a>
         <a class="overview-tile" href="#helpers">
           <img src="assets/helpers.jpg" alt="Bug Squad helpers">
-          <div class="overview-tile-body"><span>Arena tab</span><b>Squad helpers</b><p>Kies drie actieve bugs die automatisch meehelpen in battles.</p></div>
+          <div class="overview-tile-body"><span>Arena</span><b>Squad helpers</b><p>Drie actieve helperbugs.</p></div>
         </a>
         <a class="overview-tile" href="#tips">
           <img src="assets/powerups.jpg" alt="Speeltips">
-          <div class="overview-tile-body"><span>Arena tab</span><b>Speeltips</b><p>Wanneer je hoge targets pakt, powerups bewaart of beter doorspeelt.</p></div>
+          <div class="overview-tile-body"><span>Arena</span><b>Speeltips</b><p>Targets, timing en powerups.</p></div>
         </a>
         <a class="overview-tile" href="#bugdex">
           <img src="assets/jar.jpg" alt="BugDex collectie">
-          <div class="overview-tile-body"><span>BugDex tab</span><b>Collectie</b><p>Bekijk unlocks, duplicates, rarity en welke bugs helperwaarde hebben.</p></div>
+          <div class="overview-tile-body"><span>BugDex</span><b>Collectie</b><p>Unlocks, rarity en duplicates.</p></div>
         </a>
         <a class="overview-tile" href="#kansen">
-          <img src="assets/mythic-frame.png" alt="Drop kansen">
-          <div class="overview-tile-body"><span>BugDex tab</span><b>Drop-kansen</b><p>Zie per actie hoe groot de kans is op een BugDex reward.</p></div>
+          <div class="drop-art" aria-label="Drop kansen met mythische bug in frame">
+            <span class="chance rare">Rare 24.5%</span>
+            <img class="bug" src="assets/zonsondergangsmot.png" alt="">
+            <img class="frame" src="assets/mythic-frame.png" alt="">
+            <span class="chance epic">Epic 4.9%</span>
+          </div>
+          <div class="overview-tile-body"><span>BugDex</span><b>Drop-kansen</b><p>Kansen per rewardbron.</p></div>
         </a>
         <a class="overview-tile" href="#workshop">
           <img src="assets/workshop.png" alt="Ruilen en upgraden">
-          <div class="overview-tile-body"><span>BugDex tab</span><b>Ruilen/upgraden</b><p>Gebruik duplicates voor trades en combineer bugs naar hogere rarity.</p></div>
+          <div class="overview-tile-body"><span>BugDex</span><b>Ruilen/upgraden</b><p>Trades en hogere rarity.</p></div>
         </a>
         <a class="overview-tile" href="#rewards">
-          <img src="assets/lamp.jpg" alt="XP en weekly missions">
-          <div class="overview-tile-body"><span>Rank tab</span><b>XP & weekly</b><p>Bekijk XP-bronnen, weekly missions en de starter boost.</p></div>
+          <img src="assets/xp-weekly-hd.png" alt="XP en weekly missions">
+          <div class="overview-tile-body"><span>Rank</span><b>XP & weekly</b><p>XP, weekdoelen en boost.</p></div>
         </a>
       </div>
-      <div class="panel">
-        <h3>Volgende verbeteringen voor deze wiki</h3>
-        <p>Deze pagina kan nog sterker worden als hij meer als naslagwerk en minder als losse uitlegpagina werkt.</p>
-        <div class="improvement-list">
-          <div class="improvement"><b>Volledige vertaaldekking</b><span>Gebruik vaste vertaalkeys voor alle tekst, inclusief tabellen, alt-teksten en labels.</span></div>
-          <div class="improvement"><b>Release selector</b><span>Laat spelers kiezen voor welke app-versie de drop-kansen en regels gelden.</span></div>
-          <div class="improvement"><b>Interactieve calculators</b><span>Bereken upgradekosten, raritykans en verwachte rewards per actie.</span></div>
-          <div class="improvement"><b>Meer visuele uitleg</b><span>Maak kleine diagrammen voor duel-seed, helper-cooldowns en upgrade routes.</span></div>
-        </div>
-      </div>
+      <p class="empty-state" id="wikiNoResults" hidden>Geen resultaat. Probeer duel, drop, upgrade, lamp of XP.</p>
     </section>
 
     <section id="features">
+      <div class="breadcrumb"><span>Bugs</span><span>Snel starten</span></div>
       <div class="section-head">
         <h2>Snel starten</h2>
-        <p>BugBaas draait om twee dingen tegelijk: echte bugs beter opvolgen en spelprogressie verdienen door nuttige acties. Begin hier als je wilt weten welke tab waarvoor is.</p>
+        <p>BugBaas draait om bugs opvolgen en spelprogressie verdienen. Begin hier als je snel wilt weten waar alles staat.</p>
       </div>
       <div class="cards">
         <article class="card">
           <img src="assets/bugdex.jpg" alt="BugDex collectie">
           <div class="card-body">
             <h3>Bugs melden en volgen</h3>
-            <p>Gebruik de Bugs tab om meldingen aan te maken, status te volgen, comments te plaatsen en upvotes te geven op problemen die aandacht nodig hebben.</p>
+            <p>Gebruik Bugs om meldingen aan te maken, status te volgen, comments te plaatsen en upvotes te geven.</p>
           </div>
         </article>
         <article class="card">
@@ -997,20 +1531,28 @@
         <table>
           <thead><tr><th>Als je wilt...</th><th>Ga naar</th><th>Wat je daar doet</th></tr></thead>
           <tbody>
-            <tr><td>Een probleem vastleggen</td><td>Bugs tab</td><td>Nieuwe bug melden, prioriteit inschatten en updates plaatsen.</td></tr>
-            <tr><td>Snel dagelijkse progressie halen</td><td>Home tab</td><td>Daily login claimen, radar gebruiken en movement doelen volgen.</td></tr>
-            <tr><td>Je score verbeteren</td><td>Arena tab</td><td>Duels spelen, campaign oefenen en je Bug Squad testen.</td></tr>
-            <tr><td>Je collectie beheren</td><td>BugDex tab</td><td>Unlocks bekijken, helpers kiezen, ruilen en upgraden.</td></tr>
-            <tr><td>Je weekdoelen checken</td><td>Rank tab</td><td>XP, weekly missions en beloningen volgen.</td></tr>
+            <tr><td>Een probleem vastleggen</td><td>Bugs</td><td>Nieuwe bug melden, prioriteit inschatten en updates plaatsen.</td></tr>
+            <tr><td>Dagelijkse progressie halen</td><td>Home</td><td>Daily login claimen, radar gebruiken en movement volgen.</td></tr>
+            <tr><td>Je score verbeteren</td><td>Arena</td><td>Duels spelen, campaign oefenen en je Bug Squad testen.</td></tr>
+            <tr><td>Je collectie beheren</td><td>BugDex</td><td>Unlocks bekijken, helpers kiezen, ruilen en upgraden.</td></tr>
+            <tr><td>Je weekdoelen checken</td><td>Rank</td><td>XP, weekly missions en beloningen volgen.</td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
     <section id="bugdex">
+      <div class="breadcrumb"><span>BugDex</span><span>Collectie</span></div>
       <div class="section-head">
         <h2>BugDex & Rarity</h2>
-        <p>De BugDex tab is je collectiepagina. Hier zie je welke bugs je hebt, welke rarity ze hebben, welke duplicates je bezit en welke bugs geschikt zijn als helper of upgrade-materiaal.</p>
+        <p>BugDex is je collectie. Bekijk wat je hebt, wat duplicate is en welke bugs goed zijn als helper of upgrade-materiaal.</p>
+      </div>
+      <div class="rarity-grid" aria-label="Rarity overzicht">
+        <article class="rarity-card"><span class="rarity common">Gewoon</span><b>Basis</b><p>Snel te vangen en vooral nuttig als upgrade-materiaal.</p></article>
+        <article class="rarity-card"><span class="rarity rare">Zeldzaam</span><b>Eerste boost</b><p>Betere score en vaak de eerste goede helper-keuze.</p></article>
+        <article class="rarity-card"><span class="rarity epic">Episch</span><b>Sterke waarde</b><p>Kost meer taps, maar helpt duidelijk in Arena en Campaign.</p></article>
+        <article class="rarity-card"><span class="rarity legendary">Legendarisch</span><b>Zeldzaam doel</b><p>Sterk als helper en nodig voor de route naar Mythisch.</p></article>
+        <article class="rarity-card"><span class="rarity mythic">Mythisch</span><b>Einddoel</b><p>Komt alleen uit upgrades en heeft unieke helper-specials.</p></article>
       </div>
       <div class="two-col">
         <div class="panel dark">
@@ -1040,9 +1582,18 @@
     </section>
 
     <section id="kansen">
+      <div class="breadcrumb"><span>BugDex</span><span>Drop-kansen</span></div>
       <div class="section-head">
         <h2>Drop-Kansen</h2>
-        <p>Niet elke actie geeft direct een bug. Eerst rolt de app of er een BugDex drop komt; daarna wordt de rarity gekozen. Boosts helpen een beetje, maar de caps houden rare en epic drops schaars.</p>
+        <p>Elke rewardbron rolt eerst of je een BugDex drop krijgt. Daarna kiest de app rarity; Mythisch komt alleen via upgrades.</p>
+      </div>
+      <div class="chance-grid">
+        <article class="chance-card"><span>Dagelijks</span><b>Daily login</b><strong>35%</strong><p>Geeft alleen gewone bugs. Goed voor voorraad, niet voor hoge rarity.</p></article>
+        <article class="chance-card"><span>Actie</span><b>Bug melden</b><strong>58%</strong><p>Beste normale bron voor drops met kans op rare, epic en legendary.</p></article>
+        <article class="chance-card"><span>Battle</span><b>Duel win</b><strong>100%</strong><p>Altijd een roll, maar de unlock verschijnt pas als foreground catch.</p></article>
+        <article class="chance-card"><span>Week</span><b>Weekly all-3</b><strong>100%</strong><p>Extra bonus na alle drie weekmissies; rare en epic blijven gecapt.</p></article>
+        <article class="chance-card"><span>Workshop</span><b>Upgrade</b><strong>Route</strong><p>Gebruik duplicates om hogere rarity te maken. Dit is de Mythisch-route.</p></article>
+        <article class="chance-card"><span>Let op</span><b>Geen stille unlocks</b><strong>Tap</strong><p>Duel- en movement rewards wachten tot je de foreground bug aantikt.</p></article>
       </div>
       <div class="table-wrap">
         <table>
@@ -1066,21 +1617,21 @@
           </tbody>
         </table>
       </div>
-      <p class="note">Weekly all-3 bonus betekent: je claimt de extra weekbonus pas nadat alle 3 weekly missions van die week afgerond zijn. De BugDex roll is altijd 100%, maar rare blijft onder 25% en epic onder 5%.</p>
-      <p class="note">Duel win rewards geven hun BugDex unlock niet direct in een popup: de bug spawnt eerst als foreground catch. Pas na tappen verschijnt de unlock. Rarity boosts mogen de cap niet breken: Zeldzaam blijft maximaal 24.5% en Episch maximaal 4.9% op random routes.</p>
+      <p class="note">Weekly all-3 claim je pas na alle drie weekmissies. Duel- en movement rewards wachten als foreground catch, zodat je altijd ziet wat je vangt.</p>
     </section>
 
     <section id="arena">
+      <div class="breadcrumb"><span>Arena</span><span>Duel</span></div>
       <div class="section-head">
         <h2>Arena Duel</h2>
-        <p>In de Arena tab daag je iemand uit voor een korte score-run. Beide spelers krijgen dezelfde bugvolgorde, dus het verschil zit in target-keuze, timing en je actieve Bug Squad.</p>
+        <p>In Arena daag je iemand uit voor een korte score-run. Beide spelers krijgen dezelfde bugvolgorde; target-keuze en timing maken het verschil.</p>
       </div>
       <div class="cards">
         <article class="card">
           <img src="assets/duel.jpg" alt="Duel mode">
           <div class="card-body">
             <h3>Waar vind je dit</h3>
-            <p>Open de Arena tab en kies Duel. De uitdager speelt direct; de tegenstander kan later dezelfde seed spelen.</p>
+            <p>Open Arena en kies Duel. De uitdager speelt direct; de tegenstander speelt later dezelfde seed.</p>
           </div>
         </article>
         <article class="card">
@@ -1105,6 +1656,7 @@
             <tr><td>Combo bonus</td><td>Elke reeks catches kan extra punten geven, afhankelijk van squad.</td><td>Snel en netjes tappen wordt beloond.</td></tr>
             <tr><td>Support bonus</td><td>Support helpers geven eindbonus op basis van score.</td><td>Maakt consistent spelen sterker.</td></tr>
             <tr><td>Movement bonus</td><td>Movement helpers kunnen tot 3 eindpunten geven als je genoeg scoort.</td><td>Nuttig voor net-wel/net-niet duels.</td></tr>
+            <tr><td>Arena badge</td><td>Telt alleen inkomende duelacties.</td><td>Uitgaande wachtduels geven geen onterechte badge.</td></tr>
             <tr><td>Retry onder 30</td><td>Lage of bugged eigen score kan opnieuw zolang de ander nog niet speelde.</td><td>Voorkomt verloren duels door een slechte submit.</td></tr>
             <tr><td>Win BugDex reward</td><td>De reward wordt eerst als foreground bug klaargezet.</td><td>Je ziet altijd wat je vangt en krijgt geen stille unlock.</td></tr>
           </tbody>
@@ -1113,9 +1665,10 @@
     </section>
 
     <section id="campaign">
+      <div class="breadcrumb"><span>Arena</span><span>Solo Campaign</span></div>
       <div class="section-head">
         <h2>Solo Campaign</h2>
-        <p>Solo Campaign staat in de Arena tab en is bedoeld om zonder tegenstander te oefenen. Je speelt waves tegen BugBot, bouwt routine op en claimt dagelijkse boss rewards.</p>
+        <p>Solo Campaign staat in Arena. Je oefent waves tegen BugBot en claimt dagelijkse boss rewards.</p>
       </div>
       <div class="two-col">
         <div class="panel">
@@ -1151,9 +1704,16 @@
     </section>
 
     <section id="helpers">
+      <div class="breadcrumb"><span>Arena</span><span>Squad helpers</span></div>
       <div class="section-head">
         <h2>Bug Squad Helpers</h2>
-        <p>In de BugDex tab kies je maximaal 3 actieve helperbugs. In Duel en Campaign verschijnen ze als towers met cooldownbalk en geven ze automatische hits, slow, shield of andere control.</p>
+        <p>Kies maximaal 3 actieve helperbugs. Ze helpen automatisch in Duel en Campaign, maar timing en target-keuze blijven belangrijk.</p>
+      </div>
+      <div class="mini-flow" aria-label="Helper flow">
+        <article class="mini-step"><span>Stap 1</span><b>Kies 3 helpers</b><p>Actieve helperbugs blijven beschermd voor trade en upgrade.</p></article>
+        <article class="mini-step"><span>Stap 2</span><b>Check rarity</b><p>Hogere rarity geeft meer hits, kortere cooldown en betere control.</p></article>
+        <article class="mini-step"><span>Stap 3</span><b>Mix effecten</b><p>Combineer damage, slow en shield zodat je niet van een type afhankelijk bent.</p></article>
+        <article class="mini-step"><span>Stap 4</span><b>Gebruik specials</b><p>Mythische helpers geven een unieke rol, geen automatische win.</p></article>
       </div>
       <div class="gallery">
         <div class="effect"><img src="assets/effect-lightning.png" alt="Zap effect"><b>Zap</b></div>
@@ -1189,7 +1749,7 @@
       </div>
       <div class="panel">
         <h3>Mythic specials</h3>
-        <p>Mythische bugs zijn geen simpele extra damage. Elke mythic heeft een eigen rol: control, chain hits, finish damage of emergency defense. De kaarten hieronder laten per special zien wat je krijgt, wanneer je hem het best merkt en waarom hij niet te sterk wordt.</p>
+        <p>Mythische helpers hebben een eigen rol: control, chain hits, finish damage of emergency defense. Lees per kaart wat hij doet, wanneer hij sterk is en wat de balans houdt.</p>
       </div>
       <div class="mythic-special-grid" aria-label="Mythische helper specials">
         <article class="mythic-card">
@@ -1339,21 +1899,23 @@
     </section>
 
     <section id="radar">
+      <div class="breadcrumb"><span>Home</span><span>Movement radar</span></div>
       <div class="section-head">
         <h2>Radar, Movement & Bug Lamp</h2>
-        <p>De Home tab bundelt dagelijkse progressie: login claim, movement doelen, radar-widget en tijdelijke boosts. Het is extra voortgang, geen vervanging voor bugs melden of battles spelen.</p>
+        <p>Home bundelt dagelijkse progressie: login claim, movement, radar-widget en tijdelijke boosts.</p>
       </div>
       <div class="cards">
-        <article class="card"><img src="assets/radar.png" alt="Bug Radar"><div class="card-body"><h3>Android radar-widget</h3><p>Geeft maximaal 3 signals per dag. Een signal kan XP en een BugDex roll geven; verwacht vooral gewone en zeldzame bugs.</p></div></article>
+        <article class="card"><img src="assets/movement-radar-hd.png" alt="Bug Radar"><div class="card-body"><h3>Android radar-widget</h3><p>Geeft maximaal 3 signals per dag. Een signal kan XP en een BugDex roll geven; verwacht vooral gewone en zeldzame bugs.</p></div></article>
         <article class="card"><img src="assets/lamp.jpg" alt="Lamp Focus"><div class="card-body"><h3>Bug Lamp</h3><p>Elke 5e daily login geeft een lamp. Na activeren werkt hij 24 uur: movement doelen halveren en rarity krijgt een kleine boost.</p></div></article>
-        <article class="card"><img src="assets/powerups.jpg" alt="Solo powerups"><div class="card-body"><h3>Solo powerups</h3><p>Boss clears kunnen Lamp Focus of Bug Bomb geven. Activeer ze bewust voor lastige campaign waves of boss attempts.</p></div></article>
+        <article class="card"><img src="assets/movement-radar-hd.png" alt="Movement doelen"><div class="card-body"><h3>Movement</h3><p>Lopen, hardlopen en fietsen worden apart verwerkt, zodat je movement-doelen betrouwbaarder meetellen.</p></div></article>
       </div>
     </section>
 
     <section id="rewards">
+      <div class="breadcrumb"><span>Rank</span><span>XP & weekly</span></div>
       <div class="section-head">
         <h2>XP & Missions</h2>
-        <p>De Rank tab laat voortgang, XP en weekly missions zien. XP is bewust laag op spamgevoelige acties en hoger op doelen die echt terugkerende activiteit vragen.</p>
+        <p>Rank laat voortgang, XP en weekly missions zien. Weekdoelen leveren de duidelijkste progressie op.</p>
       </div>
       <div class="two-col">
         <div class="table-wrap">
@@ -1371,8 +1933,9 @@
           </table>
         </div>
         <div class="panel">
+          <img src="assets/xp-weekly-hd.png" alt="XP en weekly missions">
           <h3>Starter boost</h3>
-          <p>Nieuwe of lage-XP spelers onder 20 XP krijgen 3 dagen lang 2x positieve XP en een extra onafhankelijke BugDex roll. De extra roll geeft niet twee keer dezelfde BugDex unlock in dezelfde catch-flow.</p>
+          <p>Nieuwe of lage-XP spelers onder 80 XP krijgen 3 dagen lang 2x positieve XP en een extra onafhankelijke BugDex roll. De extra roll geeft niet twee keer dezelfde BugDex unlock in dezelfde catch-flow.</p>
           <h3>Weekly missions</h3>
           <p>Elke week krijg je drie doelen, waaronder movement. Rewards zijn vooraf zichtbaar, zodat je weet of je speelt voor XP, een gewone BugDex roll of een betere zeldzame roll.</p>
         </div>
@@ -1380,21 +1943,28 @@
     </section>
 
     <section id="workshop">
+      <div class="breadcrumb"><span>BugDex</span><span>Ruilen/upgraden</span></div>
       <div class="section-head">
         <h2>Ruilen & Upgraden</h2>
-        <p>De Workshop staat in de BugDex tab. Hier krijgen duplicates waarde: je kunt ze ruilen met anderen of combineren naar een hogere rarity.</p>
+        <p>De Workshop staat in BugDex. Duplicates krijgen waarde: ruil ze of combineer ze naar hogere rarity.</p>
       </div>
       <div class="cards">
         <article class="card"><img src="assets/workshop.png" alt="BugDex workshop"><div class="card-body"><h3>Ruilen</h3><p>Selecteer wat jij aanbiedt en wat je terug wilt. Open trades tonen duidelijk welke kant van de ruil van wie is.</p></div></article>
-        <article class="card"><img src="assets/mythic-frame.png" alt="Mythische frame"><div class="card-body"><h3>Upgrades</h3><p>Combineer bugs naar hogere rarity. Mythisch is alleen via upgrade bereikbaar en vraagt 10 verschillende Legendarische bugs.</p></div></article>
+        <article class="card">
+          <div class="upgrade-art" aria-label="Mythische upgrade met bug in frame">
+            <img class="bug" src="assets/glorieuze-scarabee.png" alt="">
+            <img class="frame" src="assets/mythic-frame.png" alt="">
+          </div>
+          <div class="card-body"><h3>Upgrades</h3><p>Combineer bugs naar hogere rarity. Mythisch is alleen via upgrade bereikbaar en vraagt 10 verschillende Legendarische bugs.</p></div>
+        </article>
         <article class="card"><img src="assets/helpers.jpg" alt="Locked helpers"><div class="card-body"><h3>Actieve squad lock</h3><p>Een bug die in je actieve squad zit wordt beschermd. Heb je een extra copy, dan blijft die wel bruikbaar voor trade of upgrade.</p></div></article>
-        <article class="card"><img src="assets/bugdex.jpg" alt="Ruilhistorie"><div class="card-body"><h3>Ruilhistorie</h3><p>Open trades tonen duidelijk wat zij bieden en wat zij van jou willen. Afgeronde, geweigerde en geannuleerde trades blijven kort zichtbaar in historie.</p></div></article>
+        <article class="card"><img src="assets/bugdex.jpg" alt="Ruilhistorie"><div class="card-body"><h3>Ruilhistorie</h3><p>Open trades tonen duidelijk wat zij bieden en wat zij van jou willen. De badge telt alleen inkomende open ruilverzoeken.</p></div></article>
       </div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Ruil onderdeel</th><th>Wat je ziet</th><th>Waarom dit helpt</th></tr></thead>
           <tbody>
-            <tr><td>Inkomend verzoek</td><td>Zij bieden en zij willen van jou staan apart.</td><td>Je hoeft niet meer te raden welke kant van de ruil van wie is.</td></tr>
+            <tr><td>Inkomend verzoek</td><td>Zij bieden en zij willen van jou staan apart.</td><td>Telt mee voor de BugDex-badge zolang het verzoek open is.</td></tr>
             <tr><td>Uitgaand verzoek</td><td>Jij biedt en jij vraagt staan apart.</td><td>Je ziet sneller of je request klopt voordat iemand accepteert.</td></tr>
             <tr><td>Historie</td><td>Laatste afgeronde, afgewezen en geannuleerde trades.</td><td>Handig om terug te zien wat er met een verzoek is gebeurd.</td></tr>
             <tr><td>Sortering</td><td>Mythisch, Legendarisch, Episch, Zeldzaam en daarna Gewoon.</td><td>Hogere waarde bugs staan bovenaan bij selecteren.</td></tr>
@@ -1415,34 +1985,37 @@
     </section>
 
     <section id="tips">
+      <div class="breadcrumb"><span>Arena</span><span>Speeltips</span></div>
       <div class="section-head">
         <h2>Slim Spelen</h2>
-        <p>In battles win je niet door alles te willen pakken. Kies targets op waarde, resterende tijd en helper-cooldowns.</p>
+        <p>Win battles door te kiezen. Pak niet alles: kijk naar score, resterende tijd en helper-cooldowns.</p>
       </div>
-      <div class="cards">
+      <div class="tips-hero">
+        <img src="assets/smart-play-hd.png" alt="Slim spelen met targets, timers en helpers">
         <article class="panel">
+          <h3>Snelle vuistregels</h3>
+          <ul>
+            <li>Prioriteit: haalbare hoge score boven willekeurig tappen.</li>
+            <li>Wacht op helpers bij zware targets als de tijd dat toelaat.</li>
+            <li>Laat dure targets liggen wanneer ze je combo of boss timing breken.</li>
+          </ul>
+        </article>
+      </div>
+      <div class="compact-card-grid">
+        <article class="compact-card">
+          <span>Arena</span>
           <h3>Duel tips</h3>
-          <ul>
-            <li>Laat extreem zware targets liggen als je helpers geen cooldown klaar hebben.</li>
-            <li>Pak Zeldzaam/Episch vaak eerder dan te lang doorbijten op Legendary.</li>
-            <li>Let op helper animaties: Zap/Sticky/Shield kunnen een target net haalbaar maken.</li>
-          </ul>
+          <p>Pak Zeldzaam en Episch vaak eerder dan lang doorbijten op Legendary. Zap, Sticky en Shield maken een target soms net haalbaar.</p>
         </article>
-        <article class="panel">
+        <article class="compact-card">
+          <span>Campaign</span>
           <h3>Campaign tips</h3>
-          <ul>
-            <li>Bewaar powerups voor boss waves of late waves.</li>
-            <li>Boss window actief? Dat is het moment om extra break bonus te pakken.</li>
-            <li>Met lage squad is boss 1 haalbaar; later verwacht de game betere helpers.</li>
-          </ul>
+          <p>Bewaar powerups voor boss waves of late waves. Tijdens het boss window is break bonus meestal meer waard dan losse targets.</p>
         </article>
-        <article class="panel">
+        <article class="compact-card">
+          <span>Collectie</span>
           <h3>Collectie tips</h3>
-          <ul>
-            <li>Weekly all-3 bonus en bug fixed zijn sterke bronnen voor betere rarity.</li>
-            <li>Mythisch komt uit upgrades, niet uit geluk.</li>
-            <li>Hou duplicates bij: ze zijn upgrade- en trade-materiaal.</li>
-          </ul>
+          <p>Weekly all-3 en bug fixed zijn sterke bronnen. Mythisch komt uit upgrades, dus duplicates zijn trade- en upgrade-materiaal.</p>
         </article>
       </div>
     </section>
@@ -1451,17 +2024,21 @@
   </main>
 
   <footer class="footer">
-    <div class="shell">BugBaas Wiki - waarden en kansen kunnen per release wijzigen. Laatst bijgewerkt voor app-versie 2.2.23.</div>
+    <div class="shell">BugBaas Wiki - waarden en kansen kunnen per release wijzigen. Laatst bijgewerkt voor app-versie 2.2.28.</div>
   </footer>
 
   <script>
-    const panels = [...document.querySelectorAll(".tab-content > section[id]")];
-    const links = [...document.querySelectorAll(".side-nav a, .hero-actions a, .action-grid a, .overview-links a")];
+    const panels = [...document.querySelectorAll(".wiki-panels > section[id]")];
+    const links = [...document.querySelectorAll(".side-nav a, .mobile-nav a, .hero-actions a, .action-grid a, .overview-links a")];
+    const mobileNav = document.querySelector(".mobile-nav");
     const panelIds = new Set(panels.map((panel) => panel.id));
     const languageButtons = [...document.querySelectorAll(".language-switch button")];
     const themeButtons = [...document.querySelectorAll(".theme-switch button")];
     const wikiFilter = document.querySelector("#wikiFilter");
     const overviewTiles = [...document.querySelectorAll(".overview-tile")];
+    const noResults = document.querySelector("#wikiNoResults");
+    const copySectionLink = document.querySelector("#copySectionLink");
+    const printWiki = document.querySelector("#printWiki");
     const translations = {
       en: {
         "BugBaas Wiki": "BugBaas Wiki",
@@ -1646,10 +2223,882 @@
         "1 willekeurige Mythische bug": "1 bug Mythic aleatoire"
       }
     };
+    const extraTranslations = {
+      en: {
+        "Actieve helperbugs blijven beschermd voor trade en upgrade.": "Active helper bugs stay protected from trade and upgrade.",
+        "Altijd een roll, maar de unlock verschijnt pas als foreground catch.": "Always a roll, but the unlock appears as a foreground catch first.",
+        "Battle": "Battle",
+        "Basis": "Base",
+        "Beste normale bron voor drops met kans op rare, epic en legendary.": "Best regular drop source with a chance at rare, epic and legendary.",
+        "Betere score en vaak de eerste goede helper-keuze.": "Better score and often the first good helper choice.",
+        "BugDex is je collectie. Bekijk wat je hebt, wat duplicate is en welke bugs goed zijn als helper of upgrade-materiaal.": "BugDex is your collection. See what you have, what is duplicate and which bugs are good as helpers or upgrade material.",
+        "Bewaar powerups voor boss waves of late waves. Tijdens het boss window is break bonus meestal meer waard dan losse targets.": "Save powerups for boss waves or late waves. During the boss window, break bonus is usually worth more than loose targets.",
+        "Check rarity": "Check rarity",
+        "Combineer damage, slow en shield zodat je niet van een type afhankelijk bent.": "Combine damage, slow and shield so you do not depend on one type.",
+        "Dagelijks": "Daily",
+        "Duel win": "Duel win",
+        "Duel- en movement rewards wachten tot je de foreground bug aantikt.": "Duel and movement rewards wait until you tap the foreground bug.",
+        "Eerste boost": "First boost",
+        "Einddoel": "End goal",
+        "Elke rewardbron rolt eerst of je een BugDex drop krijgt. Daarna kiest de app rarity; Mythisch komt alleen via upgrades.": "Every reward source first rolls whether you get a BugDex drop. Then the app chooses rarity; Mythic only comes through upgrades.",
+        "Extra bonus na alle drie weekmissies; rare en epic blijven gecapt.": "Extra bonus after all three weekly missions; rare and epic stay capped.",
+        "Geen stille unlocks": "No silent unlocks",
+        "Geeft alleen gewone bugs. Goed voor voorraad, niet voor hoge rarity.": "Gives only common bugs. Good for stock, not for high rarity.",
+        "Gebruik duplicates om hogere rarity te maken. Dit is de Mythisch-route.": "Use duplicates to create higher rarity. This is the Mythic route.",
+        "Gebruik specials": "Use specials",
+        "Helper flow": "Helper flow",
+        "Hogere rarity geeft meer hits, kortere cooldown en betere control.": "Higher rarity gives more hits, shorter cooldown and better control.",
+        "Kies 3 helpers": "Choose 3 helpers",
+        "Kies maximaal 3 actieve helperbugs. Ze helpen automatisch in Duel en Campaign, maar timing en target-keuze blijven belangrijk.": "Choose up to 3 active helper bugs. They help automatically in Duel and Campaign, but timing and target choice still matter.",
+        "Komt alleen uit upgrades en heeft unieke helper-specials.": "Only comes from upgrades and has unique helper specials.",
+        "Kost meer taps, maar helpt duidelijk in Arena en Campaign.": "Costs more taps, but clearly helps in Arena and Campaign.",
+        "Laat dure targets liggen wanneer ze je combo of boss timing breken.": "Skip expensive targets when they break your combo or boss timing.",
+        "Let op": "Note",
+        "Mix effecten": "Mix effects",
+        "Mythische helpers geven een unieke rol, geen automatische win.": "Mythic helpers give a unique role, not an automatic win.",
+        "Mythische helpers hebben een eigen rol: control, chain hits, finish damage of emergency defense. Lees per kaart wat hij doet, wanneer hij sterk is en wat de balans houdt.": "Mythic helpers have their own role: control, chain hits, finish damage or emergency defense. Each card shows what it does, when it is strong and what keeps it balanced.",
+        "Pak Zeldzaam en Episch vaak eerder dan lang doorbijten op Legendary. Zap, Sticky en Shield maken een target soms net haalbaar.": "Often take Rare and Epic before spending too long on Legendary. Zap, Sticky and Shield can make a target just reachable.",
+        "Prioriteit: haalbare hoge score boven willekeurig tappen.": "Priority: reachable high score over random tapping.",
+        "Rarity overzicht": "Rarity overview",
+        "Route": "Route",
+        "Snel te vangen en vooral nuttig als upgrade-materiaal.": "Quick to catch and mainly useful as upgrade material.",
+        "Slim spelen met targets, timers en helpers": "Smart play with targets, timers and helpers",
+        "Snelle vuistregels": "Quick rules",
+        "Stap 1": "Step 1",
+        "Stap 2": "Step 2",
+        "Stap 3": "Step 3",
+        "Stap 4": "Step 4",
+        "Sterk als helper en nodig voor de route naar Mythisch.": "Strong as a helper and needed for the route to Mythic.",
+        "Sterke waarde": "Strong value",
+        "Tap": "Tap",
+        "Wacht op helpers bij zware targets als de tijd dat toelaat.": "Wait for helpers on heavy targets when time allows.",
+        "Week": "Week",
+        "Weekly all-3": "Weekly all-3",
+        "Weekly all-3 claim je pas na alle drie weekmissies. Duel- en movement rewards wachten als foreground catch, zodat je altijd ziet wat je vangt.": "You claim weekly all-3 only after all three weekly missions. Duel and movement rewards wait as foreground catches, so you always see what you catch.",
+        "Weekly all-3 en bug fixed zijn sterke bronnen. Mythisch komt uit upgrades, dus duplicates zijn trade- en upgrade-materiaal.": "Weekly all-3 and bug fixed are strong sources. Mythic comes from upgrades, so duplicates are trade and upgrade material.",
+        "Win battles door te kiezen. Pak niet alles: kijk naar score, resterende tijd en helper-cooldowns.": "Win battles by choosing. Do not take everything: watch score, remaining time and helper cooldowns.",
+        "Zeldzaam doel": "Rare goal",
+        "0ms": "0ms",
+        "1.00x": "1.00x",
+        "1.05x": "1.05x",
+        "1.10x": "1.10x",
+        "1.14x": "1.14x",
+        "1.18x": "1.18x",
+        "10 + BugDex": "10 + BugDex",
+        "20-25": "20-25",
+        "1 / 3 / 6 / 10 / 15": "1 / 3 / 6 / 10 / 15",
+        "220ms": "220ms",
+        "4.3s": "4.3s",
+        "420ms": "420ms",
+        "5.2s": "5.2s",
+        "6.5s": "6.5s",
+        "620ms": "620ms",
+        "7.9s": "7.9s",
+        "820ms": "820ms",
+        "9.4s": "9.4s",
+        "AOE": "AOE",
+        "Boss 1": "Boss 1",
+        "Boss 2": "Boss 2",
+        "Boss 3": "Boss 3",
+        "Boss 4": "Boss 4",
+        "Boss 5": "Boss 5",
+        "BugDex": "BugDex",
+        "Bug Squad helpers": "Bug Squad helpers",
+        "Bugs": "Bugs",
+        "Burst": "Burst",
+        "Comment": "Comment",
+        "Control": "Control",
+        "Daily login": "Daily login",
+        "Doornbloembidsprinkhaan": "Doornbloembidsprinkhaan",
+        "Duel win reward": "Duel win reward",
+        "Epic 4.9%": "Epic 4.9%",
+        "Foreground bug smash": "Foreground bug smash",
+        "Freeze": "Freeze",
+        "Giraffekevertje": "Giraffekevertje",
+        "Glorieuze scarabee": "Glorieuze scarabee",
+        "Home": "Home",
+        "Koningin-Alexandravlinder": "Koningin-Alexandravlinder",
+        "Lantaarndrager": "Lantaarndrager",
+        "Picasso-wants": "Picasso-wants",
+        "Rank": "Rank",
+        "Rare 24.5%": "Rare 24.5%",
+        "route": "route",
+        "Roze esdoornmot": "Roze esdoornmot",
+        "Shield": "Shield",
+        "Solo boss 2": "Solo boss 2",
+        "Solo boss 4": "Solo boss 4",
+        "Status update": "Status update",
+        "Sticky": "Sticky",
+        "XP": "XP",
+        "Zap": "Zap",
+        "Zonsondergangsmot": "Zonsondergangsmot",
+        "Wiki onderdelen": "Wiki sections",
+        "Mobiele wiki navigatie": "Mobile wiki navigation",
+        "Mobiele wiki links": "Mobile wiki links",
+        "Menu": "Menu",
+        "Populaire acties": "Popular actions",
+        "Alle wiki pagina's": "All wiki pages",
+        "Kopieer link": "Copy link",
+        "Kopieer huidige sectielink": "Copy current section link",
+        "Print": "Print",
+        "Print wiki": "Print wiki",
+        "Gekopieerd": "Copied",
+        "Drop kansen met mythische bug in frame": "Drop chances with mythic bug in frame",
+        "Mythische upgrade met bug in frame": "Mythic upgrade with bug in frame",
+        "Movement doelen": "Movement goals",
+        "duel, drop, upgrade...": "duel, drop, upgrade...",
+        "Theme": "Theme",
+        "Light mode": "Light mode",
+        "Dark mode": "Dark mode",
+        "Language": "Language",
+        "Nederlands": "Dutch",
+        "English": "English",
+        "Français": "French",
+        "Actieve Bug Squad": "Active Bug Squad",
+        "AOE effect": "AOE effect",
+        "Bloom blade effect": "Bloom blade effect",
+        "Boss waves": "Boss waves",
+        "Bug jar helper": "Bug jar helper",
+        "Bug Radar": "Bug Radar",
+        "Bug Smash Duel": "Bug Smash Duel",
+        "BugBaas wiki hero met bug jars, arena en radar": "BugBaas wiki hero with bug jars, arena and radar",
+        "BugBaas Wiki home": "BugBaas Wiki home",
+        "BugDex collectie": "BugDex collection",
+        "BugDex workshop": "BugDex workshop",
+        "Burst slash effect": "Burst slash effect",
+        "Duel mode": "Duel mode",
+        "Freeze effect": "Freeze effect",
+        "Lamp Focus": "Lamp Focus",
+        "Lantern signal effect": "Lantern signal effect",
+        "Lightning chain effect": "Lightning chain effect",
+        "Locked helpers": "Locked helpers",
+        "Mirror shield effect": "Mirror shield effect",
+        "Mythische helper specials": "Mythic helper specials",
+        "Pattern break slash effect": "Pattern break slash effect",
+        "Ruilen en upgraden": "Trading and upgrading",
+        "Scout strike effect": "Scout strike effect",
+        "Shield effect": "Shield effect",
+        "Solo powerups": "Solo powerups",
+        "Sticky effect": "Sticky effect",
+        "Sticky slow effect": "Sticky slow effect",
+        "XP en weekly missions": "XP and weekly missions",
+        "Zap effect": "Zap effect",
+        "Onderdelen": "Sections",
+        "Korte uitleg per onderdeel: waar je iets vindt, wat je doet en welke regels belangrijk zijn.": "Short explanations per section: where to find things, what to do and which rules matter.",
+        "Bug melden": "Report a bug",
+        "Melden, prioriteit en updates.": "Report, priority and updates.",
+        "Duel spelen": "Play a duel",
+        "Score, seed en helpers.": "Score, seed and helpers.",
+        "Bugs ruilen": "Trade bugs",
+        "Offers, locks en upgrades.": "Offers, locks and upgrades.",
+        "Daily progressie": "Daily progress",
+        "Login, movement en radar.": "Login, movement and radar.",
+        "Nieuw in 2.2.28": "New in 2.2.28",
+        "Starter boost geldt nu tot 80 XP.": "Starter boost now applies up to 80 XP.",
+        "Duel- en movement rewards blijven beter klaarstaan als foreground catch.": "Duel and movement rewards now stay queued better as foreground catches.",
+        "Badges tellen alleen inkomende duels en ruilverzoeken.": "Badges only count incoming duels and trade requests.",
+        "Movement verwerkt lopen, hardlopen en fietsen beter apart.": "Movement now separates walking, running and cycling more reliably.",
+        "Wiki": "Wiki",
+        "Kies een onderwerp. De koppen links zijn hoofdgroepen; de links eronder openen de uitleg.": "Choose a topic. Headings on the left are groups; links below them open the guide.",
+        "Zoek in de wiki": "Search the wiki",
+        "Bijvoorbeeld: duel, drop, upgrade, lamp, helper of weekly.": "For example: duel, drop, upgrade, lamp, helper or weekly.",
+        "Geen resultaat. Probeer duel, drop, upgrade, lamp of XP.": "No result. Try duel, drop, upgrade, lamp or XP.",
+        "Melden, status en rewards.": "Reports, status and rewards.",
+        "Signals, bewegen en lamp.": "Signals, movement and lamp.",
+        "Eerlijke score-run met seed.": "Fair score run with a seed.",
+        "Waves, bosses en rewards.": "Waves, bosses and rewards.",
+        "Drie actieve helperbugs.": "Three active helper bugs.",
+        "Targets, timing en powerups.": "Targets, timing and powerups.",
+        "Unlocks, rarity en duplicates.": "Unlocks, rarity and duplicates.",
+        "Kansen per rewardbron.": "Chances per reward source.",
+        "Trades en hogere rarity.": "Trades and higher rarity.",
+        "XP, weekdoelen en boost.": "XP, weekly goals and boost.",
+        "BugBaas draait om bugs opvolgen en spelprogressie verdienen. Begin hier als je snel wilt weten waar alles staat.": "BugBaas is about tracking bugs and earning game progress. Start here if you want to know where everything is.",
+        "Bugs melden en volgen": "Report and follow bugs",
+        "Gebruik Bugs om meldingen aan te maken, status te volgen, comments te plaatsen en upvotes te geven.": "Use Bugs to create reports, follow status, add comments and give upvotes.",
+        "Spelen voor progressie": "Play for progress",
+        "Gebruik Arena voor duels en Solo Campaign. Je verdient XP, boss rewards en soms BugDex unlocks zonder dat spamacties de beste route worden.": "Use Arena for duels and Solo Campaign. You earn XP, boss rewards and sometimes BugDex unlocks without spam actions becoming the best route.",
+        "Collectie opbouwen": "Build your collection",
+        "Gebruik BugDex en Workshop om unlocks te bekijken, duplicates te ruilen en upgrades te maken. Actieve helperbugs blijven beschermd.": "Use BugDex and Workshop to view unlocks, trade duplicates and create upgrades. Active helper bugs stay protected.",
+        "Als je wilt...": "If you want to...",
+        "Ga naar": "Go to",
+        "Wat je daar doet": "What you do there",
+        "Een probleem vastleggen": "Record an issue",
+        "Nieuwe bug melden, prioriteit inschatten en updates plaatsen.": "Report a new bug, assess priority and post updates.",
+        "Dagelijkse progressie halen": "Get daily progress",
+        "Daily login claimen, radar gebruiken en movement volgen.": "Claim daily login, use radar and track movement.",
+        "Je score verbeteren": "Improve your score",
+        "Duels spelen, campaign oefenen en je Bug Squad testen.": "Play duels, practice campaign and test your Bug Squad.",
+        "Je collectie beheren": "Manage your collection",
+        "Unlocks bekijken, helpers kiezen, ruilen en upgraden.": "View unlocks, choose helpers, trade and upgrade.",
+        "Je weekdoelen checken": "Check weekly goals",
+        "XP, weekly missions en beloningen volgen.": "Track XP, weekly missions and rewards.",
+        "BugDex is je collectie. Je ziet unlocks, rarity, duplicates en welke bugs geschikt zijn als helper of upgrade-materiaal.": "BugDex is your collection. You see unlocks, rarity, duplicates and which bugs work as helpers or upgrade material.",
+        "Hoe rarity werkt": "How rarity works",
+        "Gewoon": "Common",
+        "komt vaak voor en is vooral tempo- en upgrade-materiaal.": "appears often and is mainly speed and upgrade material.",
+        "Zeldzaam": "Rare",
+        "geeft betere score en is nuttig voor vroege helpers.": "gives better score and is useful for early helpers.",
+        "Episch": "Epic",
+        "kost meer taps, maar helpt duidelijk meer in battles.": "costs more taps, but helps much more in battles.",
+        "Legendarisch": "Legendary",
+        "is zeldzaam uit rewards en sterk als helper.": "is rare from rewards and strong as a helper.",
+        "Mythisch": "Mythic",
+        "is het einddoel en komt alleen uit upgrades.": "is the end goal and only comes from upgrades.",
+        "Rarity": "Rarity",
+        "Taps in Duel": "Taps in Duel",
+        "Score": "Score",
+        "Hitbox": "Hitbox",
+        "Opmerking": "Note",
+        "Snel pakken, lage waarde.": "Quick to catch, low value.",
+        "Vaak betere keuze dan meerdere gewone bugs.": "Often better than several common bugs.",
+        "Goede score, maar kost tijd.": "Good score, but costs time.",
+        "Sterk target als je helpers/timing goed zijn.": "Strong target if your helpers and timing are good.",
+        "Hoogste waarde en unieke helper-specials.": "Highest value and unique helper specials.",
+        "Mythische bugs zijn bedoeld als einddoel. Je krijgt ze niet uit normale random rewards; upgrade 10 verschillende Legendarische bugs naar Mythisch.": "Mythic bugs are an end goal. You do not get them from normal random rewards; upgrade 10 different Legendary bugs to Mythic.",
+        "Niet elke actie geeft direct een bug. Eerst rolt de app of er een BugDex drop komt; daarna wordt de rarity gekozen. Boosts helpen een beetje, maar de caps houden rare en epic drops schaars.": "Not every action gives a bug directly. First the app rolls whether a BugDex drop happens; then rarity is chosen. Boosts help a bit, but caps keep rare and epic drops scarce.",
+        "Bron": "Source",
+        "Drop kans": "Drop chance",
+        "Bug melden": "Report bug",
+        "Bug gefixt": "Bug fixed",
+        "Upvote gegeven": "Upvote given",
+        "Profiel bekijken": "View profile",
+        "Upgrade": "Upgrade",
+        "Duel- en movement rewards geven hun BugDex unlock niet direct in een popup: de bug blijft als foreground catch klaarstaan tot de UI vrij is. Pas na tappen verschijnt de unlock.": "Duel and movement rewards do not show the BugDex unlock directly in a popup: the bug stays queued as a foreground catch until the UI is free. The unlock appears after tapping.",
+        "Weekly all-3 bonus betekent: je claimt de extra weekbonus pas nadat alle 3 weekly missions van die week afgerond zijn. De BugDex roll is altijd 100%, maar rare blijft onder 25% en epic onder 5%.": "Weekly all-3 bonus means you claim the extra weekly bonus only after all 3 weekly missions are complete. The BugDex roll is always 100%, but rare stays below 25% and epic below 5%.",
+        "In Arena daag je iemand uit voor een korte score-run. Beide spelers krijgen dezelfde bugvolgorde; target-keuze en timing maken het verschil.": "In Arena you challenge someone to a short score run. Both players get the same bug sequence; target choice and timing make the difference.",
+        "Waar vind je dit": "Where to find it",
+        "Open Arena en kies Duel. De uitdager speelt direct; de tegenstander speelt later dezelfde seed.": "Open Arena and choose Duel. The challenger plays immediately; the opponent plays the same seed later.",
+        "Hoe de run werkt": "How the run works",
+        "Je hebt 30 seconden en 56 targets. Hogere rarity geeft meer punten, maar vraagt meer taps en betere timing.": "You have 30 seconds and 56 targets. Higher rarity gives more points, but needs more taps and better timing.",
+        "Rewards": "Rewards",
+        "Win geeft 10 XP, verlies 5 XP. Een dagelijkse duel-reward telt maar 1x per tegenstander en BugDex wins verschijnen eerst als foreground catch.": "A win gives 10 XP, a loss 5 XP. A daily duel reward counts only once per opponent and BugDex wins appear first as a foreground catch.",
+        "Mechanic": "Mechanic",
+        "Wat gebeurt er": "What happens",
+        "Waarom belangrijk": "Why it matters",
+        "Combo bonus": "Combo bonus",
+        "Elke reeks catches kan extra punten geven, afhankelijk van squad.": "Each catch streak can give extra points, depending on your squad.",
+        "Snel en netjes tappen wordt beloond.": "Fast and clean tapping is rewarded.",
+        "Support bonus": "Support bonus",
+        "Support helpers geven eindbonus op basis van score.": "Support helpers give an end bonus based on score.",
+        "Maakt consistent spelen sterker.": "Makes consistent play stronger.",
+        "Movement bonus": "Movement bonus",
+        "Movement helpers kunnen tot 3 eindpunten geven als je genoeg scoort.": "Movement helpers can give up to 3 end points if you score enough.",
+        "Nuttig voor net-wel/net-niet duels.": "Useful for close duels.",
+        "Arena badge": "Arena badge",
+        "Telt alleen inkomende duelacties.": "Only counts incoming duel actions.",
+        "Uitgaande wachtduels geven geen onterechte badge.": "Outgoing waiting duels no longer create a wrong badge.",
+        "Retry onder 30": "Retry below 30",
+        "Lage of bugged eigen score kan opnieuw zolang de ander nog niet speelde.": "A low or bugged own score can be retried while the other player has not played yet.",
+        "Voorkomt verloren duels door een slechte submit.": "Prevents lost duels from a bad submit.",
+        "Win BugDex reward": "Win BugDex reward",
+        "De reward wordt eerst als foreground bug klaargezet.": "The reward is queued first as a foreground bug.",
+        "Je ziet altijd wat je vangt en krijgt geen stille unlock.": "You always see what you catch and do not get a silent unlock.",
+        "Solo Campaign staat in Arena. Je oefent waves tegen BugBot en claimt dagelijkse boss rewards.": "Solo Campaign is in Arena. You practice waves against BugBot and claim daily boss rewards.",
+        "Wat je moet weten": "What to know",
+        "5 levels, 20 waves totaal.": "5 levels, 20 waves total.",
+        "Elke 4e wave is een boss wave.": "Every 4th wave is a boss wave.",
+        "Bij falen verlies je een leven; op 0 levens start je terug bij wave 1.": "On failure you lose a life; at 0 lives you restart at wave 1.",
+        "Behaalde targetscore stuurt je direct naar de volgende wave-start.": "Reaching the target score sends you straight to the next wave start.",
+        "BugBot score zit onder je target: normal target -10, boss target -6.": "BugBot score is below your target: normal target -10, boss target -6.",
+        "Level": "Level",
+        "Wave 1": "Wave 1",
+        "Wave 2": "Wave 2",
+        "Wave 3": "Wave 3",
+        "Boss": "Boss",
+        "5 XP daily reward": "5 XP daily reward",
+        "Gewone BugDex daily reward": "Common BugDex daily reward",
+        "10 XP daily reward": "10 XP daily reward",
+        "Zeldzame BugDex daily reward": "Rare BugDex daily reward",
+        "15 XP daily reward": "15 XP daily reward",
+        "In BugDex kies je maximaal 3 actieve helperbugs. In Duel en Campaign helpen ze automatisch met hits, slow, shield of control.": "In BugDex you choose up to 3 active helper bugs. In Duel and Campaign they automatically help with hits, slow, shield or control.",
+        "Effect": "Effect",
+        "Typisch sterk tegen": "Typically strong against",
+        "Snelle hits op een belangrijke of zeldzame target.": "Fast hits on an important or rare target.",
+        "Rare, Epic en Legendary targets.": "Rare, Epic and Legendary targets.",
+        "Plakt/vertraagt een target kort en doet extra hits als hij veel taps nodig heeft.": "Sticks/slows a target briefly and adds extra hits if it needs many taps.",
+        "Zware targets die bijna ontsnappen.": "Heavy targets that almost escape.",
+        "Raakt doelwit plus nearby bugs; hogere rarity kan meer splash targets raken.": "Hits the target plus nearby bugs; higher rarity can hit more splash targets.",
+        "Groepjes gewone/zeldzame bugs.": "Groups of common/rare bugs.",
+        "Helpt op late targets en geeft guard/slow als ze ver op het scherm zijn.": "Helps on late targets and gives guard/slow when they are far on screen.",
+        "Targets die bijna weg zijn.": "Targets that are almost gone.",
+        "Betrouwbare directe hit; tier-voordeel kan extra helpen.": "Reliable direct hit; tier advantage can help extra.",
+        "Algemene cleanup.": "General cleanup.",
+        "Helper rarity": "Helper rarity",
+        "Helper type": "Helper type",
+        "Base hits": "Base hits",
+        "Cooldown": "Cooldown",
+        "Control bonus": "Control bonus",
+        "Mythische bugs zijn geen simpele extra damage. Elke mythic heeft een eigen rol: control, chain hits, finish damage of emergency defense. De kaarten hieronder laten per special zien wat je krijgt, wanneer je hem het best merkt en waarom hij niet te sterk wordt.": "Mythic bugs are not simple extra damage. Each mythic has its own role: control, chain hits, finish damage or emergency defense. The cards below show what you get, when you notice it most and why it stays balanced.",
+        "Doet": "Does",
+        "Beste moment": "Best moment",
+        "Balans": "Balance",
+        "Bevriest het gekozen target en nabije bugs kort. Beste gebruik: drukke boss waves waarin je even controle nodig hebt.": "Briefly freezes the chosen target and nearby bugs. Best use: busy boss waves where you need control.",
+        "Freeze op het target plus kleine radius eromheen.": "Freeze on the target plus a small radius around it.",
+        "Als veel bugs tegelijk bijna uit beeld lopen.": "When many bugs are almost leaving the screen at once.",
+        "Geeft tijd, maar geen grote score zonder goede taps.": "Buys time, but no big score without good taps.",
+        "Ketst lichte hits door naar bugs dichtbij. Beste gebruik: groepjes Zeldzaam/Episch waar losse taps net te traag zijn.": "Chains light hits to nearby bugs. Best use: groups of Rare/Epic bugs where single taps are just too slow.",
+        "Chain-hit springt naar extra targets in de buurt.": "Chain hit jumps to extra nearby targets.",
+        "Compacte clusters met meerdere middelzware bugs.": "Compact clusters with multiple medium-heavy bugs.",
+        "Sterk tegen groepjes, minder nuttig bij losse targets.": "Strong against groups, less useful on isolated targets.",
+        "Doet bonus damage op Episch+ targets. Beste gebruik: dure targets die anders te veel taps kosten voor hun score.": "Deals bonus damage to Epic+ targets. Best use: expensive targets that otherwise cost too many taps for their score.",
+        "Extra break-hit op hoge rarity targets.": "Extra break hit on high-rarity targets.",
+        "Episch, Legendarisch of Mythisch target vroeg kiezen.": "Pick an Epic, Legendary or Mythic target early.",
+        "Niet bedoeld voor gewone bugs; waarde zit in target-keuze.": "Not meant for common bugs; value comes from target choice.",
+        "Vertraagt een klein groepje bugs. Beste gebruik: targets die bijna uit beeld lopen terwijl je combo wilt vasthouden.": "Slows a small group of bugs. Best use: targets almost leaving the screen while you want to keep combo.",
+        "Sticky slow op een kleine groep targets.": "Sticky slow on a small group of targets.",
+        "Snelle waves waar je net taps tekortkomt.": "Fast waves where you are just short on taps.",
+        "Maakt targets haalbaarder, maar finisht ze niet vanzelf.": "Makes targets easier, but does not finish them by itself.",
+        "Scant naar hoge-rarity targets en geeft daar extra hits op. Beste gebruik: Legendarisch/Mythisch targets vroeg kiezen.": "Scans for high-rarity targets and gives extra hits there. Best use: pick Legendary/Mythic targets early.",
+        "Zoekt zwaardere targets en helpt daar met extra hits.": "Finds heavier targets and helps with extra hits.",
+        "Als er veel laagwaardige afleiding op het veld staat.": "When there is a lot of low-value distraction on the field.",
+        "Helpt prioriteren, maar blijft afhankelijk van spawns.": "Helps prioritize, but still depends on spawns.",
+        "Finisht sterke of bijna kapotte bugs met extra slash damage. Beste gebruik: geen taps verspillen op laatste hit.": "Finishes strong or nearly broken bugs with extra slash damage. Best use: do not waste taps on the last hit.",
+        "Execute-hit op targets die bijna kapot zijn.": "Execute hit on targets that are almost broken.",
+        "Late wave of bossfase met veel halfgeraakte bugs.": "Late wave or boss phase with many half-hit bugs.",
+        "Heeft eerst damage nodig; geen gratis full-health kill.": "Needs damage first; no free full-health kill.",
+        "Markeert gevaarlijke targets en chain-hit extra bugs. Beste gebruik: snel bepalen welke bug nu de meeste waarde heeft.": "Marks dangerous targets and chain-hits extra bugs. Best use: quickly decide which bug has the most value now.",
+        "Markeert targets met hoge waarde of hoog risico.": "Marks high-value or high-risk targets.",
+        "Drukke duels waar target-keuze belangrijker is dan alles tappen.": "Busy duels where target choice matters more than tapping everything.",
+        "Geeft richting en kleine hulp, geen automatische win.": "Gives direction and small help, not an automatic win.",
+        "Vangt late ontsnappers op met shield damage en korte freeze. Beste gebruik: score redden aan het einde van een wave.": "Catches late escapers with shield damage and short freeze. Best use: save score at the end of a wave.",
+        "Shield-hit op ontsnappers met korte controle.": "Shield hit on escapers with short control.",
+        "Laatste seconden van duel of campaign wave.": "Last seconds of a duel or campaign wave.",
+        "Redt soms een fout, maar kan een slechte run niet dragen.": "Sometimes saves a mistake, but cannot carry a bad run.",
+        "Special": "Special",
+        "Rol": "Role",
+        "Waar sterk": "Strong where",
+        "Bewuste beperking": "Intentional limit",
+        "Drukke boss waves": "Busy boss waves",
+        "Koopt tijd, geen grote damage.": "Buys time, no big damage.",
+        "AOE/chain": "AOE/chain",
+        "Clusters met meerdere targets": "Clusters with multiple targets",
+        "Zwakt af bij losse bugs.": "Weakens on isolated bugs.",
+        "Anti-rarity": "Anti-rarity",
+        "Episch+ targets": "Epic+ targets",
+        "Weinig waarde op gewone bugs.": "Low value on common bugs.",
+        "Slow": "Slow",
+        "Snelle targets vlak voor ontsnappen": "Fast targets just before escaping",
+        "Vertraagt, maar killt niet vanzelf.": "Slows, but does not kill by itself.",
+        "Target focus": "Target focus",
+        "Zware targets tussen lage spawns": "Heavy targets among low spawns",
+        "Afhankelijk van goede target-keuze.": "Depends on good target choice.",
+        "Finisher": "Finisher",
+        "Bijna-dode sterke bugs": "Nearly dead strong bugs",
+        "Heeft eerst damage nodig.": "Needs damage first.",
+        "Mark/priority": "Mark/priority",
+        "Drukke duels met veel keuzes": "Busy duels with many choices",
+        "Kleine hulp, geen auto-clear.": "Small help, no auto-clear.",
+        "Emergency defense": "Emergency defense",
+        "Laatste seconden": "Last seconds",
+        "Redt alleen beperkte missers.": "Only saves limited misses.",
+        "Home bundelt dagelijkse progressie: login claim, movement, radar-widget en tijdelijke boosts.": "Home bundles daily progress: login claim, movement, radar widget and temporary boosts.",
+        "Android radar-widget": "Android radar widget",
+        "Geeft maximaal 3 signals per dag. Een signal kan XP en een BugDex roll geven; verwacht vooral gewone en zeldzame bugs.": "Gives up to 3 signals per day. A signal can give XP and a BugDex roll; expect mostly common and rare bugs.",
+        "Bug Lamp": "Bug Lamp",
+        "Elke 5e daily login geeft een lamp. Na activeren werkt hij 24 uur: movement doelen halveren en rarity krijgt een kleine boost.": "Every 5th daily login gives a lamp. After activation it works for 24 hours: movement goals are halved and rarity gets a small boost.",
+        "Movement": "Movement",
+        "Lopen, hardlopen en fietsen worden apart verwerkt, zodat je movement-doelen betrouwbaarder meetellen.": "Walking, running and cycling are processed separately so movement goals count more reliably.",
+        "Rank laat voortgang, XP en weekly missions zien. Weekdoelen leveren de duidelijkste progressie op.": "Rank shows progress, XP and weekly missions. Weekly goals give the clearest progress.",
+        "Actie": "Action",
+        "Daily login claim": "Daily login claim",
+        "Duel winnen": "Duel win",
+        "Duel verliezen": "Duel loss",
+        "Movement radar bug": "Movement radar bug",
+        "Weekly mission XP": "Weekly mission XP",
+        "Weekly all-3 bonus": "Weekly all-3 bonus",
+        "Foreground catch Gewoon/Zeldzaam/Episch/Legendarisch/Mythisch": "Foreground catch Common/Rare/Epic/Legendary/Mythic",
+        "Starter boost": "Starter boost",
+        "Nieuwe of lage-XP spelers onder 80 XP krijgen 3 dagen lang 2x positieve XP en een extra onafhankelijke BugDex roll. De extra roll geeft niet twee keer dezelfde BugDex unlock in dezelfde catch-flow.": "New or low-XP players under 80 XP get 3 days of 2x positive XP and an extra independent BugDex roll. The extra roll does not give the same BugDex unlock twice in the same catch flow.",
+        "Weekly missions": "Weekly missions",
+        "Elke week krijg je drie doelen, waaronder movement. Rewards zijn vooraf zichtbaar, zodat je weet of je speelt voor XP, een gewone BugDex roll of een betere zeldzame roll.": "Every week you get three goals, including movement. Rewards are visible upfront, so you know whether you play for XP, a common BugDex roll or a better rare roll.",
+        "De Workshop staat in BugDex. Duplicates krijgen waarde: ruil ze of combineer ze naar hogere rarity.": "Workshop is in BugDex. Duplicates gain value: trade them or combine them into higher rarity.",
+        "Ruilen": "Trading",
+        "Selecteer wat jij aanbiedt en wat je terug wilt. Open trades tonen duidelijk welke kant van de ruil van wie is.": "Select what you offer and what you want back. Open trades clearly show which side of the trade belongs to whom.",
+        "Upgrades": "Upgrades",
+        "Combineer bugs naar hogere rarity. Mythisch is alleen via upgrade bereikbaar en vraagt 10 verschillende Legendarische bugs.": "Combine bugs into higher rarity. Mythic is only available through upgrade and requires 10 different Legendary bugs.",
+        "Actieve squad lock": "Active squad lock",
+        "Een bug die in je actieve squad zit wordt beschermd. Heb je een extra copy, dan blijft die wel bruikbaar voor trade of upgrade.": "A bug in your active squad is protected. If you have an extra copy, that one remains usable for trade or upgrade.",
+        "Open trades tonen duidelijk wat zij bieden en wat zij van jou willen. De badge telt alleen inkomende open ruilverzoeken.": "Open trades clearly show what they offer and what they want from you. The badge only counts incoming open trade requests.",
+        "Telt mee voor de BugDex-badge zolang het verzoek open is.": "Counts for the BugDex badge while the request is open.",
+        "Zij bieden en zij willen van jou staan apart.": "What they offer and what they want from you are separated.",
+        "Jij biedt en jij vraagt staan apart.": "What you offer and what you request are separated.",
+        "Je ziet sneller of je request klopt voordat iemand accepteert.": "You see faster whether your request is correct before someone accepts.",
+        "Laatste afgeronde, afgewezen en geannuleerde trades.": "Latest completed, rejected and cancelled trades.",
+        "Handig om terug te zien wat er met een verzoek is gebeurd.": "Useful to see what happened to a request.",
+        "Mythisch, Legendarisch, Episch, Zeldzaam en daarna Gewoon.": "Mythic, Legendary, Epic, Rare and then Common.",
+        "Hogere waarde bugs staan bovenaan bij selecteren.": "Higher-value bugs appear at the top when selecting.",
+        "Gewoon naar Zeldzaam": "Common to Rare",
+        "Zeldzaam naar Episch": "Rare to Epic",
+        "Episch naar Legendarisch": "Epic to Legendary",
+        "Legendarisch naar Mythisch": "Legendary to Mythic",
+        "3 verschillende Gewoon": "3 different Common",
+        "3 verschillende Zeldzaam": "3 different Rare",
+        "3 verschillende Episch": "3 different Epic",
+        "10 verschillende Legendarisch": "10 different Legendary",
+        "1 willekeurige Zeldzame bug": "1 random Rare bug",
+        "1 willekeurige Epische bug": "1 random Epic bug",
+        "1 willekeurige Legendarische bug": "1 random Legendary bug",
+        "1 willekeurige Mythische bug": "1 random Mythic bug",
+        "Slim Spelen": "Smart Play",
+        "In battles win je niet door alles te willen pakken. Kies targets op waarde, resterende tijd en helper-cooldowns.": "In battles you do not win by trying to catch everything. Choose targets by value, time left and helper cooldowns.",
+        "Duel tips": "Duel tips",
+        "Laat extreem zware targets liggen als je helpers geen cooldown klaar hebben.": "Leave extremely heavy targets if your helpers are not off cooldown.",
+        "Pak Zeldzaam/Episch vaak eerder dan te lang doorbijten op Legendary.": "Often take Rare/Epic before spending too long on Legendary.",
+        "Let op helper animaties: Zap/Sticky/Shield kunnen een target net haalbaar maken.": "Watch helper animations: Zap/Sticky/Shield can make a target just reachable.",
+        "Campaign tips": "Campaign tips",
+        "Bewaar powerups voor boss waves of late waves.": "Save powerups for boss waves or late waves.",
+        "Boss window actief? Dat is het moment om extra break bonus te pakken.": "Boss window active? That is the moment to take extra break bonus.",
+        "Met lage squad is boss 1 haalbaar; later verwacht de game betere helpers.": "With a low squad boss 1 is reachable; later the game expects better helpers.",
+        "Collectie tips": "Collection tips",
+        "Weekly all-3 bonus en bug fixed zijn sterke bronnen voor betere rarity.": "Weekly all-3 bonus and bug fixed are strong sources for better rarity.",
+        "Mythisch komt uit upgrades, niet uit geluk.": "Mythic comes from upgrades, not luck.",
+        "Hou duplicates bij: ze zijn upgrade- en trade-materiaal.": "Track duplicates: they are upgrade and trade material.",
+        "BugBaas Wiki - waarden en kansen kunnen per release wijzigen. Laatst bijgewerkt voor app-versie 2.2.28.": "BugBaas Wiki - values and chances may change per release. Last updated for app version 2.2.28.",
+        "BB": "BB",
+        "Royal Freeze": "Royal Freeze",
+        "Prism Chain": "Prism Chain",
+        "Pattern Break": "Pattern Break",
+        "Candy Slow": "Candy Slow",
+        "Longneck Scout": "Longneck Scout",
+        "Bloom Blade": "Bloom Blade",
+        "Lantern Signal": "Lantern Signal",
+        "Mirror Guard": "Mirror Guard"
+      },
+      fr: {
+        "Actieve helperbugs blijven beschermd voor trade en upgrade.": "Les helpers actifs restent proteges du trade et de l'upgrade.",
+        "Altijd een roll, maar de unlock verschijnt pas als foreground catch.": "Toujours un roll, mais l'unlock apparait d'abord comme foreground catch.",
+        "Battle": "Battle",
+        "Basis": "Base",
+        "Beste normale bron voor drops met kans op rare, epic en legendary.": "Meilleure source normale de drops avec chance rare, epic et legendary.",
+        "Betere score en vaak de eerste goede helper-keuze.": "Meilleur score et souvent le premier bon choix de helper.",
+        "BugDex is je collectie. Bekijk wat je hebt, wat duplicate is en welke bugs goed zijn als helper of upgrade-materiaal.": "BugDex est ta collection. Vois ce que tu as, ce qui est duplicate et quels bugs sont bons comme helpers ou materiau d'upgrade.",
+        "Bewaar powerups voor boss waves of late waves. Tijdens het boss window is break bonus meestal meer waard dan losse targets.": "Garde les powerups pour boss waves ou late waves. Pendant la boss window, le break bonus vaut souvent plus que des targets seules.",
+        "Check rarity": "Verifier rarity",
+        "Combineer damage, slow en shield zodat je niet van een type afhankelijk bent.": "Combine damage, slow et shield pour ne pas dependre d'un seul type.",
+        "Dagelijks": "Quotidien",
+        "Duel win": "Win duel",
+        "Duel- en movement rewards wachten tot je de foreground bug aantikt.": "Les rewards duel et movement attendent que tu tapes le foreground bug.",
+        "Eerste boost": "Premier boost",
+        "Einddoel": "But final",
+        "Elke rewardbron rolt eerst of je een BugDex drop krijgt. Daarna kiest de app rarity; Mythisch komt alleen via upgrades.": "Chaque source de reward roll d'abord si tu recois un drop BugDex. Ensuite l'app choisit la rarity; Mythique vient seulement des upgrades.",
+        "Extra bonus na alle drie weekmissies; rare en epic blijven gecapt.": "Bonus extra apres les trois missions weekly; rare et epic restent limites.",
+        "Geen stille unlocks": "Pas d'unlocks silencieux",
+        "Geeft alleen gewone bugs. Goed voor voorraad, niet voor hoge rarity.": "Donne seulement des bugs common. Bon pour le stock, pas pour la haute rarity.",
+        "Gebruik duplicates om hogere rarity te maken. Dit is de Mythisch-route.": "Utilise les duplicates pour creer une rarity plus haute. C'est la route Mythique.",
+        "Gebruik specials": "Utiliser specials",
+        "Helper flow": "Flow helpers",
+        "Hogere rarity geeft meer hits, kortere cooldown en betere control.": "Une rarity plus haute donne plus de hits, un cooldown plus court et plus de control.",
+        "Kies 3 helpers": "Choisis 3 helpers",
+        "Kies maximaal 3 actieve helperbugs. Ze helpen automatisch in Duel en Campaign, maar timing en target-keuze blijven belangrijk.": "Choisis jusqu'a 3 helper bugs actifs. Ils aident automatiquement en Duel et Campaign, mais le timing et le choix de target restent importants.",
+        "Komt alleen uit upgrades en heeft unieke helper-specials.": "Vient seulement des upgrades et a des specials helper uniques.",
+        "Kost meer taps, maar helpt duidelijk in Arena en Campaign.": "Coute plus de taps, mais aide clairement en Arena et Campaign.",
+        "Laat dure targets liggen wanneer ze je combo of boss timing breken.": "Ignore les targets couteuses quand elles cassent ton combo ou ton boss timing.",
+        "Let op": "Attention",
+        "Mix effecten": "Mixer effets",
+        "Mythische helpers geven een unieke rol, geen automatische win.": "Les helpers mythiques donnent un role unique, pas une victoire automatique.",
+        "Mythische helpers hebben een eigen rol: control, chain hits, finish damage of emergency defense. Lees per kaart wat hij doet, wanneer hij sterk is en wat de balans houdt.": "Les helpers mythiques ont leur propre role: control, chain hits, finish damage ou emergency defense. Chaque carte montre ce qu'il fait, quand il est fort et ce qui garde l'equilibre.",
+        "Pak Zeldzaam en Episch vaak eerder dan lang doorbijten op Legendary. Zap, Sticky en Shield maken een target soms net haalbaar.": "Prends souvent Rare et Epic avant de rester trop longtemps sur Legendary. Zap, Sticky et Shield peuvent rendre une target faisable.",
+        "Prioriteit: haalbare hoge score boven willekeurig tappen.": "Priorite: haut score faisable avant les taps au hasard.",
+        "Rarity overzicht": "Apercu rarity",
+        "Route": "Route",
+        "Snel te vangen en vooral nuttig als upgrade-materiaal.": "Rapide a attraper et surtout utile comme materiau d'upgrade.",
+        "Slim spelen met targets, timers en helpers": "Jeu malin avec targets, timers et helpers",
+        "Snelle vuistregels": "Regles rapides",
+        "Stap 1": "Etape 1",
+        "Stap 2": "Etape 2",
+        "Stap 3": "Etape 3",
+        "Stap 4": "Etape 4",
+        "Sterk als helper en nodig voor de route naar Mythisch.": "Fort comme helper et necessaire pour la route vers Mythique.",
+        "Sterke waarde": "Forte valeur",
+        "Tap": "Tap",
+        "Wacht op helpers bij zware targets als de tijd dat toelaat.": "Attends les helpers sur les targets lourdes si le temps le permet.",
+        "Week": "Semaine",
+        "Weekly all-3": "Weekly all-3",
+        "Weekly all-3 claim je pas na alle drie weekmissies. Duel- en movement rewards wachten als foreground catch, zodat je altijd ziet wat je vangt.": "Tu claims weekly all-3 seulement apres les trois missions weekly. Les rewards duel et movement attendent comme foreground catch, donc tu vois toujours ce que tu captures.",
+        "Weekly all-3 en bug fixed zijn sterke bronnen. Mythisch komt uit upgrades, dus duplicates zijn trade- en upgrade-materiaal.": "Weekly all-3 et bug fixed sont de bonnes sources. Mythique vient des upgrades, donc les duplicates servent au trade et aux upgrades.",
+        "Win battles door te kiezen. Pak niet alles: kijk naar score, resterende tijd en helper-cooldowns.": "Gagne les battles en choisissant. Ne prends pas tout: regarde le score, le temps restant et les cooldowns helper.",
+        "Zeldzaam doel": "Objectif rare",
+        "0ms": "0ms",
+        "1.00x": "1.00x",
+        "1.05x": "1.05x",
+        "1.10x": "1.10x",
+        "1.14x": "1.14x",
+        "1.18x": "1.18x",
+        "10 + BugDex": "10 + BugDex",
+        "10 XP daily reward": "Reward quotidienne 10 XP",
+        "15 XP daily reward": "Reward quotidienne 15 XP",
+        "20-25": "20-25",
+        "1 / 3 / 6 / 10 / 15": "1 / 3 / 6 / 10 / 15",
+        "220ms": "220ms",
+        "4.3s": "4.3s",
+        "420ms": "420ms",
+        "5 XP daily reward": "Reward quotidienne 5 XP",
+        "5.2s": "5.2s",
+        "6.5s": "6.5s",
+        "620ms": "620ms",
+        "7.9s": "7.9s",
+        "820ms": "820ms",
+        "9.4s": "9.4s",
+        "Anti-rarity": "Anti-rarity",
+        "AOE": "AOE",
+        "AOE/chain": "AOE/chain",
+        "Base hits": "Hits de base",
+        "Boss": "Boss",
+        "Boss 1": "Boss 1",
+        "Boss 2": "Boss 2",
+        "Boss 3": "Boss 3",
+        "Boss 4": "Boss 4",
+        "Boss 5": "Boss 5",
+        "Bug Lamp": "Bug Lamp",
+        "BugDex": "BugDex",
+        "Bug Squad helpers": "Helpers Bug Squad",
+        "Bugs": "Bugs",
+        "Burst": "Burst",
+        "Comment": "Commentaire",
+        "Control": "Control",
+        "Control bonus": "Bonus control",
+        "Cooldown": "Cooldown",
+        "Daily login": "Daily login",
+        "Daily login claim": "Claim daily login",
+        "Doornbloembidsprinkhaan": "Doornbloembidsprinkhaan",
+        "Duel win reward": "Reward win duel",
+        "Emergency defense": "Defense d'urgence",
+        "Epic 4.9%": "Epic 4.9%",
+        "Finisher": "Finisher",
+        "Foreground bug smash": "Foreground bug smash",
+        "Freeze": "Freeze",
+        "Giraffekevertje": "Giraffekevertje",
+        "Glorieuze scarabee": "Glorieuze scarabee",
+        "Helper rarity": "Rarity helper",
+        "Helper type": "Type helper",
+        "Home": "Home",
+        "Koningin-Alexandravlinder": "Koningin-Alexandravlinder",
+        "Lantaarndrager": "Lantaarndrager",
+        "Level": "Level",
+        "Mark/priority": "Mark/priority",
+        "Movement": "Movement",
+        "Movement radar bug": "Bug radar movement",
+        "Picasso-wants": "Picasso-wants",
+        "Rank": "Rank",
+        "Rare 24.5%": "Rare 24.5%",
+        "route": "route",
+        "Roze esdoornmot": "Roze esdoornmot",
+        "Shield": "Shield",
+        "Slow": "Slow",
+        "Solo boss 2": "Solo boss 2",
+        "Solo boss 4": "Solo boss 4",
+        "Starter boost": "Starter boost",
+        "Status update": "Update statut",
+        "Sticky": "Sticky",
+        "Target focus": "Focus target",
+        "Upgrades": "Upgrades",
+        "Wave 1": "Wave 1",
+        "Wave 2": "Wave 2",
+        "Wave 3": "Wave 3",
+        "Weekly all-3 bonus": "Bonus weekly all-3",
+        "Weekly mission XP": "XP mission weekly",
+        "Weekly missions": "Weekly missions",
+        "XP": "XP",
+        "Zap": "Zap",
+        "Zonsondergangsmot": "Zonsondergangsmot",
+        "Wiki onderdelen": "Sections wiki",
+        "Mobiele wiki navigatie": "Navigation wiki mobile",
+        "Mobiele wiki links": "Liens wiki mobile",
+        "Menu": "Menu",
+        "Populaire acties": "Actions populaires",
+        "Alle wiki pagina's": "Toutes les pages wiki",
+        "Kopieer link": "Copier le lien",
+        "Kopieer huidige sectielink": "Copier le lien de la section actuelle",
+        "Print": "Imprimer",
+        "Print wiki": "Imprimer le wiki",
+        "Gekopieerd": "Copie",
+        "Drop kansen met mythische bug in frame": "Chances de drop avec bug mythique dans le cadre",
+        "Mythische upgrade met bug in frame": "Upgrade mythique avec bug dans le cadre",
+        "Movement doelen": "Objectifs movement",
+        "duel, drop, upgrade...": "duel, drop, upgrade...",
+        "Theme": "Theme",
+        "Light mode": "Mode clair",
+        "Dark mode": "Mode sombre",
+        "Language": "Langue",
+        "Nederlands": "Neerlandais",
+        "English": "Anglais",
+        "Français": "Francais",
+        "Actieve Bug Squad": "Bug Squad active",
+        "AOE effect": "Effet AOE",
+        "Bloom blade effect": "Effet Bloom blade",
+        "Boss waves": "Boss waves",
+        "Bug jar helper": "Helper bocal bug",
+        "Bug Radar": "Bug Radar",
+        "Bug Smash Duel": "Bug Smash Duel",
+        "BugBaas wiki hero met bug jars, arena en radar": "Hero wiki BugBaas avec bocaux bug, arena et radar",
+        "BugBaas Wiki home": "Accueil Wiki BugBaas",
+        "BugDex collectie": "Collection BugDex",
+        "BugDex workshop": "Workshop BugDex",
+        "Burst slash effect": "Effet slash burst",
+        "Duel mode": "Mode Duel",
+        "Freeze effect": "Effet freeze",
+        "Lamp Focus": "Lamp Focus",
+        "Lantern signal effect": "Effet lantern signal",
+        "Lightning chain effect": "Effet chain lightning",
+        "Locked helpers": "Helpers verrouilles",
+        "Mirror shield effect": "Effet mirror shield",
+        "Mythische helper specials": "Specials helper mythiques",
+        "Pattern break slash effect": "Effet slash pattern break",
+        "Ruilen en upgraden": "Echanger et upgrader",
+        "Scout strike effect": "Effet scout strike",
+        "Shield effect": "Effet shield",
+        "Solo powerups": "Powerups solo",
+        "Sticky effect": "Effet sticky",
+        "Sticky slow effect": "Effet sticky slow",
+        "XP en weekly missions": "XP et weekly missions",
+        "Zap effect": "Effet zap",
+        "Onderdelen": "Sections",
+        "Korte uitleg per onderdeel: waar je iets vindt, wat je doet en welke regels belangrijk zijn.": "Explication courte par section: ou trouver quoi, quoi faire et quelles regles comptent.",
+        "Bug melden": "Signaler un bug",
+        "Melden, prioriteit en updates.": "Signalement, priorite et updates.",
+        "Duel spelen": "Jouer un duel",
+        "Score, seed en helpers.": "Score, seed et helpers.",
+        "Bugs ruilen": "Echanger des bugs",
+        "Offers, locks en upgrades.": "Offres, locks et upgrades.",
+        "Daily progressie": "Progression quotidienne",
+        "Login, movement en radar.": "Login, mouvement et radar.",
+        "Nieuw in 2.2.28": "Nouveau dans 2.2.28",
+        "Starter boost geldt nu tot 80 XP.": "Starter boost s'applique maintenant jusqu'a 80 XP.",
+        "Duel- en movement rewards blijven beter klaarstaan als foreground catch.": "Les rewards duel et mouvement restent mieux en attente comme foreground catch.",
+        "Badges tellen alleen inkomende duels en ruilverzoeken.": "Les badges comptent seulement les duels et trades entrants.",
+        "Movement verwerkt lopen, hardlopen en fietsen beter apart.": "Movement separe mieux marche, course et velo.",
+        "Wiki": "Wiki",
+        "Kies een onderwerp. De koppen links zijn hoofdgroepen; de links eronder openen de uitleg.": "Choisis un sujet. Les titres a gauche sont des groupes; les liens dessous ouvrent l'explication.",
+        "Zoek in de wiki": "Chercher dans le wiki",
+        "Bijvoorbeeld: duel, drop, upgrade, lamp, helper of weekly.": "Par exemple: duel, drop, upgrade, lampe, helper ou weekly.",
+        "Geen resultaat. Probeer duel, drop, upgrade, lamp of XP.": "Aucun resultat. Essaie duel, drop, upgrade, lampe ou XP.",
+        "Melden, status en rewards.": "Signalement, statut et rewards.",
+        "Signals, bewegen en lamp.": "Signals, mouvement et lampe.",
+        "Eerlijke score-run met seed.": "Run score equitable avec seed.",
+        "Waves, bosses en rewards.": "Waves, bosses et rewards.",
+        "Drie actieve helperbugs.": "Trois helper bugs actifs.",
+        "Targets, timing en powerups.": "Targets, timing et powerups.",
+        "Unlocks, rarity en duplicates.": "Unlocks, rarity et duplicates.",
+        "Kansen per rewardbron.": "Chances par source de reward.",
+        "Trades en hogere rarity.": "Trades et rarity plus haute.",
+        "XP, weekdoelen en boost.": "XP, objectifs weekly et boost.",
+        "BugBaas draait om bugs opvolgen en spelprogressie verdienen. Begin hier als je snel wilt weten waar alles staat.": "BugBaas sert a suivre les bugs et gagner de la progression. Commence ici pour savoir vite ou tout se trouve.",
+        "Bugs melden en volgen": "Signaler et suivre les bugs",
+        "Gebruik Bugs om meldingen aan te maken, status te volgen, comments te plaatsen en upvotes te geven.": "Utilise Bugs pour creer des signalements, suivre le statut, commenter et upvoter.",
+        "Spelen voor progressie": "Jouer pour progresser",
+        "Gebruik Arena voor duels en Solo Campaign. Je verdient XP, boss rewards en soms BugDex unlocks zonder dat spamacties de beste route worden.": "Utilise Arena pour les duels et Solo Campaign. Tu gagnes XP, boss rewards et parfois des unlocks BugDex sans que le spam soit la meilleure route.",
+        "Collectie opbouwen": "Construire la collection",
+        "Gebruik BugDex en Workshop om unlocks te bekijken, duplicates te ruilen en upgrades te maken. Actieve helperbugs blijven beschermd.": "Utilise BugDex et Workshop pour voir les unlocks, echanger les duplicates et faire des upgrades. Les helpers actifs restent proteges.",
+        "Als je wilt...": "Si tu veux...",
+        "Ga naar": "Va vers",
+        "Wat je daar doet": "Ce que tu y fais",
+        "Een probleem vastleggen": "Enregistrer un probleme",
+        "Nieuwe bug melden, prioriteit inschatten en updates plaatsen.": "Signaler un nouveau bug, estimer la priorite et poster des updates.",
+        "Dagelijkse progressie halen": "Faire la progression quotidienne",
+        "Daily login claimen, radar gebruiken en movement volgen.": "Claim le daily login, utilise le radar et suis le movement.",
+        "Je score verbeteren": "Ameliorer ton score",
+        "Duels spelen, campaign oefenen en je Bug Squad testen.": "Jouer des duels, pratiquer campaign et tester ta Bug Squad.",
+        "Je collectie beheren": "Gerer ta collection",
+        "Unlocks bekijken, helpers kiezen, ruilen en upgraden.": "Voir les unlocks, choisir helpers, trader et upgrader.",
+        "Je weekdoelen checken": "Verifier tes objectifs weekly",
+        "XP, weekly missions en beloningen volgen.": "Suivre XP, weekly missions et rewards.",
+        "BugDex is je collectie. Je ziet unlocks, rarity, duplicates en welke bugs geschikt zijn als helper of upgrade-materiaal.": "BugDex est ta collection. Tu vois unlocks, rarity, duplicates et quels bugs servent de helper ou materiau d'upgrade.",
+        "Hoe rarity werkt": "Comment la rarity fonctionne",
+        "Gewoon": "Common",
+        "komt vaak voor en is vooral tempo- en upgrade-materiaal.": "apparait souvent et sert surtout au tempo et aux upgrades.",
+        "Zeldzaam": "Rare",
+        "geeft betere score en is nuttig voor vroege helpers.": "donne un meilleur score et aide comme early helper.",
+        "Episch": "Epic",
+        "kost meer taps, maar helpt duidelijk meer in battles.": "coute plus de taps, mais aide beaucoup plus en battle.",
+        "Legendarisch": "Legendary",
+        "is zeldzaam uit rewards en sterk als helper.": "est rare dans les rewards et fort comme helper.",
+        "Mythisch": "Mythic",
+        "is het einddoel en komt alleen uit upgrades.": "est l'objectif final et vient seulement des upgrades.",
+        "Rarity": "Rarity",
+        "Taps in Duel": "Taps en Duel",
+        "Score": "Score",
+        "Hitbox": "Hitbox",
+        "Opmerking": "Note",
+        "Snel pakken, lage waarde.": "Rapide a prendre, faible valeur.",
+        "Vaak betere keuze dan meerdere gewone bugs.": "Souvent meilleur que plusieurs bugs common.",
+        "Goede score, maar kost tijd.": "Bon score, mais prend du temps.",
+        "Sterk target als je helpers/timing goed zijn.": "Bon target si tes helpers et ton timing sont bons.",
+        "Hoogste waarde en unieke helper-specials.": "Plus haute valeur et specials helper uniques.",
+        "Mythische bugs zijn bedoeld als einddoel. Je krijgt ze niet uit normale random rewards; upgrade 10 verschillende Legendarische bugs naar Mythisch.": "Les bugs Mythic sont un objectif final. Ils ne viennent pas des rewards random normales; upgrade 10 bugs Legendary differents vers Mythic.",
+        "Niet elke actie geeft direct een bug. Eerst rolt de app of er een BugDex drop komt; daarna wordt de rarity gekozen. Boosts helpen een beetje, maar de caps houden rare en epic drops schaars.": "Chaque action ne donne pas directement un bug. L'app roll d'abord si un drop BugDex arrive; ensuite la rarity est choisie. Les boosts aident un peu, mais les caps gardent rare et epic rares.",
+        "Bron": "Source",
+        "Drop kans": "Chance de drop",
+        "Bug gefixt": "Bug fixe",
+        "Upvote gegeven": "Upvote donne",
+        "Profiel bekijken": "Voir profil",
+        "Upgrade": "Upgrade",
+        "Duel- en movement rewards geven hun BugDex unlock niet direct in een popup: de bug blijft als foreground catch klaarstaan tot de UI vrij is. Pas na tappen verschijnt de unlock.": "Les rewards duel et movement ne montrent pas l'unlock BugDex directement en popup: le bug reste pret comme foreground catch jusqu'a ce que l'UI soit libre. L'unlock apparait apres le tap.",
+        "Weekly all-3 bonus betekent: je claimt de extra weekbonus pas nadat alle 3 weekly missions van die week afgerond zijn. De BugDex roll is altijd 100%, maar rare blijft onder 25% en epic onder 5%.": "Weekly all-3 bonus signifie que tu claims le bonus weekly apres avoir fini les 3 weekly missions. Le roll BugDex est toujours 100%, mais rare reste sous 25% et epic sous 5%.",
+        "In Arena daag je iemand uit voor een korte score-run. Beide spelers krijgen dezelfde bugvolgorde; target-keuze en timing maken het verschil.": "Dans Arena, tu defies quelqu'un sur un court score-run. Les deux joueurs ont la meme sequence de bugs; choix de target et timing font la difference.",
+        "Waar vind je dit": "Ou trouver",
+        "Open Arena en kies Duel. De uitdager speelt direct; de tegenstander speelt later dezelfde seed.": "Ouvre Arena et choisis Duel. Le challenger joue directement; l'adversaire joue le meme seed plus tard.",
+        "Hoe de run werkt": "Comment le run marche",
+        "Je hebt 30 seconden en 56 targets. Hogere rarity geeft meer punten, maar vraagt meer taps en betere timing.": "Tu as 30 secondes et 56 targets. Une rarity plus haute donne plus de points, mais demande plus de taps et un meilleur timing.",
+        "Win geeft 10 XP, verlies 5 XP. Een dagelijkse duel-reward telt maar 1x per tegenstander en BugDex wins verschijnen eerst als foreground catch.": "Une victoire donne 10 XP, une defaite 5 XP. Une reward duel quotidienne compte seulement 1x par adversaire et les wins BugDex apparaissent d'abord comme foreground catch.",
+        "Mechanic": "Mecanique",
+        "Wat gebeurt er": "Ce qui se passe",
+        "Waarom belangrijk": "Pourquoi c'est important",
+        "Combo bonus": "Bonus combo",
+        "Elke reeks catches kan extra punten geven, afhankelijk van squad.": "Chaque serie de catches peut donner des points bonus selon la squad.",
+        "Snel en netjes tappen wordt beloond.": "Taper vite et proprement est recompense.",
+        "Support bonus": "Bonus support",
+        "Support helpers geven eindbonus op basis van score.": "Les helpers support donnent un bonus final selon le score.",
+        "Maakt consistent spelen sterker.": "Rend le jeu regulier plus fort.",
+        "Movement bonus": "Bonus movement",
+        "Movement helpers kunnen tot 3 eindpunten geven als je genoeg scoort.": "Les helpers movement peuvent donner jusqu'a 3 points finaux si tu scores assez.",
+        "Nuttig voor net-wel/net-niet duels.": "Utile pour les duels serres.",
+        "Arena badge": "Badge Arena",
+        "Telt alleen inkomende duelacties.": "Compte seulement les actions duel entrantes.",
+        "Uitgaande wachtduels geven geen onterechte badge.": "Les duels sortants en attente ne donnent plus un faux badge.",
+        "Retry onder 30": "Retry sous 30",
+        "Lage of bugged eigen score kan opnieuw zolang de ander nog niet speelde.": "Un score bas ou bugge peut etre rejoue tant que l'autre n'a pas encore joue.",
+        "Voorkomt verloren duels door een slechte submit.": "Evite les duels perdus par un mauvais submit.",
+        "Win BugDex reward": "Reward win BugDex",
+        "De reward wordt eerst als foreground bug klaargezet.": "La reward est d'abord mise en file comme foreground bug.",
+        "Je ziet altijd wat je vangt en krijgt geen stille unlock.": "Tu vois toujours ce que tu catches, pas d'unlock silencieux.",
+        "Solo Campaign staat in Arena. Je oefent waves tegen BugBot en claimt dagelijkse boss rewards.": "Solo Campaign est dans Arena. Tu pratiques des waves contre BugBot et claims les boss rewards quotidiennes.",
+        "Wat je moet weten": "A savoir",
+        "5 levels, 20 waves totaal.": "5 levels, 20 waves au total.",
+        "Elke 4e wave is een boss wave.": "Chaque 4e wave est une boss wave.",
+        "Bij falen verlies je een leven; op 0 levens start je terug bij wave 1.": "En cas d'echec tu perds une vie; a 0 vie tu recommences wave 1.",
+        "Behaalde targetscore stuurt je direct naar de volgende wave-start.": "Atteindre le target score t'envoie directement au debut de la prochaine wave.",
+        "BugBot score zit onder je target: normal target -10, boss target -6.": "Le score BugBot est sous ton target: normal target -10, boss target -6.",
+        "Gewone BugDex daily reward": "Reward quotidienne BugDex common",
+        "Zeldzame BugDex daily reward": "Reward quotidienne BugDex rare",
+        "In BugDex kies je maximaal 3 actieve helperbugs. In Duel en Campaign helpen ze automatisch met hits, slow, shield of control.": "Dans BugDex tu choisis jusqu'a 3 helper bugs actifs. En Duel et Campaign ils aident automatiquement avec hits, slow, shield ou control.",
+        "Effect": "Effet",
+        "Typisch sterk tegen": "Fort typiquement contre",
+        "Snelle hits op een belangrijke of zeldzame target.": "Hits rapides sur un target important ou rare.",
+        "Rare, Epic en Legendary targets.": "Targets Rare, Epic et Legendary.",
+        "Plakt/vertraagt een target kort en doet extra hits als hij veel taps nodig heeft.": "Colle/ralentit brievement un target et ajoute des hits s'il demande beaucoup de taps.",
+        "Zware targets die bijna ontsnappen.": "Targets lourds qui s'echappent presque.",
+        "Raakt doelwit plus nearby bugs; hogere rarity kan meer splash targets raken.": "Touche la cible plus les bugs proches; une rarity plus haute peut toucher plus de splash targets.",
+        "Groepjes gewone/zeldzame bugs.": "Groupes de bugs common/rare.",
+        "Helpt op late targets en geeft guard/slow als ze ver op het scherm zijn.": "Aide sur les late targets et donne guard/slow quand ils sont loin a l'ecran.",
+        "Targets die bijna weg zijn.": "Targets presque partis.",
+        "Betrouwbare directe hit; tier-voordeel kan extra helpen.": "Hit direct fiable; avantage de tier peut aider plus.",
+        "Algemene cleanup.": "Cleanup general.",
+        "Mythische bugs zijn geen simpele extra damage. Elke mythic heeft een eigen rol: control, chain hits, finish damage of emergency defense. De kaarten hieronder laten per special zien wat je krijgt, wanneer je hem het best merkt en waarom hij niet te sterk wordt.": "Les bugs Mythic ne sont pas juste du damage bonus. Chaque mythic a son role: control, chain hits, finish damage ou emergency defense. Les cartes montrent ce que tu gagnes, quand tu le remarques le plus et pourquoi ca reste balance.",
+        "Doet": "Fait",
+        "Beste moment": "Meilleur moment",
+        "Balans": "Balance",
+        "Bevriest het gekozen target en nabije bugs kort. Beste gebruik: drukke boss waves waarin je even controle nodig hebt.": "Freeze brievement le target choisi et les bugs proches. Meilleur usage: boss waves chargees ou tu as besoin de control.",
+        "Freeze op het target plus kleine radius eromheen.": "Freeze sur le target plus petit rayon autour.",
+        "Als veel bugs tegelijk bijna uit beeld lopen.": "Quand beaucoup de bugs quittent presque l'ecran ensemble.",
+        "Geeft tijd, maar geen grote score zonder goede taps.": "Donne du temps, mais pas de gros score sans bons taps.",
+        "Ketst lichte hits door naar bugs dichtbij. Beste gebruik: groepjes Zeldzaam/Episch waar losse taps net te traag zijn.": "Fait rebondir de petits hits vers les bugs proches. Meilleur usage: groupes Rare/Epic ou les taps simples sont trop lents.",
+        "Chain-hit springt naar extra targets in de buurt.": "Chain-hit saute vers des targets proches.",
+        "Compacte clusters met meerdere middelzware bugs.": "Clusters compacts avec plusieurs bugs moyens.",
+        "Sterk tegen groepjes, minder nuttig bij losse targets.": "Fort contre les groupes, moins utile sur targets seuls.",
+        "Doet bonus damage op Episch+ targets. Beste gebruik: dure targets die anders te veel taps kosten voor hun score.": "Fait du bonus damage sur targets Epic+. Meilleur usage: targets chers qui coutent trop de taps pour leur score.",
+        "Extra break-hit op hoge rarity targets.": "Break-hit extra sur targets high rarity.",
+        "Episch, Legendarisch of Mythisch target vroeg kiezen.": "Choisir tot un target Epic, Legendary ou Mythic.",
+        "Niet bedoeld voor gewone bugs; waarde zit in target-keuze.": "Pas fait pour les bugs common; la valeur est dans le choix du target.",
+        "Vertraagt een klein groepje bugs. Beste gebruik: targets die bijna uit beeld lopen terwijl je combo wilt vasthouden.": "Ralentit un petit groupe de bugs. Meilleur usage: targets presque hors ecran quand tu veux garder le combo.",
+        "Sticky slow op een kleine groep targets.": "Sticky slow sur un petit groupe de targets.",
+        "Snelle waves waar je net taps tekortkomt.": "Waves rapides ou il manque juste quelques taps.",
+        "Maakt targets haalbaarder, maar finisht ze niet vanzelf.": "Rend les targets plus faisables, mais ne les finit pas seul.",
+        "Scant naar hoge-rarity targets en geeft daar extra hits op. Beste gebruik: Legendarisch/Mythisch targets vroeg kiezen.": "Scanne les targets high rarity et donne des hits extra. Meilleur usage: choisir tot Legendary/Mythic.",
+        "Zoekt zwaardere targets en helpt daar met extra hits.": "Cherche les targets lourds et aide avec des hits extra.",
+        "Als er veel laagwaardige afleiding op het veld staat.": "Quand il y a beaucoup de distraction low-value sur le terrain.",
+        "Helpt prioriteren, maar blijft afhankelijk van spawns.": "Aide a prioriser, mais depend des spawns.",
+        "Finisht sterke of bijna kapotte bugs met extra slash damage. Beste gebruik: geen taps verspillen op laatste hit.": "Finit les bugs forts ou presque casses avec du slash damage extra. Meilleur usage: ne pas gaspiller de taps sur le dernier hit.",
+        "Execute-hit op targets die bijna kapot zijn.": "Execute-hit sur targets presque casses.",
+        "Late wave of bossfase met veel halfgeraakte bugs.": "Late wave ou phase boss avec beaucoup de bugs a moitie touches.",
+        "Heeft eerst damage nodig; geen gratis full-health kill.": "Necessite d'abord du damage; pas de kill full-health gratuit.",
+        "Markeert gevaarlijke targets en chain-hit extra bugs. Beste gebruik: snel bepalen welke bug nu de meeste waarde heeft.": "Marque les targets dangereux et chain-hit des bugs extra. Meilleur usage: decider vite quel bug a le plus de valeur.",
+        "Markeert targets met hoge waarde of hoog risico.": "Marque les targets haute valeur ou haut risque.",
+        "Drukke duels waar target-keuze belangrijker is dan alles tappen.": "Duels charges ou le choix de target compte plus que tout taper.",
+        "Geeft richting en kleine hulp, geen automatische win.": "Donne de la direction et une petite aide, pas une win automatique.",
+        "Vangt late ontsnappers op met shield damage en korte freeze. Beste gebruik: score redden aan het einde van een wave.": "Rattrape les late escapers avec shield damage et court freeze. Meilleur usage: sauver le score a la fin d'une wave.",
+        "Shield-hit op ontsnappers met korte controle.": "Shield-hit sur escapers avec court control.",
+        "Laatste seconden van duel of campaign wave.": "Dernieres secondes d'un duel ou campaign wave.",
+        "Redt soms een fout, maar kan een slechte run niet dragen.": "Sauve parfois une erreur, mais ne porte pas un mauvais run.",
+        "Special": "Special",
+        "Rol": "Role",
+        "Waar sterk": "Fort ou",
+        "Bewuste beperking": "Limite volontaire",
+        "Drukke boss waves": "Boss waves chargees",
+        "Koopt tijd, geen grote damage.": "Achete du temps, pas de gros damage.",
+        "Clusters met meerdere targets": "Clusters avec plusieurs targets",
+        "Zwakt af bij losse bugs.": "S'affaiblit sur bugs seuls.",
+        "Episch+ targets": "Targets Epic+",
+        "Weinig waarde op gewone bugs.": "Peu de valeur sur bugs common.",
+        "Snelle targets vlak voor ontsnappen": "Targets rapides juste avant fuite",
+        "Vertraagt, maar killt niet vanzelf.": "Ralentit, mais ne tue pas seul.",
+        "Zware targets tussen lage spawns": "Targets lourds parmi low spawns",
+        "Afhankelijk van goede target-keuze.": "Depend d'un bon choix de target.",
+        "Bijna-dode sterke bugs": "Bugs forts presque morts",
+        "Heeft eerst damage nodig.": "Necessite d'abord du damage.",
+        "Drukke duels met veel keuzes": "Duels charges avec beaucoup de choix",
+        "Kleine hulp, geen auto-clear.": "Petite aide, pas d'auto-clear.",
+        "Laatste seconden": "Dernieres secondes",
+        "Redt alleen beperkte missers.": "Sauve seulement des erreurs limitees.",
+        "Home bundelt dagelijkse progressie: login claim, movement, radar-widget en tijdelijke boosts.": "Home regroupe la progression quotidienne: login claim, movement, widget radar et boosts temporaires.",
+        "Android radar-widget": "Widget radar Android",
+        "Geeft maximaal 3 signals per dag. Een signal kan XP en een BugDex roll geven; verwacht vooral gewone en zeldzame bugs.": "Donne maximum 3 signals par jour. Un signal peut donner XP et un roll BugDex; attends surtout common et rare.",
+        "Elke 5e daily login geeft een lamp. Na activeren werkt hij 24 uur: movement doelen halveren en rarity krijgt een kleine boost.": "Chaque 5e daily login donne une lampe. Apres activation elle marche 24h: objectifs movement divises par deux et petit boost rarity.",
+        "Lopen, hardlopen en fietsen worden apart verwerkt, zodat je movement-doelen betrouwbaarder meetellen.": "Marche, course et velo sont traites separement, pour que les objectifs movement comptent plus fiablement.",
+        "Rank laat voortgang, XP en weekly missions zien. Weekdoelen leveren de duidelijkste progressie op.": "Rank montre progression, XP et weekly missions. Les objectifs weekly donnent la progression la plus claire.",
+        "Actie": "Action",
+        "Duel winnen": "Victoire duel",
+        "Duel verliezen": "Defaite duel",
+        "Foreground catch Gewoon/Zeldzaam/Episch/Legendarisch/Mythisch": "Foreground catch Common/Rare/Epic/Legendary/Mythic",
+        "Nieuwe of lage-XP spelers onder 80 XP krijgen 3 dagen lang 2x positieve XP en een extra onafhankelijke BugDex roll. De extra roll geeft niet twee keer dezelfde BugDex unlock in dezelfde catch-flow.": "Les nouveaux joueurs ou joueurs bas-XP sous 80 XP recoivent 3 jours de 2x XP positif et un roll BugDex independant extra. Le roll extra ne donne pas deux fois le meme unlock BugDex dans le meme catch-flow.",
+        "Elke week krijg je drie doelen, waaronder movement. Rewards zijn vooraf zichtbaar, zodat je weet of je speelt voor XP, een gewone BugDex roll of een betere zeldzame roll.": "Chaque semaine tu as trois objectifs, dont movement. Les rewards sont visibles avant, donc tu sais si tu joues pour XP, un roll BugDex common ou un meilleur roll rare.",
+        "De Workshop staat in BugDex. Duplicates krijgen waarde: ruil ze of combineer ze naar hogere rarity.": "Workshop est dans BugDex. Les duplicates prennent de la valeur: trade-les ou combine-les vers une rarity plus haute.",
+        "Ruilen": "Echanger",
+        "Selecteer wat jij aanbiedt en wat je terug wilt. Open trades tonen duidelijk welke kant van de ruil van wie is.": "Selectionne ce que tu offres et ce que tu veux. Les trades ouverts montrent clairement quel cote appartient a qui.",
+        "Combineer bugs naar hogere rarity. Mythisch is alleen via upgrade bereikbaar en vraagt 10 verschillende Legendarische bugs.": "Combine les bugs vers une rarity plus haute. Mythic est disponible seulement via upgrade et demande 10 bugs Legendary differents.",
+        "Actieve squad lock": "Lock squad active",
+        "Een bug die in je actieve squad zit wordt beschermd. Heb je een extra copy, dan blijft die wel bruikbaar voor trade of upgrade.": "Un bug dans ta squad active est protege. Si tu as une copie extra, elle reste utilisable pour trade ou upgrade.",
+        "Open trades tonen duidelijk wat zij bieden en wat zij van jou willen. De badge telt alleen inkomende open ruilverzoeken.": "Les trades ouverts montrent ce qu'ils offrent et veulent de toi. Le badge compte seulement les demandes de trade entrantes ouvertes.",
+        "Telt mee voor de BugDex-badge zolang het verzoek open is.": "Compte pour le badge BugDex tant que la demande est ouverte.",
+        "Zij bieden en zij willen van jou staan apart.": "Ce qu'ils offrent et veulent de toi est separe.",
+        "Jij biedt en jij vraagt staan apart.": "Ce que tu offres et demandes est separe.",
+        "Je ziet sneller of je request klopt voordat iemand accepteert.": "Tu vois plus vite si ta demande est correcte avant acceptation.",
+        "Laatste afgeronde, afgewezen en geannuleerde trades.": "Derniers trades termines, refuses et annules.",
+        "Handig om terug te zien wat er met een verzoek is gebeurd.": "Utile pour revoir ce qui est arrive a une demande.",
+        "Mythisch, Legendarisch, Episch, Zeldzaam en daarna Gewoon.": "Mythic, Legendary, Epic, Rare puis Common.",
+        "Hogere waarde bugs staan bovenaan bij selecteren.": "Les bugs plus precieux sont en haut a la selection.",
+        "Slim Spelen": "Jouer malin",
+        "In battles win je niet door alles te willen pakken. Kies targets op waarde, resterende tijd en helper-cooldowns.": "En battle, tu ne gagnes pas en essayant de tout prendre. Choisis les targets selon valeur, temps restant et cooldowns helper.",
+        "Duel tips": "Conseils Duel",
+        "Laat extreem zware targets liggen als je helpers geen cooldown klaar hebben.": "Laisse les targets tres lourds si tes helpers ne sont pas prets.",
+        "Pak Zeldzaam/Episch vaak eerder dan te lang doorbijten op Legendary.": "Prends souvent Rare/Epic avant d'insister trop longtemps sur Legendary.",
+        "Let op helper animaties: Zap/Sticky/Shield kunnen een target net haalbaar maken.": "Regarde les animations helper: Zap/Sticky/Shield peuvent rendre un target atteignable.",
+        "Campaign tips": "Conseils Campaign",
+        "Bewaar powerups voor boss waves of late waves.": "Garde les powerups pour boss waves ou late waves.",
+        "Boss window actief? Dat is het moment om extra break bonus te pakken.": "Boss window actif? C'est le moment pour prendre le break bonus.",
+        "Met lage squad is boss 1 haalbaar; later verwacht de game betere helpers.": "Avec une squad basse, boss 1 est faisable; plus tard le jeu attend de meilleurs helpers.",
+        "Collectie tips": "Conseils collection",
+        "Weekly all-3 bonus en bug fixed zijn sterke bronnen voor betere rarity.": "Weekly all-3 bonus et bug fixed sont de bonnes sources de meilleure rarity.",
+        "Mythisch komt uit upgrades, niet uit geluk.": "Mythic vient des upgrades, pas de la chance.",
+        "Hou duplicates bij: ze zijn upgrade- en trade-materiaal.": "Garde les duplicates: ce sont des materiaux d'upgrade et de trade.",
+        "BugBaas Wiki - waarden en kansen kunnen per release wijzigen. Laatst bijgewerkt voor app-versie 2.2.28.": "Wiki BugBaas - valeurs et chances peuvent changer par release. Derniere mise a jour pour app version 2.2.28.",
+        "BB": "BB",
+        "Royal Freeze": "Royal Freeze",
+        "Prism Chain": "Prism Chain",
+        "Pattern Break": "Pattern Break",
+        "Candy Slow": "Candy Slow",
+        "Longneck Scout": "Longneck Scout",
+        "Bloom Blade": "Bloom Blade",
+        "Lantern Signal": "Lantern Signal",
+        "Mirror Guard": "Mirror Guard"
+      }
+    };
     const originalText = new WeakMap();
+    const originalAttributes = new WeakMap();
+    const translatedAttributes = ["placeholder", "aria-label", "title", "alt"];
 
     function translatePage(lang) {
-      const dictionary = translations[lang] ?? {};
+      const dictionary = { ...(extraTranslations[lang] ?? {}), ...(translations[lang] ?? {}) };
       document.documentElement.lang = lang === "fr" ? "fr" : lang === "en" ? "en" : "nl";
       document.querySelectorAll("body *").forEach((element) => {
         if (element.children.length > 0 || element.closest("script, style")) return;
@@ -1658,6 +3107,18 @@
         if (!originalText.has(element)) originalText.set(element, text);
         const original = originalText.get(element);
         element.textContent = lang === "nl" ? original : dictionary[original] ?? original;
+      });
+      document.querySelectorAll("[placeholder], [aria-label], [title], img[alt]").forEach((element) => {
+        if (!originalAttributes.has(element)) originalAttributes.set(element, {});
+        const originals = originalAttributes.get(element);
+        translatedAttributes.forEach((attribute) => {
+          if (!element.hasAttribute(attribute)) return;
+          const value = element.getAttribute(attribute);
+          if (!value) return;
+          if (!originals[attribute]) originals[attribute] = value;
+          const original = originals[attribute];
+          element.setAttribute(attribute, lang === "nl" ? original : dictionary[original] ?? original);
+        });
       });
       languageButtons.forEach((button) => button.classList.toggle("active", button.dataset.lang === lang));
       localStorage.setItem("bugbaas-wiki-language", lang);
@@ -1681,10 +3142,50 @@
 
     function filterOverview(query) {
       const normalized = query.trim().toLowerCase();
+      let visibleCount = 0;
       overviewTiles.forEach((tile) => {
         const text = tile.textContent.toLowerCase();
-        tile.classList.toggle("is-hidden", normalized.length > 0 && !text.includes(normalized));
+        const isHidden = normalized.length > 0 && !text.includes(normalized);
+        tile.classList.toggle("is-hidden", isHidden);
+        if (!isHidden) visibleCount += 1;
       });
+      if (noResults) noResults.hidden = visibleCount > 0;
+    }
+
+    function getCurrentSectionUrl() {
+      const activePanel = panels.find((panel) => panel.classList.contains("active-panel"));
+      const id = activePanel?.id || "overview";
+      return `${location.origin}${location.pathname}#${id}`;
+    }
+
+    function getTranslatedLabel(original) {
+      const lang = localStorage.getItem("bugbaas-wiki-language") || "nl";
+      const dictionary = { ...(extraTranslations[lang] ?? {}), ...(translations[lang] ?? {}) };
+      return lang === "nl" ? original : dictionary[original] ?? original;
+    }
+
+    async function copyCurrentSectionLink() {
+      if (!copySectionLink) return;
+      const url = getCurrentSectionUrl();
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const field = document.createElement("textarea");
+        field.value = url;
+        field.setAttribute("readonly", "");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        document.execCommand("copy");
+        field.remove();
+      }
+      copySectionLink.classList.add("copied");
+      copySectionLink.textContent = getTranslatedLabel("Gekopieerd");
+      window.setTimeout(() => {
+        copySectionLink.classList.remove("copied");
+        copySectionLink.textContent = getTranslatedLabel("Kopieer link");
+      }, 1200);
     }
 
     links.forEach((link) => {
@@ -1693,6 +3194,7 @@
         if (!id || !panelIds.has(id)) return;
         event.preventDefault();
         showPanel(id);
+        mobileNav?.removeAttribute("open");
       });
     });
 
@@ -1705,6 +3207,12 @@
       button.addEventListener("click", () => setTheme(button.dataset.themeValue || "light"));
     });
     wikiFilter?.addEventListener("input", () => filterOverview(wikiFilter.value));
+    copySectionLink?.addEventListener("click", () => {
+      copyCurrentSectionLink().catch(() => {
+        copySectionLink.textContent = getCurrentSectionUrl();
+      });
+    });
+    printWiki?.addEventListener("click", () => window.print());
     const preferredTheme = window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     setTheme(localStorage.getItem("bugbaas-wiki-theme") || preferredTheme);
     translatePage(localStorage.getItem("bugbaas-wiki-language") || "nl");
