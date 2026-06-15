@@ -128,9 +128,8 @@ service cloud.firestore {
         && (data.offerBugIds.size() > 1 || data.requestBugIds.size() > 1);
     }
 
-    function acceptedTradeBugCount() {
-      let trade = getAfter(/databases/$(database)/documents/trades/$(request.resource.data.lastTradeId)).data;
-      return trade.keys().hasAll(['acceptedBugCount']) ? trade.acceptedBugCount : 1;
+    function maxTradeBugCountPerSide() {
+      return 6;
     }
 
     function tradeInventoryCreate(userId, bugId) {
@@ -139,7 +138,7 @@ service cloud.firestore {
         && acceptedTradeData()
         && tradeGain(userId, bugId)
         && request.resource.data.count > 0
-        && request.resource.data.count <= acceptedTradeBugCount();
+        && request.resource.data.count <= maxTradeBugCountPerSide();
     }
 
     function tradeInventoryUpdate(userId, bugId) {
@@ -150,13 +149,13 @@ service cloud.firestore {
           (
             tradeGain(userId, bugId)
             && request.resource.data.count > resource.data.count
-            && request.resource.data.count <= resource.data.count + acceptedTradeBugCount()
+            && request.resource.data.count <= resource.data.count + maxTradeBugCountPerSide()
           )
           || (
             tradeLoss(userId, bugId)
             && request.resource.data.count < resource.data.count
             && request.resource.data.count >= 0
-            && request.resource.data.count >= resource.data.count - acceptedTradeBugCount()
+            && request.resource.data.count >= resource.data.count - maxTradeBugCountPerSide()
           )
         );
     }

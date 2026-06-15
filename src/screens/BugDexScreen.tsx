@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
 import { BugJarArt } from "../components/BugJarArt";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
@@ -507,7 +507,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
       }
       await refreshAll();
     } catch (error) {
-      setTradeError(error instanceof Error ? error.message : t("bugdex.tradeProcessFailed"));
+      const message = error instanceof Error ? error.message : t("bugdex.tradeProcessFailed");
+      setTradeError(message);
+      Alert.alert(t("bugdex.trade"), serviceErrorText(message));
     } finally {
       setTradeBusy("");
     }
@@ -878,6 +880,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         {incomingTrades.map((trade) => (
           <View key={trade.id} style={styles.tradeRequest}>
             <Text style={styles.tradeRequestTitle}>{t("bugdex.tradeIncomingFrom", { name: trade.fromUserName })}</Text>
+            {tradeBusy === trade.id && <Text style={styles.tradeRequestText}>...</Text>}
             <View style={styles.tradeSwapBox}>
               <Text style={styles.tradeSwapLabel}>{t("bugdex.theyOffer")}</Text>
               <Text style={styles.tradeRequestText}>{bugTradeListLabel(tradeBugIds(trade, "offer"))}</Text>
@@ -886,7 +889,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             </View>
             <View style={styles.tradeActions}>
               <Pressable style={styles.acceptButton} disabled={tradeBusy === trade.id} onPress={() => respondTrade(trade, true)}>
-                <Text style={styles.actionText}>{t("bugdex.accept")}</Text>
+                <Text style={styles.actionText}>{tradeBusy === trade.id ? "..." : t("bugdex.accept")}</Text>
               </Pressable>
               <Pressable style={styles.rejectButton} disabled={tradeBusy === trade.id} onPress={() => respondTrade(trade, false)}>
                 <Text style={styles.actionText}>{t("bugdex.reject")}</Text>
