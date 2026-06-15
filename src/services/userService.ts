@@ -614,7 +614,13 @@ export async function applyUserPoints(uid: string, pointsDelta: number, bugCount
   const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, pointsDelta));
   const bugCount = Math.max(0, user.bugCount + bugCountDelta);
   const updated = normalizeUser({ ...user, totalPoints, bugCount, title: titleForPoints(totalPoints) });
-  await updateDoc(ref, updated);
+  await updateDoc(ref, {
+    badges: updated.badges,
+    bugCount: updated.bugCount,
+    characterId: updated.characterId,
+    title: updated.title,
+    totalPoints: updated.totalPoints
+  });
   return updated;
 }
 

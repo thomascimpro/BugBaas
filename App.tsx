@@ -826,39 +826,55 @@ function AppContent() {
     if (pendingReward) {
       setPendingForegroundRewards((queue) => queue.filter((reward) => reward.id !== pendingReward.id));
     }
+    let rewardUser = user;
+    let splatMilestone = false;
     try {
       const updated = await applyUserPoints(user.uid, xp, 0);
-      const splatResult = await recordBugSplat(updated ?? user);
+      if (updated) {
+        rewardUser = updated;
+        setUser(updated);
+      }
+    } catch {
+      // XP must never block the foreground BugDex reward.
+    }
+    try {
+      const splatResult = await recordBugSplat(rewardUser);
+      rewardUser = splatResult.user;
+      splatMilestone = splatResult.milestone;
       setUser(splatResult.user);
+    } catch {
+      // Splat stats must never block the foreground BugDex reward.
+    }
+    try {
       if (pendingReward) {
         if (pendingReward.preGrantedDrop) {
           presentBugDexDrop(pendingReward.preGrantedDrop);
-          if (!pendingReward.starterBoostBonus) queueStarterBoostBugRoll(pendingReward.preGrantedDrop.source, splatResult.user, bugDropEntryId(pendingReward.preGrantedDrop));
+          if (!pendingReward.starterBoostBonus) queueStarterBoostBugRoll(pendingReward.preGrantedDrop.source, rewardUser, bugDropEntryId(pendingReward.preGrantedDrop));
           return;
         }
         if (pendingReward.preparedDrop?.source === "daily_login") {
-          const claimedDrop = await claimDailyLoginBug(splatResult.user, pendingReward.preparedDrop);
+          const claimedDrop = await claimDailyLoginBug(rewardUser, pendingReward.preparedDrop);
           if (claimedDrop?.updatedUser) setUser(claimedDrop.updatedUser);
           if (claimedDrop) {
             presentBugDexDrop(claimedDrop);
-            if (!pendingReward.starterBoostBonus) queueStarterBoostBugRoll(claimedDrop.source, claimedDrop.updatedUser ?? splatResult.user, bugDropEntryId(claimedDrop));
+            if (!pendingReward.starterBoostBonus) queueStarterBoostBugRoll(claimedDrop.source, claimedDrop.updatedUser ?? rewardUser, bugDropEntryId(claimedDrop));
           }
           return;
         }
-        const rewardDrop = await rollSpecificBugDexDrop(splatResult.user, pendingReward.entry.id, pendingReward.source, 1);
+        const rewardDrop = await rollSpecificBugDexDrop(rewardUser, pendingReward.entry.id, pendingReward.source, 1);
         if (rewardDrop?.updatedUser) setUser(rewardDrop.updatedUser);
         if (rewardDrop) {
           presentBugDexDrop(rewardDrop);
-          if (!pendingReward.starterBoostBonus) queueStarterBoostBugRoll(rewardDrop.source, rewardDrop.updatedUser ?? splatResult.user, bugDropEntryId(rewardDrop));
+          if (!pendingReward.starterBoostBonus) queueStarterBoostBugRoll(rewardDrop.source, rewardDrop.updatedUser ?? rewardUser, bugDropEntryId(rewardDrop));
         }
         return;
       }
-      const caughtBugDrop = await rollSpecificBugDexDrop(splatResult.user, bugId, "bug_splat", 1);
+      const caughtBugDrop = await rollSpecificBugDexDrop(rewardUser, bugId, "bug_splat", 1);
       if (caughtBugDrop) {
         presentBugDexDrop(caughtBugDrop);
-        queueStarterBoostBugRoll(caughtBugDrop.source, splatResult.user, bugDropEntryId(caughtBugDrop));
-      } else if (splatResult.milestone) {
-        queueRolledBugDexReward("bug_splat", splatResult.user);
+        queueStarterBoostBugRoll(caughtBugDrop.source, rewardUser, bugDropEntryId(caughtBugDrop));
+      } else if (splatMilestone) {
+        queueRolledBugDexReward("bug_splat", rewardUser);
       }
     } catch {
       // Foreground catch rewards should never interrupt normal app use.
