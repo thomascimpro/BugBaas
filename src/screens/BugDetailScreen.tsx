@@ -43,7 +43,6 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
   const [selectedReaction, setSelectedReaction] = useState("🐞");
   const [error, setError] = useState("");
   const [editTitle, setEditTitle] = useState(bug.title);
-  const [editProject, setEditProject] = useState(bug.project);
   const [editSeverity, setEditSeverity] = useState(bug.severity);
   const [editDescription, setEditDescription] = useState(bug.description);
   const [editSteps, setEditSteps] = useState(bug.steps);
@@ -65,11 +64,10 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
 
   useEffect(() => {
     setEditTitle(bug.title);
-    setEditProject(bug.project);
     setEditSeverity(bug.severity);
     setEditDescription(bug.description);
     setEditSteps(bug.steps);
-  }, [bug.description, bug.project, bug.severity, bug.steps, bug.title]);
+  }, [bug.description, bug.severity, bug.steps, bug.title]);
 
   async function changeStatus(status: BugStatus) {
     if (!canUpdateStatus) return;
@@ -103,7 +101,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
     try {
       const updated = await updateOwnBug(bug, user, {
         description: editDescription,
-        project: editProject,
+        project: bug.project || "BugBaas",
         severity: editSeverity,
         steps: editSteps,
         title: editTitle
@@ -163,7 +161,7 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
   return (
     <ScrollView contentContainerStyle={styles.content} style={sharedStyles.screen}>
       <Text style={sharedStyles.title}>{bug.title}</Text>
-      <Text style={sharedStyles.subtitle}>{bug.project} - {bug.reporterName}</Text>
+      <Text style={sharedStyles.subtitle}>{bug.reporterName}</Text>
       <View style={sharedStyles.row}>
         <View style={[styles.typeBadge, { backgroundColor: typeMeta.background, borderColor: typeMeta.color }]}>
           <Text style={[styles.typeBadgeText, { color: typeMeta.color }]}>{t(typeMeta.labelKey)}</Text>
@@ -191,8 +189,6 @@ export function BugDetailScreen({ bug, user, onBack, onBugChanged, onCommentAdde
           <Text style={styles.sectionTitle}>{t("detail.editReport")}</Text>
           <Text style={sharedStyles.label}>{t("new.reportTitle")}</Text>
           <TextInput style={sharedStyles.input} value={editTitle} onChangeText={setEditTitle} />
-          <Text style={sharedStyles.label}>{t("new.system")}</Text>
-          <TextInput style={sharedStyles.input} value={editProject} onChangeText={setEditProject} />
           {isBug && (
             <>
               <Text style={sharedStyles.label}>{t("new.urgency")}</Text>

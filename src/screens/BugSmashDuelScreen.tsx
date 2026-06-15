@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ActivityIndicator, Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Animated, Image, Modal, Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
 import { BugSwatterHit, playBugSwatterFeedback } from "../components/BugSwatterHit";
 import { BugDexDropResult, grantBugDexReward, listBugDexInventory } from "../services/bugDexService";
@@ -131,11 +131,19 @@ type SoloRun = {
 type ArenaMode = "duel" | "solo" | "training";
 
 const rarityColors: Record<BugDexRarity, string> = {
-  Gewoon: "#6f7f5f",
-  Zeldzaam: "#15724f",
-  Episch: "#356d7c",
-  Legendarisch: "#b83227",
-  Mythisch: "#7c3aed"
+  Gewoon: "#2f9e44",
+  Zeldzaam: "#228be6",
+  Episch: "#9c36b5",
+  Legendarisch: "#f59f00",
+  Mythisch: "#e03131"
+};
+
+const rarityStars: Record<BugDexRarity, string> = {
+  Gewoon: "★",
+  Zeldzaam: "★★",
+  Episch: "★★★",
+  Legendarisch: "★★★★",
+  Mythisch: "★★★★★"
 };
 
 const baseTapsByRarity: Record<BugDexRarity, number> = {
@@ -270,6 +278,14 @@ async function removePendingDuelScore(uid: string, duelId: string): Promise<void
   const current = await loadPendingDuelScores(uid);
   delete current[duelId];
   await AsyncStorage.setItem(pendingDuelScoresStorageKey(uid), JSON.stringify(current));
+}
+
+function RarityStars({ compact = false, rarity, style }: { compact?: boolean; rarity: BugDexRarity; style?: StyleProp<ViewStyle> }) {
+  return (
+    <View pointerEvents="none" style={[styles.rarityStarsPill, compact && styles.rarityStarsPillCompact, { backgroundColor: rarityColors[rarity] }, style]}>
+      <Text style={[styles.rarityStarsText, compact && styles.rarityStarsTextCompact]}>{rarityStars[rarity]}</Text>
+    </View>
+  );
 }
 
 export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, onBack, onDuelAccepted, onDuelRequest, onFullscreenChange, onRewardDrop, onUserUpdated }: Props) {
@@ -1665,7 +1681,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                       >
                         <BugArtImage bugId={item.bugId} size={50} />
                         <Text style={[styles.squadChoiceName, selected && styles.squadChoiceNameActive]} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>
-                        <Text style={[styles.rarityPill, { backgroundColor: rarityColors[entry.rarity] }]}>{rarityLabel(entry.rarity, t)}</Text>
+                        <RarityStars rarity={entry.rarity} compact />
                         <View style={[styles.squadChoiceAttackBadge, selected && styles.squadChoiceAttackBadgeActive]}>
                           <Image accessibilityIgnoresInvertColors resizeMode="contain" source={duelEffectSprites[spriteKey]} style={styles.squadChoiceAttackIcon} />
                           <Text style={[styles.squadChoiceAttack, selected && styles.squadChoiceNameActive]} numberOfLines={1}>{t("duel.helperAttack", { attack: spec.special?.label ?? helperKindLabel(spec.kind, t) })}</Text>
@@ -1819,7 +1835,7 @@ function renderSquadJars(
                   <View pointerEvents="none" style={[styles.squadJarBugWrap, compact && styles.squadJarBugWrapCompact]}>
                     <BugArtImage bugId={entry.id} size={compact ? 30 : 50} />
                   </View>
-                  <Text style={[styles.squadJarRarity, compact && styles.squadJarRarityCompact, { backgroundColor: rarityColors[entry.rarity] }]} numberOfLines={1}>{rarityLabel(entry.rarity, t)}</Text>
+                  <RarityStars rarity={entry.rarity} compact={compact} style={[styles.squadJarRarity, compact && styles.squadJarRarityCompact]} />
                   {!compact && <Text style={styles.squadJarName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>}
                   {!compact && bonus && <Text style={styles.squadJarBonus} numberOfLines={1}>{squadBonusLabel(bonus.category, t)}</Text>}
                 </>
@@ -1950,9 +1966,7 @@ function renderTargets(
             <Text style={styles.targetFreezeText}>TIME</Text>
           </View>
         )}
-        <View pointerEvents="none" style={[styles.targetRarityBadge, { backgroundColor: rarityColors[entry.rarity] }]}>
-          <Text style={styles.targetRarityText} numberOfLines={1}>{rarityLabel(entry.rarity, t)}</Text>
-        </View>
+        <RarityStars rarity={entry.rarity} compact style={styles.targetRarityBadge} />
         {bossLevel > 0 ? (
           <>
             <Image accessibilityIgnoresInvertColors resizeMode="contain" source={soloBossImageForLevel(bossLevel)} style={{ height: bugArtSize, width: bugArtSize }} />
@@ -4215,6 +4229,34 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     textAlign: "center"
   },
+  rarityStarsPill: {
+    alignItems: "center",
+    borderColor: "rgba(255,255,255,0.85)",
+    borderRadius: 999,
+    borderWidth: 1,
+    marginTop: 3,
+    minHeight: 18,
+    minWidth: 38,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  rarityStarsPillCompact: {
+    minHeight: 15,
+    minWidth: 28,
+    paddingHorizontal: 4,
+    paddingVertical: 1
+  },
+  rarityStarsText: {
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "900",
+    lineHeight: 12,
+    textAlign: "center"
+  },
+  rarityStarsTextCompact: {
+    fontSize: 7,
+    lineHeight: 9
+  },
   smallButton: {
     backgroundColor: "#edf6ea",
     borderColor: "#15724f",
@@ -4733,23 +4775,14 @@ const styles = StyleSheet.create({
   },
   squadJarRarity: {
     borderRadius: 999,
-    color: "#ffffff",
-    fontSize: 8,
-    fontWeight: "900",
     marginTop: 2,
     maxWidth: "92%",
-    overflow: "hidden",
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    textAlign: "center",
     zIndex: 4
   },
   squadJarRarityCompact: {
     bottom: 2,
-    fontSize: 7,
     left: 5,
     marginTop: 0,
-    paddingHorizontal: 3,
     position: "absolute",
     right: 5
   },

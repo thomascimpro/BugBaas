@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
 import { BugJarArt } from "../components/BugJarArt";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
@@ -28,11 +28,18 @@ type Props = {
 type UpgradeRarity = Exclude<BugDexRarity, "Mythisch">;
 
 const rarityColors: Record<BugDexRarity, string> = {
-  Gewoon: "#6f7f5f",
-  Zeldzaam: "#15724f",
-  Episch: "#356d7c",
-  Legendarisch: "#b83227",
-  Mythisch: "#7c3aed"
+  Gewoon: "#2f9e44",
+  Zeldzaam: "#228be6",
+  Episch: "#9c36b5",
+  Legendarisch: "#f59f00",
+  Mythisch: "#e03131"
+};
+const rarityStars: Record<BugDexRarity, string> = {
+  Gewoon: "★",
+  Zeldzaam: "★★",
+  Episch: "★★★",
+  Legendarisch: "★★★★",
+  Mythisch: "★★★★★"
 };
 const raritySortOrder: Record<BugDexRarity, number> = {
   Mythisch: 0,
@@ -63,6 +70,7 @@ const emptyDailyUpgradeUsage: DailyUpgradeUsage = {
 const activeBugSquadHeroImage = require("../../assets/generated/active-bug-squad-selection-hd.jpg");
 const bugDexWorkshopImage = require("../../assets/generated/bugdex-workshop-shortcut.png");
 const bugDexUpgradeImage = require("../../assets/generated/bugdex-upgrades-button-hd.png");
+const bugDexRarityTypesGuideImage = require("../../assets/generated/bugdex-rarity-types-guide.png");
 const attackIconImages: Record<BugSquadAttackKind, number> = {
   burst: require("../../assets/generated/duel_effect_slash_hd.png"),
   shield: require("../../assets/generated/duel_effect_shield_hd.png"),
@@ -98,6 +106,14 @@ function VisibilityIcon({ active, slashed }: { active: boolean; slashed: boolean
         <View style={[styles.visibilityPupil, active && styles.visibilityPupilActive]} />
       </View>
       {slashed && <View style={styles.visibilitySlash} />}
+    </View>
+  );
+}
+
+function RarityStars({ compact = false, rarity, style }: { compact?: boolean; rarity: BugDexRarity; style?: StyleProp<ViewStyle> }) {
+  return (
+    <View style={[styles.rarityStarsPill, compact && styles.rarityStarsPillCompact, { backgroundColor: rarityColors[rarity] }, style]}>
+      <Text style={[styles.rarityStarsText, compact && styles.rarityStarsTextCompact]}>{rarityStars[rarity]}</Text>
     </View>
   );
 }
@@ -753,7 +769,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                 >
                   <BugArtImage bugId={item.bugId} size={34} />
                   <Text style={[styles.squadBugChipText, selected && styles.squadBugChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                  <Text style={[styles.tradeRarityPill, { backgroundColor: rarityColors[entry.rarity] }]}>{rarityLabel(entry.rarity, t)}</Text>
+                  <RarityStars rarity={entry.rarity} compact />
                   {bonus && attackKind && (
                     <View style={[styles.squadAttackBadge, selected && styles.squadAttackBadgeActive]}>
                       <Image accessibilityIgnoresInvertColors resizeMode="contain" source={attackIconImages[attackKind]} style={styles.squadAttackIcon} />
@@ -817,7 +833,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                       )}
                     </View>
                     <Text style={[styles.tradeChipText, selected && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                    <Text style={[styles.tradeRarityPill, { backgroundColor: rarityColors[rarity] }]}>{rarityLabel(rarity, t)}</Text>
+                    <RarityStars rarity={rarity} compact />
                     {activeLocked && <Text style={styles.activeSquadLockedText}>{t("bugdex.activeSquadLockedShort")}</Text>}
                     {!!selectedRecipient && !recipientOwnedTradeBugIds.has(item.bugId) && (
                       <Text style={[styles.tradeNeedPill, selected && styles.tradeNeedPillActive]}>{t("bugdex.colleagueNeedsThis")}</Text>
@@ -857,7 +873,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                     <Pressable key={item.bugId} disabled={maxSelected} style={[styles.tradeBugChip, selected && styles.tradeChipActive, maxSelected && styles.activeSquadLockedChip]} onPress={() => setTradeRequestIds((current) => current.includes(item.bugId) ? current.filter((bugId) => bugId !== item.bugId) : [...current, item.bugId])}>
                       <BugArtImage bugId={item.bugId} size={34} />
                       <Text style={[styles.tradeChipText, selected && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                      <Text style={[styles.tradeRarityPill, { backgroundColor: rarityColors[bugRarity(item.bugId)] }]}>{rarityLabel(bugRarity(item.bugId), t)}</Text>
+                      <RarityStars rarity={bugRarity(item.bugId)} compact />
                       {!ownedTradeBugIds.has(item.bugId) && (
                         <Text style={[styles.tradeNeedPill, selected && styles.tradeNeedPillActive]}>{t("bugdex.youNeedThis")}</Text>
                       )}
@@ -994,6 +1010,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                             )}
                           </View>
                           <Text style={[styles.upgradeChoiceText, selected && styles.upgradeChoiceTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
+                          <RarityStars rarity={bugRarity(item.bugId)} compact />
                           {activeLocked && <Text style={[styles.activeSquadLockedText, { borderColor: rarityColor }]}>{t("bugdex.activeSquadLockedShort")}</Text>}
                           <Text style={[styles.bugBuffMeta, selected && styles.upgradeChoiceTextActive]} numberOfLines={2}>{bugBuffText(item.bugId)}</Text>
                           {item.count > 1 && <Text style={[styles.upgradeChoiceCount, selected && styles.upgradeChoiceTextActive]}>x{item.count}</Text>}
@@ -1067,6 +1084,10 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
           <Text style={styles.summaryValue}>{totalCount - unlockedCount}</Text>
           <Text style={styles.summaryLabel}>{t("bugdex.toGo")}</Text>
         </View>
+      </View>
+
+      <View style={styles.rarityGuideCard}>
+        <Image source={bugDexRarityTypesGuideImage} style={styles.rarityGuideImage} resizeMode="contain" />
       </View>
 
       {dexList}
@@ -1452,6 +1473,18 @@ const styles = StyleSheet.create({
     color: "#52665d",
     fontSize: 12,
     fontWeight: "900"
+  },
+  rarityGuideCard: {
+    backgroundColor: "#102018",
+    borderColor: "#d7bd57",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+    overflow: "hidden"
+  },
+  rarityGuideImage: {
+    aspectRatio: 1.5,
+    width: "100%"
   },
   squadDropdown: {
     alignItems: "center",
@@ -1875,6 +1908,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     textAlign: "center"
+  },
+  rarityStarsPill: {
+    alignItems: "center",
+    borderColor: "rgba(255,255,255,0.78)",
+    borderRadius: 999,
+    borderWidth: 1,
+    marginTop: 3,
+    minHeight: 18,
+    minWidth: 38,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  rarityStarsPillCompact: {
+    minHeight: 16,
+    minWidth: 30,
+    paddingHorizontal: 5,
+    paddingVertical: 1
+  },
+  rarityStarsText: {
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "900",
+    lineHeight: 12,
+    textAlign: "center"
+  },
+  rarityStarsTextCompact: {
+    fontSize: 8,
+    lineHeight: 10
   },
   tradeButton: {
     alignItems: "center",

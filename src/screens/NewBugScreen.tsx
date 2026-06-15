@@ -10,7 +10,7 @@ import { BugReport, BugSeverity, ReportType, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 const severities: BugSeverity[] = ["Laag", "Normaal", "Hoog", "Kritiek"];
-const projectOptions = ["TBox", "TConnect", "SkySpark", "Infinite", "VTScada", "Alert", "Anders"];
+const defaultReportProject = "BugBaas";
 const reportTypes: Array<{ value: ReportType; labelKey: string; descriptionKey: string }> = [
   { value: "bug", labelKey: "report.type.bug", descriptionKey: "new.reportBugDesc" },
   { value: "tip", labelKey: "report.type.tip", descriptionKey: "new.reportTipDesc" },
@@ -44,8 +44,7 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
   const [reportType, setReportType] = useState<ReportType>("bug");
   const [typeOpen, setTypeOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [project, setProject] = useState("");
-  const [projectOpen, setProjectOpen] = useState(false);
+  const [project, setProject] = useState(defaultReportProject);
   const userOrganizationIds = organizationIdsForUser(user);
   const userOrganizationNames = organizationNamesForUser(user);
   const defaultSelectedOrganizationId = userOrganizationIds[0] ?? defaultOrganizationId;
@@ -69,7 +68,7 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
       ? organizationId
       : defaultSelectedOrganizationId;
   const draft: BugDraft = { reportType, title, project, severity, description, steps, organizationId: selectedOrganizationId, screenshotPreviewUri, screenshotDataUrl };
-  const hasDraftContent = Boolean(title.trim() || project.trim() || description.trim() || steps.trim() || screenshotDataUrl);
+  const hasDraftContent = Boolean(title.trim() || description.trim() || steps.trim() || screenshotDataUrl);
 
   useEffect(() => {
     async function loadDraft() {
@@ -100,7 +99,7 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
   function applyDraft(nextDraft: BugDraft) {
     setReportType(nextDraft.reportType ?? "bug");
     setTitle(nextDraft.title);
-    setProject(nextDraft.project);
+    setProject(nextDraft.project || defaultReportProject);
     setOrganizationId(nextDraft.organizationId && userOrganizationIds.includes(nextDraft.organizationId) ? nextDraft.organizationId : defaultOrganizationId);
     setSeverity(nextDraft.severity);
     setDescription(nextDraft.description);
@@ -114,7 +113,7 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
     setReportType("bug");
     setTypeOpen(false);
     setTitle("");
-    setProject("");
+    setProject(defaultReportProject);
     setOrganizationId(hasOrganization ? defaultSelectedOrganizationId : defaultOrganizationId);
     setSeverity("Normaal");
     setDescription("");
@@ -165,7 +164,7 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
     setBusy(true);
     setError("");
     try {
-      const bug = await createBug({ reportType, title, project, severity: isBug ? severity : "Laag", description, steps, screenshotDataUrl, organizationId: selectedOrganizationId }, user);
+      const bug = await createBug({ reportType, title, project: project || defaultReportProject, severity: isBug ? severity : "Laag", description, steps, screenshotDataUrl, organizationId: selectedOrganizationId }, user);
       await AsyncStorage.removeItem(draftKey);
       clearForm();
       onSaved(bug);
@@ -238,26 +237,6 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
           </Pressable>
         ))}
       </View>
-      <Text style={sharedStyles.label}>{t("new.system")}</Text>
-      <Pressable style={styles.selectButton} onPress={() => setProjectOpen((current) => !current)}>
-        <Text style={[styles.selectText, !project && styles.selectPlaceholder]}>{project || t("new.chooseSystem")}</Text>
-      </Pressable>
-      {projectOpen && (
-        <View style={styles.selectMenu}>
-          {projectOptions.map((item) => (
-            <Pressable
-              key={item}
-              style={[styles.selectOption, project === item && styles.selectOptionActive]}
-              onPress={() => {
-                setProject(item);
-                setProjectOpen(false);
-              }}
-            >
-              <Text style={[styles.selectOptionText, project === item && styles.selectOptionTextActive]}>{item}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
       {isBug && (
         <>
           <Text style={sharedStyles.label}>{t("new.urgency")}</Text>
