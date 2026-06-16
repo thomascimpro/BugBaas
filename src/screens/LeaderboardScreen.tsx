@@ -122,11 +122,11 @@ export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }
       </View>
       {loading ? <ActivityIndicator /> : (
         <FlatList
-          data={visibleUsers}
+          data={visibleUsers.slice(3)}
           keyExtractor={(user) => user.uid}
           ListHeaderComponent={visibleUsers.length ? <Podium metricLabel={metricLabel} metricValue={metricValue} users={visibleUsers.slice(0, 3)} onSelectUser={onSelectUser} /> : null}
-          ListEmptyComponent={<Text style={sharedStyles.subtitle}>{t("leaderboard.empty")}</Text>}
-          renderItem={({ item, index }) => <LeaderboardRow metricLabel={metricLabel} metricValue={metricValue(item)} user={item} lastCatch={lastCatches[item.uid]} index={index} onPress={() => onSelectUser(item)} />}
+          ListEmptyComponent={visibleUsers.length ? null : <Text style={sharedStyles.subtitle}>{t("leaderboard.empty")}</Text>}
+          renderItem={({ item, index }) => <LeaderboardRow metricLabel={metricLabel} metricValue={metricValue(item)} user={item} lastCatch={lastCatches[item.uid]} index={index + 3} onPress={() => onSelectUser(item)} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />

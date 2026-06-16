@@ -31,6 +31,7 @@ import { playBugSound } from "../services/soundService";
 import { soloCampaignConfig, soloCampaignBugIds, soloCampaignMaxLevel, soloCampaignMaxWave, type SoloCampaignConfig } from "../services/soloCampaignBalance";
 import { loadSoloCampaignProgress, saveSoloCampaignProgress } from "../services/soloCampaignProgressService";
 import { claimSoloCampaignBossDailyReward } from "../services/soloCampaignRewardService";
+import { recordSoloCampaignBossDefeated } from "../services/missionProgressService";
 import { activateSoloLampFocus, consumeSoloBugBomb, emptySoloPowerupInventory, grantSoloBossReward, loadSoloPowerupInventory, soloLampFocusActive, soloLampFocusRemainingMinutes, type SoloPowerupInventory } from "../services/soloPowerupService";
 import { listUsers, updateUserBugSquad } from "../services/userService";
 import { BugDexInventoryItem, BugSmashDuel, BugSmashDuelScore, User } from "../types";
@@ -1279,6 +1280,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     const rewardKey = trainingDuel.id;
     if (soloBossRewardedRef.current.has(rewardKey)) return;
     soloBossRewardedRef.current.add(rewardKey);
+    void recordSoloCampaignBossDefeated(user.uid).catch(() => undefined);
     void grantSoloBossReward(user.uid, soloCampaign.level).then((result) => {
       setSoloPowerups(result.inventory);
       const labels = result.rewards.map((reward) => reward === "lamp_focus" ? t("duel.powerupLamp") : t("duel.powerupBomb"));

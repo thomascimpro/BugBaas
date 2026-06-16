@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.0
+
+- Home heeft nu Daily missies met XP rewards en een daily BugDex bonus als alle daily doelen gehaald zijn.
+- Weekly missies gebruiken nu echte Solo Campaign boss-kills voor het boss-doel.
+- BugDex toont `niet unlocked` op basis van ooit unlocked, en losse per-bug upgradeknoppen zijn weggehaald.
+- Rank toont top 3 nog maar een keer en laat characters zien in alle rankingrijen.
+
 ## 2.3.0
 
 - Grote feature-release met alle verbeteringen sinds 2.2: Arena is uitgewerkt met Duel, Training en Solo Campaign.

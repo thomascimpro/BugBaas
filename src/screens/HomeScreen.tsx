@@ -16,6 +16,8 @@ import { languages, useI18n } from "../services/i18n";
 import { listLeaderboardUsers } from "../services/userService";
 import { loadSoloCampaignProgress } from "../services/soloCampaignProgressService";
 import { starterBoostRemainingDays } from "../services/starterBoostService";
+import { claimedDailyMissionIds as fetchClaimedDailyMissionIds, claimDailyMissionBonusWithReward, claimDailyMissionReward, dailyMissionSet, dailyMissionSetComplete, isDailyMissionBonusClaimed } from "../services/dailyMissionService";
+import { loadSoloCampaignBossProgress, SoloCampaignBossProgress } from "../services/missionProgressService";
 import { claimedWeeklyMissionIds, claimWeeklyMissionBonusWithReward, claimWeeklyMissionReward, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
 import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
@@ -56,6 +58,12 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [bugLampActivating, setBugLampActivating] = useState(false);
   const [movementClaiming, setMovementClaiming] = useState(false);
   const [soloCampaignWave, setSoloCampaignWave] = useState(1);
+  const [bossProgress, setBossProgress] = useState<SoloCampaignBossProgress>({ dayCount: 0, dayId: "", updatedAt: "", weekCount: 0, weekId: "" });
+  const [claimedDailyIds, setClaimedDailyIds] = useState<Set<string>>(new Set());
+  const [claimingDailyMissionId, setClaimingDailyMissionId] = useState("");
+  const [dailyBonusClaimed, setDailyBonusClaimed] = useState(false);
+  const [dailyBonusClaiming, setDailyBonusClaiming] = useState(false);
+  const [dailyBonusError, setDailyBonusError] = useState("");
   const [claimedMissionIds, setClaimedMissionIds] = useState<Set<string>>(new Set());
   const [claimingMissionId, setClaimingMissionId] = useState("");
   const [weeklyBonusClaimed, setWeeklyBonusClaimed] = useState(false);
@@ -69,7 +77,9 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const activeSquadEntries = sanitizeActiveBugSquad(user.activeBugSquad, inventory)
     .map((bugId) => entryByBugId(bugId))
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-  const missions = weeklyMissionSet(user, bugs, { duels, inventory, soloCampaignWave });
+  const dailyMissions = dailyMissionSet(user, { bossProgress, duels });
+  const dailyMissionIdsKey = dailyMissions.map((mission) => mission.id).join("|");
+  const missions = weeklyMissionSet(user, bugs, { bossProgress, duels, inventory, soloCampaignWave });
   const missionIdsKey = missions.map((mission) => mission.id).join("|");
   const canClaimMovement = Boolean((movementProgress && movementProgress.claimableRewards > 0) || queuedRadarBugIds.length > 0);
   const selectedLanguage = languages.find((item) => item.value === language) ?? languages[0];
@@ -83,8 +93,14 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     listBugSmashDuels(user).then(setDuels).catch(() => setDuels([]));
     listBugDexInventory(user).then(setInventory);
     loadSoloCampaignProgress(user.uid).then((progress) => setSoloCampaignWave(progress.wave)).catch(() => setSoloCampaignWave(1));
+    loadSoloCampaignBossProgress(user.uid).then(setBossProgress).catch(() => undefined);
     refreshMovementProgress();
   }, [movementBoost, user.uid, user.totalPoints]);
+
+  useEffect(() => {
+    fetchClaimedDailyMissionIds(user, dailyMissions.map((mission) => mission.id)).then(setClaimedDailyIds).catch(() => setClaimedDailyIds(new Set()));
+    isDailyMissionBonusClaimed(user).then(setDailyBonusClaimed).catch(() => setDailyBonusClaimed(false));
+  }, [dailyMissionIdsKey, user.uid]);
 
   useEffect(() => {
     claimedWeeklyMissionIds(user, missions.map((mission) => mission.id)).then(setClaimedMissionIds).catch(() => setClaimedMissionIds(new Set()));
@@ -161,6 +177,46 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
       if (!refreshed.has(mission.id)) setWeeklyBonusError(t("home.weeklyBonusFailed"));
     } finally {
       setClaimingMissionId("");
+    }
+  }
+
+  async function handleDailyMissionClaim(mission: typeof dailyMissions[number]) {
+    if (claimingDailyMissionId || mission.progress < mission.target || claimedDailyIds.has(mission.id)) return;
+    setClaimingDailyMissionId(mission.id);
+    setDailyBonusError("");
+    try {
+      const updated = await claimDailyMissionReward(user, mission);
+      if (updated) onUserUpdated?.(updated);
+      const refreshed = await fetchClaimedDailyMissionIds(user, dailyMissions.map((item) => item.id));
+      setClaimedDailyIds(refreshed);
+      if (!refreshed.has(mission.id)) setDailyBonusError(t("home.dailyBonusFailed"));
+    } catch {
+      const refreshed = await fetchClaimedDailyMissionIds(user, dailyMissions.map((item) => item.id)).catch(() => claimedDailyIds);
+      setClaimedDailyIds(refreshed);
+      if (!refreshed.has(mission.id)) setDailyBonusError(t("home.dailyBonusFailed"));
+    } finally {
+      setClaimingDailyMissionId("");
+    }
+  }
+
+  async function handleDailyBonusClaim() {
+    if (dailyBonusClaiming || dailyBonusClaimed || !dailyMissionSetComplete(dailyMissions)) return;
+    setDailyBonusClaiming(true);
+    setDailyBonusError("");
+    try {
+      const result = await claimDailyMissionBonusWithReward(user, dailyMissions);
+      if (!result) {
+        setDailyBonusClaimed(await isDailyMissionBonusClaimed(user));
+        return;
+      }
+      onUserUpdated?.(result.user);
+      onRewardDrop?.(result.drop);
+      setDailyBonusClaimed(true);
+      listBugDexInventory(user).then(setInventory).catch(() => undefined);
+    } catch {
+      setDailyBonusError(t("home.dailyBonusFailed"));
+    } finally {
+      setDailyBonusClaiming(false);
     }
   }
 
@@ -396,6 +452,51 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
           <Text style={styles.workshopCta}>{t("home.workshopCta")}</Text>
         </View>
       </Pressable>
+      <View style={styles.missionCard}>
+        <View style={styles.missionHeader}>
+          <View>
+            <Text style={styles.missionTitle}>{t("home.dailyMissions")}</Text>
+            <Text style={styles.missionWeek}>{t("home.dailyMissionsMeta")}</Text>
+          </View>
+          <BugArtImage bugId="lieveheersbeestje" size={48} />
+        </View>
+        <View style={styles.missionList}>
+          {dailyMissions.map((mission) => {
+            const done = mission.progress >= mission.target;
+            const claimed = claimedDailyIds.has(mission.id);
+            const width: DimensionValue = `${Math.min(100, Math.round((mission.progress / mission.target) * 100))}%`;
+            return (
+              <View key={mission.id} style={styles.missionItem}>
+                <View style={styles.missionLine}>
+                  <Text style={styles.missionName}>{tr(mission.title)}</Text>
+                  <Text style={[styles.missionCount, done && styles.missionDone]}>{formatMissionValue(mission.progress)}/{formatMissionValue(mission.target)}</Text>
+                </View>
+                <View style={styles.missionTrack}>
+                  <View style={[styles.missionFill, { width }]} />
+                </View>
+                {done && !claimed ? (
+                  <Pressable style={styles.missionClaimButton} disabled={claimingDailyMissionId === mission.id} onPress={() => handleDailyMissionClaim(mission)}>
+                    <Text style={styles.missionClaimText}>{claimingDailyMissionId === mission.id ? "..." : t("home.claimDailyReward")}</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={styles.missionReward}>
+                    {done && claimed ? t("home.claimedDailyReward", { reward: tr(mission.reward) }) : t("home.dailyReward", { reward: tr(mission.reward) })}
+                  </Text>
+                )}
+              </View>
+            );
+          })}
+          {dailyMissionSetComplete(dailyMissions) && !dailyBonusClaimed && (
+            <Pressable style={styles.missionBonusButton} disabled={dailyBonusClaiming} onPress={handleDailyBonusClaim}>
+              <Text style={styles.missionBonusText}>{dailyBonusClaiming ? "..." : t("home.claimDailyBugDex")}</Text>
+            </Pressable>
+          )}
+          {dailyMissionSetComplete(dailyMissions) && dailyBonusClaimed && (
+            <Text style={styles.missionReward}>{t("home.claimedDailyBugDex")}</Text>
+          )}
+          {dailyBonusError ? <Text style={styles.missionError}>{dailyBonusError}</Text> : null}
+        </View>
+      </View>
       <View style={styles.missionCard}>
         <View style={styles.missionHeader}>
           <View>
