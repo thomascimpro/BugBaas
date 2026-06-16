@@ -344,6 +344,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const lastCatchAtRef = useRef(0);
   const lastHitSoundAtRef = useRef(0);
   const soloBossRewardedRef = useRef(new Set<string>());
+  const soloBossProgressRecordedRef = useRef(new Set<string>());
   const soloCampaignClearRewardedRef = useRef(new Set<string>());
   const assist = useMemo(() => bugSmashDuelBalanceForUser({ activeBugSquad: activeSquadIds }), [activeSquadIds]);
   const opponents = useMemo(() => {
@@ -1137,6 +1138,9 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   function handleSoloCampaignResultAction() {
     const campaign = soloRun?.mode === "campaign" ? soloRun : null;
     if (!campaign) return;
+    if (soloCampaignWon && campaign.boss && trainingDuel) {
+      void recordSoloBossProgressOnce(trainingDuel.id);
+    }
     if (soloCampaignComplete) {
       void rememberSoloCampaignProgress(1, soloCampaignStartingLives);
       startSoloCampaign(1);
@@ -1156,6 +1160,12 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     }
     void rememberSoloCampaignProgress(1, soloCampaignStartingLives);
     startSoloCampaign(1);
+  }
+
+  async function recordSoloBossProgressOnce(rewardKey: string) {
+    if (soloBossProgressRecordedRef.current.has(rewardKey)) return;
+    soloBossProgressRecordedRef.current.add(rewardKey);
+    await recordSoloCampaignBossDefeated(user.uid);
   }
 
   async function activateLampFocus() {
@@ -1280,7 +1290,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     const rewardKey = trainingDuel.id;
     if (soloBossRewardedRef.current.has(rewardKey)) return;
     soloBossRewardedRef.current.add(rewardKey);
-    void recordSoloCampaignBossDefeated(user.uid).catch(() => undefined);
+    void recordSoloBossProgressOnce(rewardKey).catch(() => undefined);
     void grantSoloBossReward(user.uid, soloCampaign.level).then((result) => {
       setSoloPowerups(result.inventory);
       const labels = result.rewards.map((reward) => reward === "lamp_focus" ? t("duel.powerupLamp") : t("duel.powerupBomb"));
