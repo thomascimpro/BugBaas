@@ -115,7 +115,13 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
   }, [activeBug]);
 
   useEffect(() => {
-    if (!enabled) clearActiveBug();
+    if (enabled) return;
+    const currentBug = activeRef.current;
+    if (currentBug?.forced && !caughtRef.current) {
+      stopActiveBugTimers();
+      return;
+    }
+    clearActiveBug();
   }, [enabled]);
 
   useEffect(() => {
@@ -162,13 +168,13 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
   useEffect(() => {
     const currentBug = activeRef.current;
     if (!currentBug || caughtRef.current) return;
-    if (appActive) {
+    if (enabled && appActive) {
       startActiveBugTimers(currentBug);
       return () => stopActiveBugTimers();
     }
     stopActiveBugTimers();
     return undefined;
-  }, [appActive]);
+  }, [appActive, enabled]);
 
   useEffect(() => {
     if (!enabled || activeRef.current || forcedBugIds.length === 0) return;
