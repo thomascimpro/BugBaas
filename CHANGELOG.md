@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.1
+
+- Daily mission claims werken met gedeployde Firestore rules voor daily claims en mission progress.
+- Solo Campaign boss-kills worden extra vastgelegd bij doorgaan naar de volgende wave, zodat wave 4/8/12/16/20 meetellen.
+
 ## 2.5.0
 
 - Home heeft nu Daily missies met XP rewards en een daily BugDex bonus als alle daily doelen gehaald zijn.
