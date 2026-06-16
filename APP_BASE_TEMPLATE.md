@@ -465,7 +465,7 @@ Belangrijke service-regels:
 
 Checklist voor nieuwe app:
 
-- Zet Firebase waarden in `app.json` onder `expo.extra`.
+- Zet Firebase waarden lokaal in `.env`; `app.config.js` geeft ze door via `expo.extra`.
 - Gebruik `initializeAuth` met AsyncStorage persistence voor React Native.
 - Controleer bij start of Firebase config compleet is.
 - Maak Firestore rules vroeg; test geen app op open database rules.

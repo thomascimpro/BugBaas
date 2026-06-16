@@ -11,17 +11,28 @@ Tierwerking staat in `TIERS.md`.
    ```bash
    npm install
    ```
-2. Controleer Firebase waarden in `app.json` onder `expo.extra`.
-   De app staat nu ingesteld op project `thomascimpro-6266f`.
-3. Firebase staat gekoppeld aan project `thomascimpro-6266f`.
+2. Maak lokale env-config:
+   ```bash
+   cp .env.example .env
+   ```
+   Vul daarna deze waarden in `.env`:
+   - `FIREBASE_API_KEY`
+   - `FIREBASE_AUTH_DOMAIN`
+   - `FIREBASE_PROJECT_ID`
+   - `FIREBASE_MESSAGING_SENDER_ID`
+   - `FIREBASE_APP_ID`
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_ANDROID_CLIENT_ID`
+3. Firebase staat gekoppeld via `FIREBASE_PROJECT_ID`.
    Controleer in Firebase Console:
    - Authentication > Sign-in method > Email/Password > Enabled
    - Authentication > Sign-in method > Google > Enabled
    - Firestore database `(default)` bestaat
 4. Deploy Firestore security rules en indexes:
    ```bash
-   firebase deploy --only firestore
+   firebase deploy --only firestore --project "$FIREBASE_PROJECT_ID"
    ```
+   Optioneel voor lokale Firebase CLI aliases: kopieer `.firebaserc.example` naar `.firebaserc` en vul lokaal project-id in.
 5. Start:
    ```bash
    npm run start
@@ -45,9 +56,16 @@ Waarom niet volledig dicht op Spark:
 
 Conclusie: dit is de maximale Spark/free implementatie zonder Blaze, Cloud Functions, server-side push of extra dependencies.
 
+## Runtime config
+
+- Expo leest `app.config.js`.
+- `app.config.js` vult `expo.extra` vanuit `.env`/environment variables.
+- Runtime keys blijven gelijk: `firebaseApiKey`, `firebaseAuthDomain`, `firebaseProjectId`, `firebaseMessagingSenderId`, `firebaseAppId`, `googleClientId`, `googleAndroidClientId`.
+- `.env` mag niet naar GitHub; `.env.example` bevat alleen lege placeholders.
+
 ## Google login
 
-- `app.json` bevat een web OAuth client en Android OAuth client.
+- `.env` bevat een web OAuth client en Android OAuth client.
 - De Android client is gekoppeld aan package `nl.cimpro.bugbaas`.
 - De eerste interne APK gebruikt debug signing met SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`.
 - Volledige Google-login moet getest worden met een dev build of standalone Android build. Expo Go gebruikt package `host.exp.exponent`; Google blokkeert die OAuth-combinatie voor dit Firebase project.
@@ -58,7 +76,7 @@ Conclusie: dit is de maximale Spark/free implementatie zonder Blaze, Cloud Funct
 - Release-stappen staan in `ANDROID_RELEASE_RUNBOOK.md`.
 - APK is bedoeld voor GitHub Releases en handmatige installatie door collega's.
 - Android vraagt gebruikers om installatie uit onbekende bron toe te staan.
-- Iedereen gebruikt hetzelfde Firebase project `thomascimpro-6266f`, dus gebruikers, bugs, upvotes en ranglijst zijn gedeeld.
+- Iedereen gebruikt het Firebase project uit `FIREBASE_PROJECT_ID`, dus gebruikers, bugs, upvotes en ranglijst zijn gedeeld.
 - Build lokaal:
   ```bash
   cd android

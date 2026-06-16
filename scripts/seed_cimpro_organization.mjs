@@ -2,7 +2,7 @@
 
 import { createRequire } from "node:module";
 
-const projectId = "thomascimpro-6266f";
+const projectId = process.env.FIREBASE_PROJECT_ID;
 const databaseId = "(default)";
 const baseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents`;
 const cimproNames = new Set(["jean", "biertje", "boompie", "debuglex"]);
@@ -151,6 +151,7 @@ async function upsertOrganizationMember(token, organizationId, organizationName,
 }
 
 async function main() {
+  if (!projectId) throw new Error("FIREBASE_PROJECT_ID is required.");
   const token = await accessToken();
   const users = await listCollection("/users", token);
   let cimproUsers = 0;

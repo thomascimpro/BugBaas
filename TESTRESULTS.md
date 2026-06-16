@@ -26,7 +26,7 @@
 - `npx.cmd expo config --type public`: geslaagd; versie `2.2.18`, package `nl.cimpro.bugbaas`.
 - `npx.cmd expo install --check`: geslaagd.
 - Logic smoke-check: actieve duelkaart toont score in plaats van gevangen bugs, `score: 0` wordt hersteld vanuit gevangen bugs, dubbele passieve duelhelpers zijn verborgen, en app/rules gebruiken 56 duelbugs per gedeelde seed.
-- `firebase.cmd deploy --only firestore:rules --project thomascimpro-6266f`: geslaagd.
+- `firebase.cmd deploy --only firestore:rules --project <firebase-project-id>`: geslaagd.
 - `.\android\gradlew.bat -p android assembleRelease -PbugbaasLegacyDebugSigning=true`: geslaagd.
 - APK gekopieerd naar `dist/CimPro-BugBaas-2.2.18.apk`.
 - APK grootte: `44,651,178` bytes.
@@ -72,7 +72,7 @@
 - `npx.cmd expo config --type public`: geslaagd; versie `2.2.15`, package `nl.cimpro.bugbaas`.
 - `npx.cmd expo install --check`: geslaagd.
 - Logic smoke-check: 48 duel bugs in rules, pending preplay submit, duelRewardEvents, solo progress Firestore rules, retry UI, auto-resubmit en legacy wave migratie aanwezig.
-- `firebase.cmd deploy --only firestore:rules --project thomascimpro-6266f`: geslaagd.
+- `firebase.cmd deploy --only firestore:rules --project <firebase-project-id>`: geslaagd.
 - `.\android\gradlew.bat -p android :app:clean :app:assembleRelease --no-daemon --console=plain`: geslaagd.
 - APK gekopieerd naar `dist/CimPro-BugBaas-2.2.15.apk`.
 - APK grootte: `44,647,974` bytes.
@@ -262,10 +262,10 @@ Datum: 2026-06-02
 ## Firebase live connection update
 
 - Firebase CLI: ingelogd als `thomascimpro@gmail.com`.
-- Firebase project: `thomascimpro-6266f` actief in `.firebaserc`.
-- Firebase Android app: `1:508370199825:android:469f30507a5623e281d8b0` gevonden via CLI.
+- Firebase project: `<firebase-project-id>` actief in `.firebaserc`.
+- Firebase Android app: `<firebase-app-id>` gevonden via CLI.
 - Firestore database: `(default)` bestaat als `STANDARD` / `FIRESTORE_NATIVE`.
-- `firebase deploy --only firestore:rules --project thomascimpro-6266f`: geslaagd.
+- `firebase deploy --only firestore:rules --project <firebase-project-id>`: geslaagd.
 - Auth REST signup met project API key: geslaagd.
 - Firebase JS Auth signup: geslaagd.
 - Firestore REST met Firebase ID-token:
@@ -281,7 +281,7 @@ Datum: 2026-06-02
 
 - `npm run typecheck`: geslaagd na upvote update.
 - `npx expo install --check`: geslaagd na upvote update.
-- `firebase deploy --only firestore:rules --project thomascimpro-6266f`: geslaagd; rules compileerden en zijn live.
+- `firebase deploy --only firestore:rules --project <firebase-project-id>`: geslaagd; rules compileerden en zijn live.
 - Firebase rules smoke-test met live Auth tokens:
   - bug create: HTTP 200.
   - upvote toevoegen door andere gebruiker: HTTP 200.
@@ -320,11 +320,11 @@ Datum: 2026-06-02
 ## Firebase final CLI setup
 
 - Firebase CLI versie: `15.19.0`.
-- Actief project: `thomascimpro-6266f`.
-- Android app aanwezig: `1:508370199825:android:469f30507a5623e281d8b0`.
+- Actief project: `<firebase-project-id>`.
+- Android app aanwezig: `<firebase-app-id>`.
 - Firestore database aanwezig: `(default)`, `STANDARD`, `FIRESTORE_NATIVE`.
 - `firestore.indexes.json` toegevoegd en gekoppeld in `firebase.json`.
-- `firebase deploy --only firestore --project thomascimpro-6266f`: geslaagd.
+- `firebase deploy --only firestore --project <firebase-project-id>`: geslaagd.
 - Live Firebase smoke-test met echte Auth tokens:
   - `users` create/read: HTTP 200.
   - `bugs` create/read: HTTP 200.
@@ -364,7 +364,7 @@ Datum: 2026-06-02
 - Firebase Android app `nl.cimpro.bugbaas` heeft lokale debug SHA-1:
   - `2F:2C:57:B3:01:24:97:19:79:AA:B3:A9:79:2B:92:C2:35:4C:90:37`.
 - Android OAuth client toegevoegd:
-  - `508370199825-tp4jcs7iacabpp45ulhfm44ef2mi0rkh.apps.googleusercontent.com`.
+  - `<google-oauth-client-id>`.
 - Expo Go Firebase app `host.exp.exponent` is aangemaakt voor diagnosecontext, maar wordt niet gebruikt door de appconfig. SHA toevoegen faalde terecht met HTTP 409 omdat Expo Go package+cert al in een ander OAuth project bestaat.
 - Pixel 8 Expo Go: Google-knop zichtbaar en opent `accounts.google.com`.
 - Pixel 8 Expo Go volledige OAuth-login: geblokkeerd door Google `Error 400: invalid_request`; verwacht voor Expo Go. Test volledige login met dev/standalone Android build.
@@ -381,7 +381,7 @@ Datum: 2026-06-02
 - APK signing SHA-1 van `android/app/debug.keystore` toegevoegd aan Firebase:
   - `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`.
 - Android OAuth client voor deze APK:
-  - `508370199825-70k6pl884r7cei7tn27qrlda953794qa.apps.googleusercontent.com`.
+  - `<google-android-client-id>`.
 - `assembleRelease`: geslaagd met ingebakken JS bundle.
 - APK gekopieerd naar `release/CimPro-BugBaas-0.1.0.apk`.
 - GitHub Release aangemaakt:

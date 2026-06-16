@@ -21,7 +21,7 @@ const appConfig = isFirebaseConfigured
   ? firebaseConfig
   : {
       apiKey: "demo-api-key",
-      authDomain: "demo.firebaseapp.com",
+      authDomain: "demo.invalid",
       projectId: "demo-project",
       messagingSenderId: "000000000000",
       appId: "1:000000000000:web:demo"

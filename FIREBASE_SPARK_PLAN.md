@@ -60,7 +60,7 @@ Bronnen, geraadpleegd op 2026-06-02:
 
 ## Productkeuzes voor Spark
 
-- App config gebruikt project `thomascimpro-6266f`.
+- App config gebruikt project `<firebase-project-id>`.
 - Firebase Console Authentication > Sign-in method > Email/Password is nodig en is live getest via Auth signup.
 - Firebase Console Authentication > Sign-in method > Google is nodig. Dit blijft binnen Spark; er zijn geen Cloud Functions nodig.
 - Voor native Android Google-login is een OAuth client met package `nl.cimpro.bugbaas` en SHA-1 nodig. Expo Go kan de volledige Google OAuth-flow niet afronden voor dit project omdat `host.exp.exponent` + Expo Go SHA al in een ander OAuth project bestaat.
