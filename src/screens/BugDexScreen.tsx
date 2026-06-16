@@ -7,7 +7,7 @@ import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugDexUnlockModal } from "../components/BugDexUnlockModal";
 import { MythicRarityFrame } from "../components/MythicRarityFrame";
 import { TradeAnimationModal } from "../components/TradeAnimationModal";
-import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineBugDexDuplicates, combineDifferentBugDexUpgrade, combineRequiredCount, differentUpgradeRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory, listBugDexUnlocks } from "../services/bugDexService";
+import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineDifferentBugDexUpgrade, differentUpgradeRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory, listBugDexUnlocks } from "../services/bugDexService";
 import { allBugDexSetId, bugDexSetById, bugDexSets } from "../services/bugDexSetService";
 import { activeBugSquadBonusList, bugSquadAttackKindForCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad, BugSquadAttackKind, BugSquadBonusCategory } from "../services/bugSquadService";
 import { bugDexEntryName, bugDexEntryNote, bugDexEntryTitle, rarityLabel, useI18n } from "../services/i18n";
@@ -129,7 +129,6 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   const [completedTrade, setCompletedTrade] = useState<TradeRequest | null>(null);
   const [closedCompletedTradeIds, setClosedCompletedTradeIds] = useState<string[]>([]);
   const [closedCompletedTradeIdsLoaded, setClosedCompletedTradeIdsLoaded] = useState(false);
-  const [combineBusyId, setCombineBusyId] = useState("");
   const [activeSquadIds, setActiveSquadIds] = useState<string[]>(sanitizeActiveBugSquad(user.activeBugSquad));
   const [squadBusyId, setSquadBusyId] = useState("");
   const [squadExpanded, setSquadExpanded] = useState(false);
@@ -166,7 +165,6 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   const selectedSetDescription = selectedSet ? t(selectedSet.descriptionKey) : t("bugdex.set.all.description");
   const unlockedEntries = inventory.map((item) => entryByBugId(item.bugId)).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   const activeSquadEntries = activeSquadIds.map((bugId) => entryByBugId(bugId)).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-  const activeSquadIdSet = new Set(activeSquadIds);
   const activeSquadCounts = activeSquadIds.reduce<Record<string, number>>((counts, bugId) => {
     counts[bugId] = (counts[bugId] ?? 0) + 1;
     return counts;
@@ -208,11 +206,6 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
 
   function canSpendBugCopy(item: BugDexInventoryItem | null | undefined) {
     return spendableCountForItem(item) > 0;
-  }
-
-  function canCombineItem(item: BugDexInventoryItem | null | undefined, requiredCount: number) {
-    if (!item || !Number.isFinite(requiredCount) || item.count < requiredCount) return false;
-    return item.count - requiredCount + 1 >= activeCountForBug(item.bugId);
   }
 
   useEffect(() => {
@@ -317,26 +310,6 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
 
   async function refreshDailyUpgradeUsage() {
     setDailyUpgradeUsage(await getDailyUpgradeUsage(user));
-  }
-
-  async function combine(bugId: string) {
-    const entry = entryByBugId(bugId);
-    const requiredCount = entry ? combineRequiredCount(entry.rarity) : Infinity;
-    if (!canCombineItem(inventoryById[bugId], requiredCount)) {
-      setUpgradeError(t("bugdex.activeSquadLocked"));
-      return;
-    }
-    setCombineBusyId(bugId);
-    setUpgradeError("");
-    try {
-      const result = await combineBugDexDuplicates(user, bugId);
-      setDrop(result);
-      await Promise.all([refreshInventory(), refreshDailyUpgradeUsage()]);
-    } catch (error) {
-      setUpgradeError(error instanceof Error ? error.message : t("bugdex.upgradeFailed"));
-    } finally {
-      setCombineBusyId("");
-    }
   }
 
   async function upgradeDifferent(rarity: UpgradeRarity, bugIds: string[]) {
@@ -614,15 +587,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         <View style={styles.grid}>
           {dexCards.map(({ entry, index, inventoryItem, unlockItem }) => {
             const color = rarityColors[entry.rarity];
-            const requiredCount = combineRequiredCount(entry.rarity);
             const owned = Boolean(inventoryItem);
             const everHad = !owned && Boolean(unlockItem);
             const revealed = owned || everHad;
-            const upgradeRarity = entry.rarity === "Mythisch" ? null : entry.rarity as UpgradeRarity;
-            const routeUsedToday = upgradeRarity ? upgradeRouteUsedToday(upgradeRarity) : false;
-            const hasEnoughToCombine = owned && Number.isFinite(requiredCount) && inventoryItem.count >= requiredCount;
-            const activeSquadLocked = owned && activeSquadIdSet.has(entry.id) && !canCombineItem(inventoryItem, requiredCount);
-            const canCombine = hasEnoughToCombine && !routeUsedToday && canCombineItem(inventoryItem, requiredCount);
             const isMythic = owned && entry.rarity === "Mythisch";
             return (
               <View key={entry.id} style={[styles.card, !revealed && styles.lockedCard, everHad && styles.everHadCard, isMythic && styles.mythicCard, { borderColor: revealed ? color : "#cbd8d1" }]}>
@@ -643,11 +610,6 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                 <Text style={[styles.note, !revealed && styles.lockedText, everHad && styles.everHadText]}>
                   {revealed ? bugDexEntryNote(entry, t) : t("bugdex.findHint")}
                 </Text>
-                {hasEnoughToCombine && (
-                  <Pressable style={[styles.combineButton, !canCombine && styles.combineButtonDisabled]} disabled={!canCombine || combineBusyId === entry.id} onPress={() => combine(entry.id)}>
-                    <Text style={styles.combineText}>{combineBusyId === entry.id ? "..." : activeSquadLocked ? t("bugdex.activeSquadLockedShort") : routeUsedToday ? t("bugdex.tomorrowAgain") : t("bugdex.combineCount", { count: requiredCount })}</Text>
-                  </Pressable>
-                )}
               </View>
             );
           })}
@@ -1080,7 +1042,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
           <Text style={styles.summaryLabel}>{t("bugdex.unlockedShort")}</Text>
         </View>
         <View style={styles.summaryTile}>
-          <Text style={styles.summaryValue}>{totalCount - unlockedCount}</Text>
+          <Text style={styles.summaryValue}>{totalCount - everUnlockedCount}</Text>
           <Text style={styles.summaryLabel}>{t("bugdex.toGo")}</Text>
         </View>
       </View>

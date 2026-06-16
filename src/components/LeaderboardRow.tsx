@@ -43,12 +43,10 @@ export function LeaderboardRow({ index, lastCatch, metricLabel, metricValue, use
       <View style={styles.rankSlot}>
         <MedalIcon index={index} size={index < 3 ? 52 : 38} />
       </View>
-      {medal ? (
-        <View style={styles.topThreeCharacter}>
-          <CharacterAvatarImage characterId={user.characterId} size={isLeader ? 64 : 54} />
-          <BugArtImage bugId={medal.bugId} size={isLeader ? 30 : 26} />
-        </View>
-      ) : null}
+      <View style={styles.topThreeCharacter}>
+        <CharacterAvatarImage characterId={user.characterId} size={isLeader ? 64 : 54} />
+        {medal ? <BugArtImage bugId={medal.bugId} size={isLeader ? 30 : 26} /> : null}
+      </View>
       <View style={styles.body}>
         <View style={styles.nameRow}>
           <Text adjustsFontSizeToFit ellipsizeMode="tail" minimumFontScale={0.78} numberOfLines={1} style={[styles.name, medal && styles.topThreeName]}>{user.displayName}</Text>

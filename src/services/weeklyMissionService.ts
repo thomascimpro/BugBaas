@@ -2,6 +2,7 @@ import { doc, getDoc, runTransaction } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
 import { BugDexDropResult, BugDexDropSource, pickBugDexRewardEntry, grantBugDexReward } from "./bugDexService";
+import { SoloCampaignBossProgress } from "./missionProgressService";
 import { badgesForUser, titleForPoints } from "./pointsService";
 import { weeklyMissionBonusXp } from "./rewardBalanceService";
 import { starterBoostedXp } from "./starterBoostService";
@@ -32,6 +33,7 @@ type WeeklyMissionContext = {
   bugs: BugReport[];
   duels: BugSmashDuel[];
   inventory: BugDexInventoryItem[];
+  bossProgress: SoloCampaignBossProgress;
   soloCampaignWave: number;
 };
 
@@ -84,22 +86,23 @@ const weeklyMissionTemplates: MissionTemplate[] = [
     progressFor: (user, { duels }, weekStart) => duels.filter((duel) => isUserDuel(duel, user) && isThisWeek(duel.scores?.[user.uid]?.submittedAt ?? "", weekStart)).length
   },
   {
-    id: "solo-wave-20",
-    title: "mission.soloWave20",
-    target: 20,
+    id: "solo-bosses-10",
+    title: "mission.soloBosses10",
+    target: 10,
     reward: "mission.rewardXp25",
     rewardType: "xp",
     rewardXp: 25,
-    progressFor: (_user, { soloCampaignWave }) => Math.max(1, soloCampaignWave)
+    progressFor: (_user, { bossProgress }) => bossProgress.weekCount
   }
 ];
 
-export function weeklyMissionSet(user: User, bugs: BugReport[], options: { duels?: BugSmashDuel[]; inventory?: BugDexInventoryItem[]; now?: Date; soloCampaignWave?: number } = {}): WeeklyMission[] {
+export function weeklyMissionSet(user: User, bugs: BugReport[], options: { bossProgress?: SoloCampaignBossProgress; duels?: BugSmashDuel[]; inventory?: BugDexInventoryItem[]; now?: Date; soloCampaignWave?: number } = {}): WeeklyMission[] {
   const now = options.now ?? new Date();
   const weekStart = startOfIsoWeek(now);
   const seed = weekNumber(now);
   const context: WeeklyMissionContext = {
     bugs,
+    bossProgress: options.bossProgress ?? { dayCount: 0, dayId: "", updatedAt: "", weekCount: 0, weekId: "" },
     duels: options.duels ?? [],
     inventory: options.inventory ?? [],
     soloCampaignWave: options.soloCampaignWave ?? 1

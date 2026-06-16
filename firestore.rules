@@ -742,6 +742,48 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /dailyMissionClaims/{claimId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.id == claimId
+          && request.resource.data.claimedAt is string
+          && request.resource.data.keys().hasOnly([
+            'claimedAt',
+            'id',
+            'localDay',
+            'missionIds',
+            'missionTitle',
+            'rewardBugId',
+            'rewardGrantedAt',
+            'rewardRarity',
+            'rewardSource',
+            'rewardType',
+            'rewardXp'
+          ]);
+        allow delete: if false;
+      }
+
+      match /missionProgress/{progressId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && progressId == 'soloCampaignBosses'
+          && request.resource.data.keys().hasOnly([
+            'dayCount',
+            'dayId',
+            'updatedAt',
+            'weekCount',
+            'weekId'
+          ])
+          && request.resource.data.dayCount is int
+          && request.resource.data.dayId is string
+          && request.resource.data.updatedAt is string
+          && request.resource.data.weekCount is int
+          && request.resource.data.weekId is string;
+        allow delete: if false;
+      }
+
       match /settings/{settingId} {
         allow read: if signedIn()
           && request.auth.uid == userId
