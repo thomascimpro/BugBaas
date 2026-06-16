@@ -265,6 +265,7 @@ function AppContent() {
   const movementCheckInProgress = useRef(false);
   const versionCheckInProgress = useRef(false);
   const activeForegroundRewardRef = useRef<PendingForegroundReward | null>(null);
+  const pendingForegroundRewardsRef = useRef<PendingForegroundReward[]>([]);
   const userRef = useRef<User | null>(null);
   const previousRankRef = useRef<{ uid: string; minPoints: number } | null>(null);
   const previousBadgesRef = useRef<{ badges: string[]; uid: string } | null>(null);
@@ -302,6 +303,10 @@ function AppContent() {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  useEffect(() => {
+    pendingForegroundRewardsRef.current = pendingForegroundRewards;
+  }, [pendingForegroundRewards]);
 
   useEffect(() => {
     if (!user) {
@@ -374,6 +379,25 @@ function AppContent() {
     setBadgeUnlock(nextBadge);
     setBadgeUnlockQueue(remaining);
   }, [badgeUnlock, badgeUnlockQueue, bugDexDrop, changelogVersion, helpVisible, notification, rankUpTier, splatBonusVisible, versionNotice]);
+
+  useEffect(() => {
+    if (
+      bugDexDrop
+      || activeForegroundRewardRef.current
+      || pendingForegroundRewards.length > 0
+      || badgeUnlock
+      || rankUpTier
+      || notification
+      || helpVisible
+      || changelogVersion
+      || splatBonusVisible
+      || versionNotice
+    ) return;
+    const [nextDrop, ...remaining] = bugDexDropQueue;
+    if (!nextDrop) return;
+    setBugDexDrop(nextDrop);
+    setBugDexDropQueue(remaining);
+  }, [badgeUnlock, bugDexDrop, bugDexDropQueue, changelogVersion, helpVisible, notification, pendingForegroundRewards.length, rankUpTier, splatBonusVisible, versionNotice]);
 
   useEffect(() => {
     notificationSettingsRef.current = notificationSettings;
@@ -693,6 +717,10 @@ function AppContent() {
     if (drop.rewardType === "bug" && drop.isNew && notificationSettingsRef.current.bugdex) {
       void showBugDexUnlockNotification(bugDexEntryName(drop.entry, t), rarityLabel(drop.entry.rarity, t)).catch(() => undefined);
     }
+    if (activeForegroundRewardRef.current || pendingForegroundRewardsRef.current.length > 0) {
+      setBugDexDropQueue((queue) => [...queue, drop]);
+      return;
+    }
     setBugDexDrop((current) => {
       if (current) {
         setBugDexDropQueue((queue) => [...queue, drop]);
@@ -703,7 +731,11 @@ function AppContent() {
   }
 
   function queueForegroundReward(reward: PendingForegroundReward) {
-    setPendingForegroundRewards((queue) => queue.length >= maxQueuedForegroundBugs ? queue : [...queue, reward]);
+    setPendingForegroundRewards((queue) => {
+      const next = queue.length >= maxQueuedForegroundBugs ? queue : [...queue, reward];
+      pendingForegroundRewardsRef.current = next;
+      return next;
+    });
   }
 
   function queueStarterBoostBugRoll(source: BugDexDropSource, appUser: User, excludeBugId?: string) {
@@ -853,7 +885,11 @@ function AppContent() {
     const pendingReward = activeForegroundRewardRef.current?.bugId === bugId ? activeForegroundRewardRef.current : null;
     activeForegroundRewardRef.current = null;
     if (pendingReward) {
-      setPendingForegroundRewards((queue) => queue.filter((reward) => reward.id !== pendingReward.id));
+      setPendingForegroundRewards((queue) => {
+        const next = queue.filter((reward) => reward.id !== pendingReward.id);
+        pendingForegroundRewardsRef.current = next;
+        return next;
+      });
     }
     let rewardUser = user;
     let splatMilestone = false;
@@ -1232,7 +1268,11 @@ function AppContent() {
         }}
         onForcedBugMissed={(bugId) => {
           const missedReward = activeForegroundRewardRef.current?.bugId === bugId ? activeForegroundRewardRef.current : null;
-          setPendingForegroundRewards((queue) => missedReward ? queue.filter((reward) => reward.id !== missedReward.id) : queue.filter((reward) => reward.bugId !== bugId));
+          setPendingForegroundRewards((queue) => {
+            const next = missedReward ? queue.filter((reward) => reward.id !== missedReward.id) : queue.filter((reward) => reward.bugId !== bugId);
+            pendingForegroundRewardsRef.current = next;
+            return next;
+          });
           activeForegroundRewardRef.current = null;
         }}
       />
