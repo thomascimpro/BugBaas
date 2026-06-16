@@ -862,8 +862,9 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     const bossLevel = soloBossLevelForTarget(runningDuel, targetIndex, soloCampaign);
     const requiredTaps = requiredTapsForTarget(entry.rarity, assist, targetIndex, soloTapMultiplier, bossLevel);
     const bossBreakBonus = soloBossBreakBonusForCatch(runningDuel, targetIndex, soloCampaign, timestamp, assist, targetTimeOffsetsRef.current[bugId] ?? 0);
+    const hitDamage = source === "tap" ? soloBossTapDamageForHit(runningDuel, targetIndex, soloCampaign, timestamp, assist, targetTimeOffsetsRef.current[bugId] ?? 0) : 1;
     const currentHits = hitCountsRef.current;
-    const nextHits = (currentHits[bugId] ?? 0) + 1;
+    const nextHits = (currentHits[bugId] ?? 0) + hitDamage;
     hitCountsRef.current = { ...currentHits, [bugId]: nextHits };
     if (source === "tap") playBugSwatterFeedback(hitFeedbackFor(bugId));
     setHitCounts(hitCountsRef.current);
@@ -1453,7 +1454,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 </Pressable>
               </View>
             </View>
-            {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal, { compact: true })}
+            {renderSquadJars(activeSquadIds, openSquadModal, { compact: true })}
           </View>
           {arenaMode === "duel" && (
           <View style={[styles.card, styles.duelModePanel]}>
@@ -1646,7 +1647,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             </Pressable>
           </View>
         </View>
-        {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal)}
+        {renderSquadJars(activeSquadIds, openSquadModal)}
         {renderSquadEffectCards(activeSquadBonuses, t)}
       </View>
 
@@ -1663,7 +1664,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               </Pressable>
             </View>
             <Text style={styles.modalIntro}>{t("bugdex.activeSquadHint")}</Text>
-            {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal)}
+            {renderSquadJars(activeSquadIds, openSquadModal)}
             {squadLoading ? (
               <View style={styles.modalState}>
                 <ActivityIndicator color="#15724f" />
@@ -1822,8 +1823,6 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
 function renderSquadJars(
   activeSquadIds: string[],
-  bonuses: ReturnType<typeof activeBugSquadBonusList>,
-  t: (key: string, params?: Record<string, string | number>) => string,
   onOpen: () => void,
   options: { compact?: boolean; interactive?: boolean } = {}
 ) {
@@ -1834,7 +1833,6 @@ function renderSquadJars(
       {Array.from({ length: maxActiveBugSquadSize }).map((_, index) => {
         const bugId = activeSquadIds[index];
         const entry = bugId ? entryByBugId(bugId) : null;
-        const bonus = bonuses.find((item) => item.bugId === bugId);
         return (
           <Pressable key={index} disabled={!interactive} style={styles.squadJarWrap} onPress={onOpen}>
             <View style={[styles.squadJar, compact && styles.squadJarCompact, entry && { borderColor: rarityColors[entry.rarity] }]}>
@@ -1845,16 +1843,13 @@ function renderSquadJars(
               {entry ? (
                 <>
                   <View pointerEvents="none" style={[styles.squadJarBugWrap, compact && styles.squadJarBugWrapCompact]}>
-                    <BugArtImage bugId={entry.id} size={compact ? 30 : 50} />
+                    <BugArtImage bugId={entry.id} size={compact ? 26 : 58} />
                   </View>
                   <RarityStars rarity={entry.rarity} compact={compact} style={[styles.squadJarRarity, compact && styles.squadJarRarityCompact]} />
-                  {!compact && <Text style={styles.squadJarName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>}
-                  {!compact && bonus && <Text style={styles.squadJarBonus} numberOfLines={1}>{squadBonusLabel(bonus.category, t)}</Text>}
                 </>
               ) : (
                 <>
                   <Text style={[styles.squadJarEmpty, compact && styles.squadJarEmptyCompact]}>+</Text>
-                  {!compact && <Text style={styles.squadJarBonus}>{t("bugdex.squadEmptySlot")}</Text>}
                 </>
               )}
               <View pointerEvents="none" style={[styles.squadJarBase, compact && styles.squadJarBaseCompact]} />
@@ -1981,11 +1976,14 @@ function renderTargets(
         <RarityStars rarity={entry.rarity} compact style={styles.targetRarityBadge} />
         {bossLevel > 0 ? (
           <>
+            {bossMechanic && (
+              <View pointerEvents="none" style={[styles.bossWeakRing, bossMechanic.active && styles.bossWeakRingActive, { borderColor: bossMechanic.color }]} />
+            )}
             <Image accessibilityIgnoresInvertColors resizeMode="contain" source={soloBossImageForLevel(bossLevel)} style={{ height: bugArtSize, width: bugArtSize }} />
             <Text style={styles.bossTargetLabel}>BOSS L{bossLevel}</Text>
             {bossMechanic && (
               <View pointerEvents="none" style={[styles.bossMechanicBadge, bossMechanic.active && styles.bossMechanicBadgeActive, { borderColor: bossMechanic.color }]}>
-                <Text style={[styles.bossMechanicText, bossMechanic.active && { color: bossMechanic.color }]}>{bossMechanic.active ? `${bossMechanic.activeLabel} +${bossMechanic.bonus}` : bossMechanic.label}</Text>
+                <Text style={[styles.bossMechanicText, bossMechanic.active && { color: bossMechanic.color }]}>{bossMechanic.active ? `${bossMechanic.activeLabel} x${bossMechanic.tapDamage}` : bossMechanic.label}</Text>
               </View>
             )}
           </>
@@ -2914,6 +2912,25 @@ function soloBossBreakBonus(level: number) {
   return level > 0 ? 5 + level * 2 : 0;
 }
 
+function soloBossTapDamageForHit(
+  duel: BugSmashDuel,
+  targetIndex: number,
+  soloCampaign: SoloCampaignConfig | null,
+  timestamp: number,
+  assist: BugSmashDuelBalance,
+  targetTimeOffset: number
+) {
+  const bossLevel = soloBossLevelForTarget(duel, targetIndex, soloCampaign);
+  if (!bossLevel) return 1;
+  const bugId = duel.bugIds[targetIndex];
+  const entry = entryByBugId(bugId);
+  if (!entry) return 1;
+  const startAt = duel.startAt ? Date.parse(duel.startAt) : timestamp;
+  const motion = targetMotion(targetIndex, duel.seed, timestamp - startAt - targetTimeOffset, entry.rarity, assist, bossLevel, soloCampaign?.spawnSpacingMultiplier ?? 1, duel.durationMs, duel.bugIds.length);
+  const mechanic = soloBossMechanicForLevel(bossLevel, motion.progress);
+  return mechanic.active ? mechanic.tapDamage : 1;
+}
+
 function soloBossBreakBonusForCatch(
   duel: BugSmashDuel,
   targetIndex: number,
@@ -2935,9 +2952,9 @@ function soloBossBreakBonusForCatch(
 
 function soloBossMechanicForLevel(level: number, progress: number) {
   const specs = [
-    { activeLabel: "CRACK", color: "#facc15", label: "ARMOR", windowEnd: 0.72, windowStart: 0.48 },
+    { activeLabel: "BREAK", color: "#facc15", label: "ARMOR", windowEnd: 0.72, windowStart: 0.48 },
     { activeLabel: "PUNISH", color: "#fb7185", label: "DASH", windowEnd: 0.66, windowStart: 0.42 },
-    { activeLabel: "CORE", color: "#38bdf8", label: "SHIELD", windowEnd: 0.78, windowStart: 0.56 },
+    { activeLabel: "CORE HIT", color: "#38bdf8", label: "CORE", windowEnd: 0.78, windowStart: 0.56 },
     { activeLabel: "CLEAR", color: "#f97316", label: "SWARM", windowEnd: 0.74, windowStart: 0.5 },
     { activeLabel: "RESET", color: "#a78bfa", label: "RAGE", windowEnd: 0.7, windowStart: 0.46 }
   ];
@@ -2947,7 +2964,8 @@ function soloBossMechanicForLevel(level: number, progress: number) {
   return {
     ...spec,
     active: phase >= spec.windowStart && phase <= spec.windowEnd,
-    bonus: soloBossBreakBonus(level)
+    bonus: soloBossBreakBonus(level),
+    tapDamage: 2
   };
 }
 
@@ -4674,20 +4692,20 @@ const styles = StyleSheet.create({
     borderColor: "rgba(16,32,24,0.12)",
     borderRadius: 8,
     borderWidth: 1,
-    height: 104,
+    height: 112,
     justifyContent: "center",
     overflow: "hidden",
-    padding: 6
+    padding: 8
   },
   squadJarCompact: {
     backgroundColor: "rgba(232,246,239,0.3)",
-    height: 54,
+    height: 58,
     padding: 3
   },
   squadJarBugWrap: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 8,
+    marginTop: 0,
     shadowColor: "#102018",
     shadowOffset: { height: 3, width: 0 },
     shadowOpacity: 0.22,
@@ -4695,7 +4713,7 @@ const styles = StyleSheet.create({
     zIndex: 3
   },
   squadJarBugWrapCompact: {
-    marginTop: 2
+    marginTop: -1
   },
   squadJarBase: {
     backgroundColor: "rgba(16,32,24,0.18)",
@@ -4712,14 +4730,6 @@ const styles = StyleSheet.create({
     left: 9,
     right: 9
   },
-  squadJarBonus: {
-    color: "#53645d",
-    fontSize: 9,
-    fontWeight: "900",
-    marginTop: 1,
-    textAlign: "center",
-    zIndex: 4
-  },
   squadJarEmpty: {
     color: "#6f7f5f",
     fontSize: 28,
@@ -4733,14 +4743,14 @@ const styles = StyleSheet.create({
   squadJarGlow: {
     backgroundColor: "rgba(215,189,87,0.15)",
     borderRadius: 999,
-    bottom: 12,
-    height: 54,
+    bottom: 16,
+    height: 62,
     position: "absolute",
-    width: 58,
+    width: 68,
     zIndex: 1
   },
   squadJarGlowCompact: {
-    bottom: 7,
+    bottom: 9,
     height: 32,
     width: 38
   },
@@ -4776,26 +4786,18 @@ const styles = StyleSheet.create({
     marginBottom: -1,
     width: 42
   },
-  squadJarName: {
-    color: "#102018",
-    fontSize: 10,
-    fontWeight: "900",
-    marginTop: 2,
-    textAlign: "center",
-    width: "100%",
-    zIndex: 4
-  },
   squadJarRarity: {
     borderRadius: 999,
-    marginTop: 2,
-    maxWidth: "92%",
+    bottom: 13,
+    left: 16,
+    marginTop: 0,
+    position: "absolute",
+    right: 16,
     zIndex: 4
   },
   squadJarRarityCompact: {
-    bottom: 2,
+    bottom: 3,
     left: 5,
-    marginTop: 0,
-    position: "absolute",
     right: 5
   },
   squadJarShine: {
@@ -4879,6 +4881,23 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     position: "absolute",
     top: -10
+  },
+  bossWeakRing: {
+    borderRadius: 999,
+    borderWidth: 2,
+    height: "76%",
+    opacity: 0.34,
+    position: "absolute",
+    width: "76%"
+  },
+  bossWeakRingActive: {
+    backgroundColor: "rgba(253,254,251,0.1)",
+    borderWidth: 4,
+    opacity: 0.92,
+    shadowColor: "#d7bd57",
+    shadowOffset: { height: 0, width: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 10
   },
   bossMechanicBadge: {
     backgroundColor: "rgba(16,32,24,0.88)",

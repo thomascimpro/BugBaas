@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.3
+
+- Active Bug Squad potjes tonen nu alleen bug art en sterren, zodat tekst niet meer in of buiten de potjes valt.
+- Solo Campaign bosses hebben nu duidelijke weak-window feedback; goede taps in het window tellen x2 terwijl boss HP gebalanceerd blijft.
+- Helper UI noemt Shield nu Guard en legt uit dat helpers in Duel en Solo Campaign werken.
+- Release-builds falen nu bewust als verplichte Firebase/Google env vars ontbreken.
+
 ## 2.5.2
 
 - Foreground reward-bugs uit wandelen/widget-claims blijven nu in queue tot ze gevangen zijn; unlock-popups wachten tot de reward-queue leeg is.

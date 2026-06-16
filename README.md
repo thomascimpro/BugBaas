@@ -62,6 +62,7 @@ Conclusie: dit is de maximale Spark/free implementatie zonder Blaze, Cloud Funct
 - `app.config.js` vult `expo.extra` vanuit `.env`/environment variables.
 - Runtime keys blijven gelijk: `firebaseApiKey`, `firebaseAuthDomain`, `firebaseProjectId`, `firebaseMessagingSenderId`, `firebaseAppId`, `googleClientId`, `googleAndroidClientId`.
 - `.env` mag niet naar GitHub; `.env.example` bevat alleen lege placeholders.
+- Zet `BUGBAAS_REQUIRE_ENV=1` bij release-builds zodat de build faalt als verplichte Firebase/Google env vars ontbreken.
 
 ## Google login
 
@@ -78,8 +79,9 @@ Conclusie: dit is de maximale Spark/free implementatie zonder Blaze, Cloud Funct
 - Android vraagt gebruikers om installatie uit onbekende bron toe te staan.
 - Iedereen gebruikt het Firebase project uit `FIREBASE_PROJECT_ID`, dus gebruikers, bugs, upvotes en ranglijst zijn gedeeld.
 - Build lokaal:
-  ```bash
+  ```powershell
   cd android
+  $env:BUGBAAS_REQUIRE_ENV='1'
   .\gradlew.bat assembleRelease
   ```
 
