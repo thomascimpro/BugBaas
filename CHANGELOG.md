@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.2
+
+- Foreground reward-bugs uit wandelen/widget-claims blijven nu in queue tot ze gevangen zijn; unlock-popups wachten tot de reward-queue leeg is.
+- Tijdelijk verborgen reward-bugs worden gepauzeerd in plaats van als gemist verwijderd, zodat meerdere verdiende bugs niet verloren gaan of dubbel worden uitgekeerd.
+
 ## 2.5.1
 
 - Daily mission claims werken met gedeployde Firestore rules voor daily claims en mission progress.
