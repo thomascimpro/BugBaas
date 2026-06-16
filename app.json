@@ -39,15 +39,6 @@
         "backgroundColor": "#102018"
       }
     },
-    "extra": {
-      "firebaseApiKey": "<firebase-api-key>",
-      "firebaseAuthDomain": "<firebase-auth-domain>",
-      "firebaseProjectId": "<firebase-project-id>",
-      "firebaseMessagingSenderId": "<firebase-sender-id>",
-      "firebaseAppId": "<firebase-app-id>",
-      "googleClientId": "<google-web-client-id>",
-      "googleAndroidClientId": "<google-android-client-id>"
-    },
     "plugins": []
   }
 }

@@ -2,7 +2,7 @@
 
 import { createRequire } from "node:module";
 
-const projectId = "<firebase-project-id>";
+const projectId = process.env.FIREBASE_PROJECT_ID;
 const databaseId = "(default)";
 const baseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents`;
 const starterBoostMaxStartingXp = 80;
@@ -86,6 +86,7 @@ async function patchStarterBoost(id, token, grantedAt, activeUntil) {
 }
 
 async function main() {
+  if (!projectId) throw new Error("FIREBASE_PROJECT_ID is required.");
   const token = await accessToken();
   const now = Date.now();
   const grantedAt = new Date(now).toISOString();
