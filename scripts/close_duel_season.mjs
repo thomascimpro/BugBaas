@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 
 const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -70,15 +71,23 @@ function fieldStringArray(doc, field) {
 
 async function accessToken() {
   if (process.env.FIRESTORE_ACCESS_TOKEN) return process.env.FIRESTORE_ACCESS_TOKEN;
+
+  try {
+    const token = execFileSync("gcloud", ["auth", "print-access-token"], { encoding: "utf8" }).trim();
+    if (token) return token;
+  } catch (error) {
+    // Continue to the local Firebase CLI fallback below.
+  }
+
   try {
     const require = createRequire(import.meta.url);
-    const auth = require("C:/Users/thoma.THOMAS/AppData/Roaming/npm/node_modules/firebase-tools/lib/auth");
-    const scopes = require("C:/Users/thoma.THOMAS/AppData/Roaming/npm/node_modules/firebase-tools/lib/scopes");
+    const auth = require("firebase-tools/lib/auth");
+    const scopes = require("firebase-tools/lib/scopes");
     const account = await auth.getGlobalDefaultAccount();
     const token = await auth.getAccessToken(account?.tokens?.refresh_token, [scopes.CLOUD_PLATFORM, scopes.FIREBASE_PLATFORM, scopes.EMAIL]);
     return typeof token === "string" ? token : token.access_token;
   } catch (error) {
-    throw new Error(`No Firestore access token available: ${error.message}`);
+    throw new Error(`No Firestore access token available. Set FIRESTORE_ACCESS_TOKEN or run after google-github-actions/auth + setup-gcloud. Last error: ${error.message}`);
   }
 }
 
