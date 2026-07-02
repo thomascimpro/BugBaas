@@ -23,6 +23,7 @@ if (!Number.isFinite(hours) || hours <= 0) {
 }
 
 const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+const cutoffIso = cutoff.toISOString();
 
 async function deleteOldRunsForGame(gameId) {
   const runsRef = db
@@ -34,7 +35,7 @@ async function deleteOldRunsForGame(gameId) {
 
   while (true) {
     const snapshot = await runsRef
-      .where("timestamp", "<", cutoff)
+      .where("timestamp", "<", cutoffIso)
       .orderBy("timestamp", "asc")
       .limit(batchSize)
       .get();
@@ -47,8 +48,7 @@ async function deleteOldRunsForGame(gameId) {
     if (dryRun) {
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
-        const timestamp = data.timestamp?.toDate ? data.timestamp.toDate().toISOString() : String(data.timestamp);
-        console.log(`[DRY RUN] would delete ${doc.ref.path} timestamp=${timestamp}`);
+        console.log(`[DRY RUN] would delete ${doc.ref.path} timestamp=${String(data.timestamp)}`);
       });
       break;
     }
@@ -67,7 +67,8 @@ async function deleteOldRunsForGame(gameId) {
 
 async function main() {
   console.log(`Cleanup arcade runs older than ${hours} hours`);
-  console.log(`Cutoff: ${cutoff.toISOString()}`);
+  console.log(`Cutoff: ${cutoffIso}`);
+  console.log("Timestamp mode: ISO string");
   console.log(`Mode: ${dryRun ? "DRY RUN" : "DELETE"}`);
   console.log(`Games: ${gameIds.join(", ")}`);
 
