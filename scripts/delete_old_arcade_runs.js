@@ -43,7 +43,7 @@ async function deleteOldRunsForGame(gameId) {
     if (snapshot.empty) break;
 
     total += snapshot.size;
-    console.log(`[${gameId}] batch=${snapshot.size}`);
+    console.log(`[arcade:${gameId}] batch=${snapshot.size}`);
 
     if (dryRun) {
       snapshot.docs.forEach((doc) => {
@@ -61,21 +61,59 @@ async function deleteOldRunsForGame(gameId) {
     await batch.commit();
   }
 
-  console.log(`[${gameId}] ${dryRun ? "would delete at least" : "deleted"} ${total}`);
+  console.log(`[arcade:${gameId}] ${dryRun ? "would delete at least" : "deleted"} ${total}`);
+  return total;
+}
+
+async function deleteOldBugSmashDuels() {
+  const duelsRef = db.collection("bugSmashDuels");
+  let total = 0;
+
+  while (true) {
+    const snapshot = await duelsRef
+      .where("createdAt", "<", cutoffIso)
+      .orderBy("createdAt", "asc")
+      .limit(batchSize)
+      .get();
+
+    if (snapshot.empty) break;
+
+    total += snapshot.size;
+    console.log(`[bugSmashDuels] batch=${snapshot.size}`);
+
+    if (dryRun) {
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        console.log(`[DRY RUN] would delete ${doc.ref.path} createdAt=${String(data.createdAt)}`);
+      });
+      break;
+    }
+
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      console.log(`[DELETE] ${doc.ref.path}`);
+    });
+    await batch.commit();
+  }
+
+  console.log(`[bugSmashDuels] ${dryRun ? "would delete at least" : "deleted"} ${total}`);
   return total;
 }
 
 async function main() {
-  console.log(`Cleanup arcade runs older than ${hours} hours`);
+  console.log(`Cleanup old game data older than ${hours} hours`);
   console.log(`Cutoff: ${cutoffIso}`);
   console.log("Timestamp mode: ISO string");
   console.log(`Mode: ${dryRun ? "DRY RUN" : "DELETE"}`);
-  console.log(`Games: ${gameIds.join(", ")}`);
+  console.log(`Arcade games: ${gameIds.join(", ")}`);
+  console.log("Collections: arcadeGameResults/*/runs, bugSmashDuels");
 
   let grandTotal = 0;
   for (const gameId of gameIds) {
     grandTotal += await deleteOldRunsForGame(gameId);
   }
+  grandTotal += await deleteOldBugSmashDuels();
 
   console.log(`${dryRun ? "Would delete at least" : "Deleted"}: ${grandTotal}`);
 }
