@@ -8,7 +8,7 @@ on:
       hours:
         description: "Delete arcade runs older than this many hours"
         required: true
-        default: "48"
+        default: "168"
       dry_run:
         description: "Dry run only"
         required: true
@@ -37,7 +37,7 @@ jobs:
       - name: Delete old arcade runs
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          HOURS: ${{ inputs.hours || '48' }}
+          HOURS: ${{ inputs.hours || '168' }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
             node scripts/delete_old_arcade_runs.js --dry-run
