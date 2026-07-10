@@ -15,7 +15,7 @@ const db = admin.firestore();
 
 const gameIds = ["bug_glide", "nest_defense", "web_runner"];
 const dryRun = process.argv.includes("--dry-run");
-const hours = Number(process.env.HOURS || 48);
+const hours = Number(process.env.HOURS || 168);
 const batchSize = Math.min(Math.max(Number(process.env.BATCH_SIZE || 400), 1), 400);
 
 if (!Number.isFinite(hours) || hours <= 0) {
