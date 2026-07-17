@@ -1,5 +1,21 @@
 # Test Results
 
+## 2026-07-18 release 2.10.2 gameplay and permissions
+
+- `npm run test:arcade`: geslaagd voor hold-duration versus spronghoogte, kleinere platforms, grotere gaten, oplopende scroll, match-3, geen pop bij twee bubbels en vallende unsupported clusters.
+- `npm run typecheck`: geslaagd na Tower-, Bubble-, Glide-, Arena- en rules-wijzigingen.
+- Expo webexport: geslaagd met 313 assets; Sites-productiebuild: geslaagd.
+- Headless Chromium mobiel 390x844: Bug Tower linker/rechter halve touchzones, 560 ms charge en release-jump gecontroleerd; geen tilt- of losse jumpknop aanwezig.
+- Headless Chromium mobiel: Bubble Swarm toont minimaal 30 vierkante/ronde bubbelbeelden, verwerkt een drag/release-shot en toont afzonderlijke Ranked/Train-acties.
+- Headless Chromium mobiel: tap in de linker Bug Glide-strook komt door, terwijl de volledige characterbox rechts van de 32 px strook blijft.
+- Headless Chromium desktop 1280x800: Bubble Swarm-playfield schaalt mee en alle bubbels blijven rond; screenshots staan lokaal onder `dist/playtest-2.10.2` en worden niet gecommit.
+- `firebase-tools deploy --only firestore:rules`: regels compileerden en zijn succesvol live uitgebracht op project `thomascimpro-6266f`.
+- Productie-APK-build met R8/minify en resource-optimalisatie: geslaagd (`BUILD SUCCESSFUL`).
+- APK: `dist/BugBaas-2.10.2.apk`, 75.321.796 bytes; package `nl.cimpro.bugbaas`, versionCode `182`, versionName `2.10.2`, minSdk `26`, targetSdk `36`.
+- Signing: APK Signature Scheme v2 geldig, 1 signer, certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA-256: `DA247011A669976E658A92FD841E2A514DA7217C1C9482AD5BEC71570888B62B`.
+- Device-smoke: niet uitgevoerd; `adb devices` gaf geen aangesloten apparaten.
+
 ## 2026-07-18 web and Strava release
 
 - npm run typecheck: geslaagd voor de gedeelde Expo-app.

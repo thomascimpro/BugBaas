@@ -3,21 +3,20 @@ import { Alert, BackHandler, DimensionValue, Image, ImageBackground, Pressable, 
 import { createArcadeSeed, loadArcadeHighScore, saveArcadeHighScore, seededNumber } from "../../services/arcadeResultService";
 import { arcadeSquadAssistForUser } from "../../services/bugSquadGameBalance";
 import { playBugSound } from "../../services/soundService";
-import { subscribeToTilt } from "../../services/tiltControlService";
 import { ArcadeRunResult, User } from "../../types";
 import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
+import { TOWER_MAX_CHARGE_MS, clamp, towerDifficulty, towerDifficultyLabel, towerJumpVelocity, towerPlatformGap, towerPlatformWidth } from "./bugTowerLogic";
 
 type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; ranked?: boolean; seed?: string; user: User };
 type GameState = "ready" | "result" | "running";
 type Platform = { drift: number; floor: number; id: string; width: number; x: number; y: number };
 type Player = { grounded: boolean; lastGroundAt: number; vx: number; vy: number; x: number; y: number };
-type RenderState = { combo: number; floor: number; maxCombo: number; platforms: Platform[]; player: Player; score: number };
+type RenderState = { charge: number; combo: number; difficulty: number; floor: number; maxCombo: number; platforms: Platform[]; player: Player; score: number };
 
 const tickMs = 20;
 const gravity = 0.13;
-const jumpVelocity = -2.32;
-const horizontalAcceleration = 0.075;
-const maxHorizontalSpeed = 0.92;
+const horizontalAcceleration = 0.105;
+const maxHorizontalSpeed = 1.08;
 const playerHalfWidth = 6.5;
 const playerHalfHeight = 5.2;
 const towerBackground = require("../../../assets/minigames/bug-tower/bug-tower-background.png");
@@ -28,7 +27,6 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
   const [state, setState] = useState<GameState>("ready");
   const [bestScore, setBestScore] = useState(0);
   const [result, setResult] = useState<ArcadeRunResult | null>(null);
-  const [sensorActive, setSensorActive] = useState(false);
   const [renderState, setRenderState] = useState<RenderState>(() => initialRenderState("preview"));
   const playerRef = useRef<Player>(initialPlayer());
   const platformsRef = useRef<Platform[]>([]);
@@ -40,9 +38,8 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
   const maxComboRef = useRef(0);
   const startAtRef = useRef(0);
   const finishedRef = useRef(false);
-  const tiltRef = useRef(0);
-  const tiltBaselineRef = useRef<number | null>(null);
   const manualDirectionRef = useRef(-0 as -1 | 0 | 1);
+  const holdStartedAtRef = useRef(0);
   const landedAtRef = useRef(0);
 
   useEffect(() => {
@@ -50,26 +47,6 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
     void loadArcadeHighScore(user.uid, "bug_tower").then((value) => active && setBestScore(value));
     return () => { active = false; };
   }, [user.uid]);
-
-  useEffect(() => {
-    if (state !== "running") return;
-    let unsubscribe: () => void = () => undefined;
-    let active = true;
-    void subscribeToTilt((sample) => {
-      if (tiltBaselineRef.current === null) tiltBaselineRef.current = sample.x;
-      const calibrated = sample.x - (tiltBaselineRef.current ?? 0);
-      tiltRef.current = clamp(calibrated / 4.3, -1, 1);
-      if (active) setSensorActive(true);
-    }).then((next) => {
-      if (active) unsubscribe = next;
-      else next();
-    });
-    return () => {
-      active = false;
-      unsubscribe();
-      setSensorActive(false);
-    };
-  }, [state]);
 
   useEffect(() => {
     if (state !== "running") return;
@@ -95,13 +72,11 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
     maxComboRef.current = 0;
     startAtRef.current = Date.now();
     finishedRef.current = false;
-    tiltRef.current = 0;
-    tiltBaselineRef.current = null;
     manualDirectionRef.current = 0;
+    holdStartedAtRef.current = 0;
     landedAtRef.current = Date.now();
     setResult(null);
-    setSensorActive(false);
-    setRenderState({ combo: 0, floor: 0, maxCombo: 0, platforms: initial, player: initialPlayer(), score: 0 });
+    setRenderState({ charge: 0, combo: 0, difficulty: 0, floor: 0, maxCombo: 0, platforms: initial, player: initialPlayer(), score: 0 });
     setState("running");
     playBugSound("arcade_start");
   }
@@ -111,7 +86,7 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
     const now = Date.now();
     const elapsed = now - startAtRef.current;
     const previous = playerRef.current;
-    const input = manualDirectionRef.current || tiltRef.current;
+    const input = manualDirectionRef.current;
     const vx = clamp(previous.vx * (Math.abs(input) < 0.08 ? 0.9 : 0.96) + input * horizontalAcceleration, -maxHorizontalSpeed, maxHorizontalSpeed);
     let nextPlayer: Player = {
       ...previous,
@@ -130,7 +105,8 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
       nextPlayer.vx = -Math.abs(nextPlayer.vx) * 0.9;
     }
 
-    const scroll = towerScrollSpeed(landedFloorRef.current, elapsed);
+    const difficulty = towerDifficulty(landedFloorRef.current, elapsed);
+    const scroll = difficulty.scrollSpeed;
     let platforms = platformsRef.current.map((platform) => movePlatform(platform, scroll));
     nextPlayer.y += scroll;
 
@@ -168,7 +144,9 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
     platformsRef.current = platforms;
     scoreRef.current += 0.08 + Math.max(0, comboRef.current - 1) * 0.012;
     setRenderState({
+      charge: holdStartedAtRef.current ? clamp((now - holdStartedAtRef.current) / TOWER_MAX_CHARGE_MS, 0, 1) : 0,
       combo: comboRef.current,
+      difficulty: difficulty.level,
       floor: landedFloorRef.current,
       maxCombo: maxComboRef.current,
       platforms,
@@ -179,13 +157,23 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
     if (nextPlayer.y - playerHalfHeight > 105) finish();
   }
 
-  function jump() {
+  function beginRun(direction: -1 | 1) {
     if (state !== "running") return;
+    manualDirectionRef.current = direction;
+    holdStartedAtRef.current = Date.now();
+    playBugSound("arcade_tap");
+  }
+
+  function releaseJump(direction: -1 | 1) {
+    if (state !== "running" || manualDirectionRef.current !== direction) return;
     const now = Date.now();
+    const holdMs = holdStartedAtRef.current ? now - holdStartedAtRef.current : 0;
+    manualDirectionRef.current = 0;
+    holdStartedAtRef.current = 0;
     const player = playerRef.current;
     if (!player.grounded && now - player.lastGroundAt > 120) return;
-    playerRef.current = { ...player, grounded: false, vy: jumpVelocity };
-    playBugSound("arcade_tap");
+    playerRef.current = { ...player, grounded: false, vy: towerJumpVelocity(holdMs) };
+    playBugSound("arcade_build");
   }
 
   function landOnFloor(floor: number, now: number) {
@@ -202,7 +190,7 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
   function finish() {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    const durationMs = Math.max(0, Date.now() - startAtRef.current);
+    const durationMs = Math.min(90000, Math.max(0, Date.now() - startAtRef.current));
     const finalScore = Math.max(1, Math.round(scoreRef.current + landedFloorRef.current * 14 + maxComboRef.current * 45));
     playBugSound("arcade_finish");
     void saveArcadeHighScore(user.uid, "bug_tower", finalScore).then((highScore) => {
@@ -250,35 +238,34 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
           <View style={styles.hud}>
             <HudChip label={`Floor ${renderState.floor}`} />
             <HudChip label={`${renderState.score} pt`} />
-            <HudChip active={renderState.combo > 0} label={renderState.combo > 0 ? `Combo ${renderState.combo}` : towerZone(renderState.floor)} />
+            <HudChip active={renderState.difficulty >= 3} label={`${towerDifficultyLabel(renderState.difficulty)} ${renderState.difficulty + 1}`} />
           </View>
-          <Pressable style={styles.playfield} onPress={jump}>
+          <View style={styles.playfield}>
             <ImageBackground resizeMode="cover" source={towerBackground} style={styles.background}>
               <View style={styles.backgroundShade} />
               <View style={styles.squadOverlay}><ArcadeSquadAssist compact label={`Squad ${squadAssist.activeCount}/3`} user={user} /></View>
-              <View style={styles.controlHint}><Text style={styles.controlHintText}>{sensorActive ? "Tilt to steer • Tap to jump" : "Hold arrows • Tap to jump"}</Text></View>
+              <View pointerEvents="none" style={styles.controlHint}><Text style={styles.controlHintText}>Hold a side to run - release to jump</Text></View>
               {renderState.platforms.map((platform) => <TowerPlatform key={platform.id} platform={platform} />)}
               <View pointerEvents="none" style={[styles.player, percentPosition(renderState.player.x, renderState.player.y)]}>
                 <BugTowerSprite frame={animationFrame} />
               </View>
+              <View pointerEvents="none" style={styles.chargeTrack}><View style={[styles.chargeFill, { width: `${Math.max(4, renderState.charge * 100)}%` as DimensionValue }]} /></View>
               <View style={styles.controls}>
                 <Pressable
-                  style={styles.controlButton}
-                  onPressIn={() => { manualDirectionRef.current = -1; }}
-                  onPressOut={() => { manualDirectionRef.current = 0; }}
-                ><Text style={styles.controlButtonText}>‹</Text></Pressable>
+                  accessibilityLabel="Run left and charge jump"
+                  style={({ pressed }) => [styles.controlHalf, styles.controlHalfLeft, pressed && styles.controlHalfPressed]}
+                  onPressIn={() => beginRun(-1)}
+                  onPressOut={() => releaseJump(-1)}
+                ><Text pointerEvents="none" style={styles.controlSideText}>LEFT</Text></Pressable>
                 <Pressable
-                  style={styles.jumpButton}
-                  onPress={jump}
-                ><Text style={styles.jumpButtonText}>JUMP</Text></Pressable>
-                <Pressable
-                  style={styles.controlButton}
-                  onPressIn={() => { manualDirectionRef.current = 1; }}
-                  onPressOut={() => { manualDirectionRef.current = 0; }}
-                ><Text style={styles.controlButtonText}>›</Text></Pressable>
+                  accessibilityLabel="Run right and charge jump"
+                  style={({ pressed }) => [styles.controlHalf, styles.controlHalfRight, pressed && styles.controlHalfPressed]}
+                  onPressIn={() => beginRun(1)}
+                  onPressOut={() => releaseJump(1)}
+                ><Text pointerEvents="none" style={styles.controlSideText}>RIGHT</Text></Pressable>
               </View>
             </ImageBackground>
-          </Pressable>
+          </View>
         </View>
       )}
       {state === "result" && result && <Result onBack={onBack} onRetry={start} ranked={ranked} result={result} />}
@@ -293,11 +280,11 @@ function Ready({ onStart }: { onStart: () => void }) {
       <View style={styles.panel}>
         <BugTowerSprite frame={3} large />
         <Text style={styles.panelTitle}>Climb the endless tower</Text>
-        <Text style={styles.body}>Tilt your phone left or right to build speed. Tap to jump. Chain multi-floor jumps for combos before the tower outruns you.</Text>
+        <Text style={styles.body}>Hold anywhere on the left or right half to run. Release to jump: a longer hold gives a higher leap. Platforms alternate sides, shrink, move, and speed up.</Text>
         <View style={styles.difficultyRow}>
-          <Text style={styles.difficultyChip}>Smaller floors</Text>
-          <Text style={styles.difficultyChip}>Faster scroll</Text>
-          <Text style={styles.difficultyChip}>Moving ledges</Text>
+          <Text style={styles.difficultyChip}>Hold = jump power</Text>
+          <Text style={styles.difficultyChip}>Alternating ledges</Text>
+          <Text style={styles.difficultyChip}>8 difficulty levels</Text>
         </View>
         <Pressable style={styles.primaryButton} onPress={onStart}><Text style={styles.primaryText}>Start climb</Text></Pressable>
       </View>
@@ -360,7 +347,7 @@ function BugTowerSprite({ frame, large = false }: { frame: number; large?: boole
 
 function initialRenderState(seed: string): RenderState {
   const platforms = buildInitialPlatforms(seed);
-  return { combo: 0, floor: 0, maxCombo: 0, platforms, player: initialPlayer(), score: 0 };
+  return { charge: 0, combo: 0, difficulty: 0, floor: 0, maxCombo: 0, platforms, player: initialPlayer(), score: 0 };
 }
 
 function initialPlayer(): Player {
@@ -374,15 +361,15 @@ function buildInitialPlatforms(seed: string) {
 }
 
 function createPlatform(previous: Platform | null, floor: number, seed: string): Platform {
-  const stage = Math.floor(floor / 12);
-  const width = clamp(58 - stage * 3.1 - seededNumber(seed, floor * 5) * 7, 19, 58);
-  const gap = clamp(10.8 + stage * 0.55 + seededNumber(seed, floor * 5 + 1) * 2.8, 10.8, 17.5);
+  const difficulty = towerDifficulty(floor, 0);
+  const width = towerPlatformWidth(floor, seededNumber(seed, floor * 5));
+  const gap = towerPlatformGap(floor, seededNumber(seed, floor * 5 + 1));
   const previousCenter = previous ? previous.x + previous.width / 2 : 50;
-  const reach = clamp(24 + stage * 0.7, 24, 36);
-  const offset = (seededNumber(seed, floor * 5 + 2) - 0.5) * reach * 2;
+  const alternate = floor % 2 === 0 ? -1 : 1;
+  const offset = alternate * (10 + seededNumber(seed, floor * 5 + 2) * Math.min(18, 11 + difficulty.level));
   const x = clamp(previousCenter + offset - width / 2, 3.5, 96.5 - width);
   const driftRoll = seededNumber(seed, floor * 5 + 3);
-  const drift = floor >= 40 && floor % 4 === 0 ? (driftRoll > 0.5 ? 1 : -1) * (0.025 + stage * 0.002) : 0;
+  const drift = floor >= 18 && floor % difficulty.movingEvery === 0 ? (driftRoll > 0.5 ? 1 : -1) * (0.026 + difficulty.level * 0.003) : 0;
   return { drift, floor, id: `floor-${floor}`, width, x, y: (previous?.y ?? 2) - gap };
 }
 
@@ -397,20 +384,6 @@ function movePlatform(platform: Platform, scroll: number): Platform {
   return { ...platform, drift, x, y: platform.y + scroll };
 }
 
-function towerScrollSpeed(floor: number, elapsed: number) {
-  if (floor < 5) return 0;
-  const timePressure = Math.floor(elapsed / 30000) * 0.006;
-  const floorPressure = Math.floor(floor / 15) * 0.003;
-  return clamp(0.012 + timePressure + floorPressure, 0.012, 0.105);
-}
-
-function towerZone(floor: number) {
-  if (floor < 25) return "Ice Cellar";
-  if (floor < 50) return "Crystal Hall";
-  if (floor < 75) return "Moon Keep";
-  return "Void Crown";
-}
-
 function playerAnimationFrame(player: Player, landedAt: number) {
   if (Date.now() - landedAt < 120 && player.grounded) return 5;
   if (player.vy < -0.2) return 3;
@@ -423,21 +396,22 @@ function percentPosition(x: number, y: number) {
   return { left: `${x}%` as DimensionValue, top: `${y}%` as DimensionValue };
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
 const styles = StyleSheet.create({
   background: { flex: 1, overflow: "hidden" },
   backgroundShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(3,8,28,0.14)" },
   body: { color: "#dce9ff", fontSize: 15, fontWeight: "700", lineHeight: 22, textAlign: "center" },
   closeButton: { alignItems: "center", backgroundColor: "#f8fbff", borderRadius: 10, height: 44, justifyContent: "center", width: 44 },
   closeText: { color: "#0b1638", fontSize: 24, fontWeight: "900" },
-  controlButton: { alignItems: "center", backgroundColor: "rgba(7,17,50,0.78)", borderColor: "rgba(125,211,252,0.78)", borderRadius: 999, borderWidth: 2, height: 58, justifyContent: "center", width: 58 },
-  controlButtonText: { color: "#eff8ff", fontSize: 44, fontWeight: "900", lineHeight: 47 },
+  chargeFill: { backgroundColor: "#facc15", borderRadius: 999, height: "100%" },
+  chargeTrack: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 999, bottom: 18, height: 7, left: "30%", overflow: "hidden", position: "absolute", width: "40%", zIndex: 22 },
   controlHint: { alignSelf: "center", backgroundColor: "rgba(4,12,38,0.72)", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, position: "absolute", top: 8, zIndex: 8 },
   controlHintText: { color: "#dce9ff", fontSize: 11, fontWeight: "900" },
-  controls: { alignItems: "center", bottom: 14, flexDirection: "row", justifyContent: "space-between", left: 14, position: "absolute", right: 14, zIndex: 12 },
+  controlHalf: { bottom: 0, justifyContent: "flex-end", paddingBottom: 32, position: "absolute", top: 0, width: "50%", zIndex: 20 },
+  controlHalfLeft: { alignItems: "flex-start", left: 0, paddingLeft: 18 },
+  controlHalfPressed: { backgroundColor: "rgba(93,217,255,0.09)" },
+  controlHalfRight: { alignItems: "flex-end", paddingRight: 18, right: 0 },
+  controlSideText: { color: "rgba(239,248,255,0.64)", fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
+  controls: { ...StyleSheet.absoluteFillObject, zIndex: 20 },
   difficultyChip: { backgroundColor: "rgba(103,65,217,0.28)", borderColor: "rgba(167,139,250,0.8)", borderRadius: 999, borderWidth: 1, color: "#ede9fe", fontSize: 11, fontWeight: "900", paddingHorizontal: 9, paddingVertical: 6 },
   difficultyRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "center" },
   game: { flex: 1 },
@@ -446,8 +420,6 @@ const styles = StyleSheet.create({
   hudChip: { alignItems: "center", backgroundColor: "rgba(93,217,255,0.1)", borderColor: "rgba(93,217,255,0.35)", borderRadius: 999, borderWidth: 1, flex: 1, justifyContent: "center", paddingHorizontal: 7 },
   hudChipActive: { backgroundColor: "rgba(250,204,21,0.2)", borderColor: "#facc15" },
   hudText: { color: "#f8fbff", fontSize: 12, fontWeight: "900" },
-  jumpButton: { alignItems: "center", backgroundColor: "rgba(234,179,8,0.88)", borderColor: "#fef08a", borderRadius: 999, borderWidth: 2, height: 64, justifyContent: "center", width: 82 },
-  jumpButtonText: { color: "#1d1733", fontSize: 14, fontWeight: "900" },
   meta: { color: "#9fb4dd", fontSize: 12, fontWeight: "800" },
   panel: { alignItems: "center", alignSelf: "center", backgroundColor: "rgba(7,19,48,0.94)", borderColor: "#5dd9ff", borderRadius: 16, borderWidth: 1, gap: 14, margin: 16, maxWidth: 520, padding: 20 },
   panelTitle: { color: "#f8fbff", fontSize: 26, fontWeight: "900", textAlign: "center" },

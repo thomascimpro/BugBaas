@@ -65,7 +65,7 @@ export function BugGlideGame({ onBack, onResult, ranked = false, seed, user }: P
   const yRef = useRef(48);
   const vxRef = useRef(0);
   const vyRef = useRef(0);
-  const skySizeRef = useRef({ height: 1, width: 1 });
+  const skySizeRef = useRef({ height: 640, width: referenceSkyWidth });
   const gameScaleRef = useRef(1);
   const shieldUntilRef = useRef(0);
   const windUntilRef = useRef(0);
@@ -150,11 +150,12 @@ export function BugGlideGame({ onBack, onResult, ranked = false, seed, user }: P
   }
 
   function movePlayer(now: number) {
+    const minPlayerX = minimumGlidePlayerX(skySizeRef.current.width, gameScaleRef.current);
     vxRef.current = clamp(vxRef.current * 0.91, -maxHorizontalSpeed, maxHorizontalSpeed);
     vyRef.current = clamp(vyRef.current * 0.94 + gravity, -maxVerticalSpeed, maxVerticalSpeed);
-    xRef.current = Math.max(5, Math.min(maxPlayerX, xRef.current + vxRef.current));
+    xRef.current = Math.max(minPlayerX, Math.min(maxPlayerX, xRef.current + vxRef.current));
     yRef.current = Math.max(10, Math.min(82, yRef.current + vyRef.current));
-    if (xRef.current <= 5 || xRef.current >= maxPlayerX) vxRef.current *= -0.3;
+    if (xRef.current <= minPlayerX || xRef.current >= maxPlayerX) vxRef.current *= -0.3;
     if (yRef.current <= 10) vyRef.current = Math.max(0.8, vyRef.current * -0.2);
     if (yRef.current >= 82) vyRef.current = Math.min(0, vyRef.current * -0.35);
     setX(xRef.current);
@@ -349,6 +350,7 @@ export function BugGlideGame({ onBack, onResult, ranked = false, seed, user }: P
             <HudChip active={tailwind} icon={tailwind ? "↯" : "🔥"} label={tailwind ? "Wind" : `${streak}x`} />
           </View>
           <Pressable
+            accessibilityLabel="Bug Glide playfield"
             style={styles.sky}
             onLayout={updateSkyLayout}
             onPress={tapSky}
@@ -373,7 +375,7 @@ export function BugGlideGame({ onBack, onResult, ranked = false, seed, user }: P
             <View style={styles.squadOverlay}><ArcadeSquadAssist compact label={`Squad ${squadAssist.activeCount}/3`} user={user} /></View>
             {entities.map((entity) => <EntityView key={entity.id} entity={entity} scale={gameScale} />)}
             {tapPulses.map((pulse) => <View key={pulse.id} pointerEvents="none" style={[styles.tapPulse, { left: `${pulse.x}%`, top: `${pulse.y}%` }]} />)}
-            <View pointerEvents="none" style={[styles.player, { left: `${x}%`, top: `${y}%`, transform: [{ scale: gameScale }] }]}>
+            <View accessibilityLabel="Bug Glide character" accessible pointerEvents="none" style={[styles.player, { left: `${x}%`, top: `${y}%`, transform: [{ scale: gameScale }] }]}>
               <LifePips current={hearts} max={maxHearts} />
               <BeeSprite direction={beeDirection} frame={beeFrame} />
               {shield && <Image accessibilityIgnoresInvertColors resizeMode="contain" source={shieldEffectImage} style={styles.playerShield} />}
@@ -482,6 +484,12 @@ function gameScaleForSkyWidth(width: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+export function minimumGlidePlayerX(width: number, scale: number): number {
+  const safeWidth = Math.max(1, width);
+  const playerRadius = playerHitboxPx * clamp(scale, minGameScale, maxGameScale) / 2;
+  return clamp(((leftControlStripWidth + playerRadius + 6) / safeWidth) * 100, 10, 24);
 }
 
 const styles = StyleSheet.create({

@@ -184,15 +184,15 @@ service cloud.firestore {
     }
 
     function validArcadeMode(mode) {
-      return mode in ['web_runner', 'nest_defense', 'bug_glide', 'bug_tower'];
+      return mode in ['web_runner', 'nest_defense', 'bug_glide', 'bug_tower', 'bubble_swarm'];
     }
 
     function validArcadeResultMode(mode) {
-      return validArcadeMode(mode) || mode == 'bubble_swarm';
+      return validArcadeMode(mode);
     }
 
     function validDuelMode(mode) {
-      return mode in ['tap_duel', 'web_runner', 'nest_defense', 'bug_glide', 'bug_tower'];
+      return mode in ['tap_duel', 'web_runner', 'nest_defense', 'bug_glide', 'bug_tower', 'bubble_swarm'];
     }
 
     function isTaggedTapDuel(data) {
@@ -207,16 +207,16 @@ service cloud.firestore {
       return data.keys().hasAny(['arcadeMode']) && validArcadeMode(data.arcadeMode);
     }
 
-    function validRankedBugTowerRun(mode) {
+    function validRankedArcadeRun(mode) {
       let data = request.resource.data;
       let hasRankedContext = data.keys().hasAny(['duelId', 'ranked']);
       return !hasRankedContext
-        || (mode == 'bug_tower'
+        || (validArcadeMode(mode)
           && data.keys().hasAll(['duelId', 'ranked'])
           && data.duelId is string
           && data.ranked == true
           && exists(/databases/$(database)/documents/bugSmashDuels/$(data.duelId))
-          && get(/databases/$(database)/documents/bugSmashDuels/$(data.duelId)).data.arcadeMode == 'bug_tower'
+          && get(/databases/$(database)/documents/bugSmashDuels/$(data.duelId)).data.arcadeMode == mode
           && (get(/databases/$(database)/documents/bugSmashDuels/$(data.duelId)).data.fromUserId == request.auth.uid
             || get(/databases/$(database)/documents/bugSmashDuels/$(data.duelId)).data.toUserId == request.auth.uid)
           && get(/databases/$(database)/documents/bugSmashDuels/$(data.duelId)).data.scores.keys().hasAny([request.auth.uid])
@@ -226,7 +226,7 @@ service cloud.firestore {
     function validArcadeRunData(mode) {
       return validArcadeResultMode(mode)
         && request.resource.data.keys().hasOnly(['combo', 'duelId', 'durationMs', 'hits', 'localHighScore', 'mode', 'pickups', 'ranked', 'score', 'streak', 'timestamp', 'userId'])
-        && validRankedBugTowerRun(mode)
+        && validRankedArcadeRun(mode)
         && request.resource.data.mode == mode
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.score is int

@@ -1,5 +1,10 @@
 # Decisions
 
+- Bug Tower gebruikt twee onzichtbare schermhelften als enige besturing: vasthouden bouwt horizontale snelheid en sprongkracht op, loslaten activeert de sprong. Tilt en losse jumpknoppen zijn verwijderd.
+- Tower-moeilijkheid stijgt in acht zichtbare niveaus met afwisselend links/rechts geplaatste, smallere platforms, grotere gaten, eerdere platformbeweging en snellere scroll.
+- Bubble Swarm gebruikt een hex-grid met match-3, unsupported-cluster drops en pressure rows; individuele ronde bugbubbel-assets blijven de visuele eenheid op mobiel en desktop.
+- Bubble Swarm Ranked gebruikt dezelfde duel-seed, score-submit en geverifieerde Arcade-runcontext als andere ranked games; Train schrijft geen ranked resultaat.
+- De linker Bug Glide-strook blijft volledig klikbaar, maar de minimale characterpositie wordt uit strookbreedte, hitbox en schermschaal berekend.
 - De webversie hergebruikt exact dezelfde Expo/React Native-gamecode; Sites host de export in een responsive shell, zodat Android niet wordt geforkt of gebroken.
 - Strava OAuth-codewisseling gebeurt uitsluitend server-side. Access- en refresh-tokens worden AES-GCM-versleuteld in D1 en activiteiten worden per Strava-ID ontdubbeld.
 - Sites controleert ieder Strava API-verzoek met het Firebase ID-token van de ingelogde BugBaas-gebruiker; kilometerstanden blijven daarna via de bestaande profieltransactie lopen.
@@ -13,9 +18,8 @@
 - De vaste linker Bug Glide-strook is een actieve stuurzone: taps lopen door naar dezelfde physics-handler en geven daardoor een duidelijke impuls naar rechts.
 - Ranked-inactiviteit wordt client-side bij Arena-open verwerkt: 5 Duel rating per volledig gemiste lokale kalenderdag, nooit lager dan 1000 en met een dagcheckpoint tegen dubbele decay.
 - Bug Tower gebruikt originele BugBaas-assets en retro arcadefeedback; originele Icy Tower-sprites, muziek en samples worden niet gekopieerd.
-- Alleen Bug Tower-ranked breidt het bestaande Arcade-resultaat uit met `ranked` en `duelId`; de vier bestaande gamerecords behouden hun huidige schema en aanroep.
-- Tiltbesturing gebruikt de bestaande Android native module met gravity/accelerometer en geen nieuwe dependency; zichtbare links/rechtsknoppen blijven beschikbaar als sensorfallback.
-- Een Bug Tower-run wordt uiteindelijk onhoudbaar door tijd- en floor-gebonden scrollversnelling, terwijl platformbreedte, gaten en beweging per hoogteband moeilijker worden.
+- Alle ranked Arcade-games schrijven `ranked` en `duelId`; Firestore vergelijkt mode, deelnemer en ingediende duelscore voordat het runrecord wordt geaccepteerd.
+- Een Bug Tower-run wordt uiteindelijk onhoudbaar door tijd- en floor-gebonden scrollversnelling, terwijl platformbreedte, gaten en beweging per acht floors duidelijk moeilijker worden.
 - BugDex-achievements tellen unieke bugs uit `bugdexUnlocks`; inventory blijft alleen de bron voor actueel bezit en actieve squads.
 - Ranked minigames mogen vóór het resultaat niet via de UI of Android-back worden verlaten.
 - BugBaas gebruikt Android `appCategory=game`, zodat de bestaande portraitrestrictie op Android 16-tablets van toepassing blijft zonder de mobiele flow te wijzigen.

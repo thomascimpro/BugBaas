@@ -1,6 +1,6 @@
 {
   "name": "bugbaas",
-  "version": "2.10.1",
+  "version": "2.10.2",
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
@@ -12,6 +12,8 @@
     "apk:release": "cd android && gradlew.bat :app:assembleRelease --console=plain",
     "apk:fast": "cd android && gradlew.bat :app:assembleRelease --console=plain -Pandroid.enableMinifyInReleaseBuilds=false -Pandroid.enableShrinkResourcesInReleaseBuilds=false -Pandroid.enablePngCrunchInReleaseBuilds=false",
     "typecheck": "tsc --noEmit",
+    "test:arcade": "node scripts/test_arcade_gameplay.mjs",
+    "test:arcade:web": "node scripts/playtest_arcade_web.mjs",
     "seed:cimpro-org": "node scripts/seed_cimpro_organization.mjs",
     "season:close-duel": "node scripts/close_duel_season.mjs",
     "wiki:deploy": "npx netlify-cli deploy --dir bugbaas-wiki",

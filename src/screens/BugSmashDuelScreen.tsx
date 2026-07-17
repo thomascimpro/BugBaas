@@ -1681,7 +1681,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       void saveArcadeRunResult(
         user.uid,
         result,
-        result.mode === "bug_tower" ? { duelId: savedDuel.id, ranked: true } : undefined
+        { duelId: savedDuel.id, ranked: true }
       ).catch(() => undefined);
     } catch {
       await removePendingDuelScore(user.uid, activeDuel.id).catch(() => undefined);
@@ -1737,6 +1737,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     if (activeArcadeMode === "nest_defense") return <NestDefenseGame {...commonProps} />;
     if (activeArcadeMode === "bug_glide") return <BugGlideGame {...commonProps} />;
     if (activeArcadeMode === "bug_tower") return <BugTowerGame {...commonProps} />;
+    if (activeArcadeMode === "bubble_swarm") return <BubbleSwarmGame {...commonProps} />;
   }
 
   if (fullscreenGame && gameDuel) {
@@ -1898,10 +1899,12 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 onTrain={() => { setArcadeTrainingMode(true); setArenaMode("bug_tower"); }}
               />
               <ArcadeModeCard
+                actionLabel="Ranked"
                 active={false}
                 image={bubbleSwarmImage}
                 title={t("arcade.bubbleSwarm.title")}
-                onPress={() => { setArcadeTrainingMode(false); setArenaMode("bubble_swarm"); }}
+                onPress={() => confirmRankedStart(() => { void startRandomChallenge("bubble_swarm"); })}
+                onTrain={() => { setArcadeTrainingMode(true); setArenaMode("bubble_swarm"); }}
               />
             </View>
             <View style={styles.arenaUtilityRow}>
@@ -3751,6 +3754,7 @@ function duelGameLabel(duel: BugSmashDuel, t: (key: string, params?: Record<stri
   if (duel.arcadeMode === "nest_defense") return t("arcade.nestDefense.title");
   if (duel.arcadeMode === "bug_glide") return t("arcade.bugGlide.title");
   if (duel.arcadeMode === "bug_tower") return t("arcade.bugTower.title");
+  if (duel.arcadeMode === "bubble_swarm") return t("arcade.bubbleSwarm.title");
   return t("arcade.tapDuel.title");
 }
 
@@ -3759,6 +3763,7 @@ function isDuelParticipant(duel: BugSmashDuel, user: User) {
 }
 
 function ArcadeModeCard({
+  actionLabel = "Start",
   active,
   artRect,
   image,
@@ -3766,6 +3771,7 @@ function ArcadeModeCard({
   onPress,
   onTrain
 }: {
+  actionLabel?: string;
   active: boolean;
   artRect?: SpriteRect;
   image?: ImageSourcePropType;
@@ -3789,7 +3795,7 @@ function ArcadeModeCard({
       </View>
       <View style={styles.arcadeActionRow}>
         <Pressable style={styles.arcadeStatusPill} onPress={onPress}>
-          <Text style={styles.arcadeStatusText}>Start</Text>
+          <Text style={styles.arcadeStatusText}>{actionLabel}</Text>
         </Pressable>
         {onTrain ? (
           <Pressable style={[styles.arcadeStatusPill, styles.arcadeTrainPill]} onPress={onTrain}>

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.10.2
+
+- Bug Tower gebruikt geen tilt meer: houd de linker- of rechter schermhelft vast om te rennen en laat los om te springen; langer vasthouden geeft een hogere sprong.
+- Bug Tower-platforms wisselen duidelijker links/rechts, worden per moeilijkheidsniveau kleiner, krijgen grotere gaten en gaan eerder bewegen en sneller scrollen.
+- Bubble Swarm is gepolijst tot een klassieke bubble shooter met ronde bugbubbels, match-3 pops, vallende losse clusters, aim/release-besturing en drukrijen.
+- Bubble Swarm heeft nu afzonderlijke `Ranked`- en `Train`-knoppen en gebruikt dezelfde beveiligde duelresultaatflow als de andere Arcade-games.
+- De klikbare linker stuurstrook van Bug Glide blijft bereikbaar, terwijl het character er fysiek niet meer in kan komen.
+- Firestore-regels accepteren en verifiÃ«ren Bubble Swarm-duels en ranked Arcade-resultaten; de regels zijn live gedeployed.
+- Deterministische gameplaytests en Chromium-playtests voor mobiel en desktop toegevoegd.
+
 ## 2.10.1
 
 - Volledige webversie toegevoegd voor pc, iPhone en iPad, gehost via Sites met dezelfde gamecode als Android.
