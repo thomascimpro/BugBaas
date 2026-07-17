@@ -15,16 +15,16 @@ type Props = {
 const jarImage = require("../../assets/generated/bug-squad-empty-jar-hd.png");
 
 const rarityColors: Record<BugDexRarity, string> = {
-  Gewoon: "#6f7f5f",
-  Zeldzaam: "#15724f",
-  Episch: "#356d7c",
-  Legendarisch: "#b83227",
-  Mythisch: "#7c3aed"
+  Gewoon: "#2f9e44",
+  Zeldzaam: "#228be6",
+  Episch: "#9c36b5",
+  Legendarisch: "#f59f00",
+  Mythisch: "#ef4444"
 };
 
 export function BugJarArt({ bugId, rarity = "Gewoon", size = 88, style, unlocked = true }: Props) {
   const color = rarityColors[rarity];
-  const bugSize = Math.round(size * 0.58);
+  const bugSize = Math.round(size * 0.46);
 
   return (
     <View style={[styles.wrap, { height: size, width: size }, style]}>
@@ -35,7 +35,7 @@ export function BugJarArt({ bugId, rarity = "Gewoon", size = 88, style, unlocked
         {unlocked && bugId ? (
           <>
             {rarity === "Mythisch" && <MythicRarityFrame size={Math.round(size * 0.9)} style={styles.mythicFrame} />}
-            <BugArtImage bugId={bugId} size={bugSize} style={styles.bug} />
+            <BugArtImage bugId={bugId} size={bugSize} style={[styles.bug, { bottom: Math.round(size * 0.24) }]} />
           </>
         ) : (
           <Text style={styles.locked}>?</Text>
@@ -88,6 +88,7 @@ const styles = StyleSheet.create({
     zIndex: 2
   },
   bug: {
+    position: "absolute",
     zIndex: 3
   },
   locked: {

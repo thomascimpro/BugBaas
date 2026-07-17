@@ -10,7 +10,25 @@ android/app/build/
 android/app/*.jks
 android/app/*release*.keystore
 android/app/upload-keystore.properties
+# Build outputs and release artifacts
 release/*.apk
+dist/
+*.apk
+*.aab
+
+# Local/generated source assets that must not be bundled or committed accidentally
+assets/**/*.zip
+assets/**/*.fbx
+assets/**/*.blend
+assets/**/*.psd
+assets/**/*.ai
+assets/**/*.mp4
+assets/**/Models/
+assets/**/Vector/
+assets/**/Spritesheet/
+assets/**/Previews/
+assets/**/Thumbs.db
+
 *.log
 *.hprof
 *.tmp

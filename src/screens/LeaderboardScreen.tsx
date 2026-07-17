@@ -5,9 +5,12 @@ import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { LastCatchSummary, LeaderboardRow } from "../components/LeaderboardRow";
 import { MedalIcon } from "../components/MedalIcon";
 import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
-import { useI18n } from "../services/i18n";
+import { bugDexEntryName, useI18n } from "../services/i18n";
+import { BugDexRarity } from "../services/pointsService";
 import { defaultOrganizationId, organizationIdsForUser, organizationNamesForUser } from "../services/organizationService";
-import { listUsers } from "../services/userService";
+import { presenceLabel } from "../services/presenceService";
+import { currentDuelSeasonId, duelSeasonEndLabel, duelSeasonRank, duelSeasonRewardForRank, effectiveDuelRating, getDuelSeasonSummary } from "../services/duelSeasonService";
+import { listLeaderboardUsers } from "../services/userService";
 import { User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
@@ -24,9 +27,30 @@ const podiumStyles = [
 ];
 type RankingMode = "score" | "duel";
 
+const seasonRewardBadges = [
+  { color: "#f59f00", label: "#1 ★★★★" },
+  { color: "#9c36b5", label: "#2 ★★★ ×2" },
+  { color: "#9c36b5", label: "#3 ★★★" },
+  { color: "#228be6", label: "#4 ★★" },
+  { color: "#228be6", label: "#5 ★★" }
+];
+
+const seasonRewardVisuals = {
+  Zeldzaam: { color: "#228be6", stars: "★★" },
+  Episch: { color: "#9c36b5", stars: "★★★" },
+  Legendarisch: { color: "#f59f00", stars: "★★★★" }
+};
+
+const rarityVisuals: Record<BugDexRarity, { color: string; stars: string }> = {
+  Gewoon: { color: "#2f9e44", stars: "★" },
+  Zeldzaam: { color: "#228be6", stars: "★★" },
+  Episch: { color: "#9c36b5", stars: "★★★" },
+  Legendarisch: { color: "#f59f00", stars: "★★★★" },
+  Mythisch: { color: "#ef4444", stars: "★★★★★" }
+};
+
 function duelRating(user: User): number {
-  const rating = Math.round(user.duelRating ?? 1000);
-  return Number.isFinite(rating) ? Math.max(100, rating) : 1000;
+  return effectiveDuelRating(user);
 }
 
 export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }: Props) {
@@ -34,8 +58,10 @@ export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }
   const [users, setUsers] = useState<User[]>([]);
   const [lastCatches, setLastCatches] = useState<Record<string, LastCatchSummary>>({});
   const [loading, setLoading] = useState(true);
+  const [lastSeasonWinner, setLastSeasonWinner] = useState("");
   const [organizationPickerOpen, setOrganizationPickerOpen] = useState(false);
-  const [rankingMode, setRankingMode] = useState<RankingMode>("score");
+  const [seasonOpen, setSeasonOpen] = useState(false);
+  const [rankingMode, setRankingMode] = useState<RankingMode>("duel");
   const [selectedOrganizationId, setSelectedOrganizationId] = useState(defaultOrganizationId);
   const organizationIds = organizationIdsForUser(currentUser);
   const organizationNames = organizationNamesForUser(currentUser);
@@ -48,16 +74,20 @@ export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }
     ? users
     : users.filter((item) => organizationIdsForUser(item).includes(selectedOrganizationId));
   const visibleUsers = [...filteredUsers].sort((a, b) => rankingMode === "duel" ? duelRating(b) - duelRating(a) : b.totalPoints - a.totalPoints);
+  const ownDuelRank = duelSeasonRank(filteredUsers, currentUser.uid, currentDuelSeasonId());
+  const ownSeasonReward = ownDuelRank ? duelSeasonRewardForRank(ownDuelRank) : null;
   const metricLabel = rankingMode === "duel" ? t("leader.duelRating") : t("leader.score");
   const metricValue = (user: User) => rankingMode === "duel" ? duelRating(user) : user.totalPoints;
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const nextUsers = await listUsers();
-      const catchPairs = await Promise.all(nextUsers.map(async (item) => [item.uid, await latestCatchForUser(item)] as const));
+      const [nextUsers, previousSeason] = await Promise.all([listLeaderboardUsers(), getDuelSeasonSummary().catch(() => null)]);
+      const catchUsers = nextUsers;
+      const catchPairs = await Promise.all(catchUsers.map(async (item) => [item.uid, await latestCatchForUser(item)] as const));
       if (!active) return;
       setUsers(nextUsers);
+      setLastSeasonWinner(previousSeason?.top5[0]?.displayName ?? "");
       setLastCatches(Object.fromEntries(catchPairs.filter((item): item is readonly [string, LastCatchSummary] => Boolean(item[1]))));
       setLoading(false);
     }
@@ -110,8 +140,33 @@ export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }
           )}
         </View>
       )}
+      <View style={styles.seasonCard}>
+        <Pressable style={styles.seasonHeaderRow} onPress={() => setSeasonOpen((current) => !current)}>
+          <View style={styles.seasonHeaderText}>
+            <Text style={styles.seasonTitle}>Maandelijkse Duel Season</Text>
+            <Text style={styles.seasonMeta}>Eindigt: {duelSeasonEndLabel()} · jij {ownDuelRank ? `#${ownDuelRank}` : "-"}</Text>
+          </View>
+          <Text style={styles.seasonDropdownIcon}>{seasonOpen ? "▲" : "▼"}</Text>
+        </Pressable>
+        {seasonOpen && (
+          <View style={styles.seasonDetails}>
+            <Text style={styles.seasonRule}>Alleen ranked/random duels tellen mee. Na maandafsluiting reset iedereen naar 1000.</Text>
+            <View style={styles.seasonRewardRow}>
+              {seasonRewardBadges.map((reward) => (
+                <View key={reward.label} style={[styles.seasonRewardChip, { borderColor: reward.color }]}>
+                  <Text style={[styles.seasonRewardChipText, { color: reward.color }]}>{reward.label}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.seasonOwnReward}>
+              Mogelijke reward: {ownSeasonReward ? `${seasonRewardVisuals[ownSeasonReward.rarity].stars}${ownSeasonReward.count > 1 ? ` ×${ownSeasonReward.count}` : ""}` : "geen top 5 reward"}
+            </Text>
+            {lastSeasonWinner ? <Text style={styles.seasonMeta}>Vorige winnaar: {lastSeasonWinner}</Text> : null}
+          </View>
+        )}
+      </View>
       <View style={styles.rankModeRow}>
-        {(["score", "duel"] as RankingMode[]).map((mode) => {
+        {(["duel", "score"] as RankingMode[]).map((mode) => {
           const active = rankingMode === mode;
           return (
             <Pressable key={mode} style={[styles.rankModeButton, active && styles.rankModeButtonActive]} onPress={() => setRankingMode(mode)}>
@@ -124,7 +179,7 @@ export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }
         <FlatList
           data={visibleUsers.slice(3)}
           keyExtractor={(user) => user.uid}
-          ListHeaderComponent={visibleUsers.length ? <Podium metricLabel={metricLabel} metricValue={metricValue} users={visibleUsers.slice(0, 3)} onSelectUser={onSelectUser} /> : null}
+          ListHeaderComponent={visibleUsers.length ? <Podium lastCatches={lastCatches} metricLabel={metricLabel} metricValue={metricValue} users={visibleUsers.slice(0, 3)} onSelectUser={onSelectUser} /> : null}
           ListEmptyComponent={visibleUsers.length ? null : <Text style={sharedStyles.subtitle}>{t("leaderboard.empty")}</Text>}
           renderItem={({ item, index }) => <LeaderboardRow metricLabel={metricLabel} metricValue={metricValue(item)} user={item} lastCatch={lastCatches[item.uid]} index={index + 3} onPress={() => onSelectUser(item)} />}
           contentContainerStyle={styles.listContent}
@@ -153,11 +208,15 @@ async function latestCatchForUser(user: User): Promise<LastCatchSummary | null> 
   }
 }
 
-function Podium({ metricLabel, metricValue, users, onSelectUser }: { metricLabel: string; metricValue: (user: User) => number; users: User[]; onSelectUser: (user: User) => void }) {
+function Podium({ lastCatches, metricLabel, metricValue, users, onSelectUser }: { lastCatches: Record<string, LastCatchSummary>; metricLabel: string; metricValue: (user: User) => number; users: User[]; onSelectUser: (user: User) => void }) {
+  const { t } = useI18n();
   return (
     <View style={styles.podium}>
       {users.map((user, index) => {
         const medal = podiumStyles[index] ?? podiumStyles[0];
+        const lastCatch = lastCatches[user.uid];
+        const lastCatchEntry = lastCatch ? entryByBugId(lastCatch.bugId) : null;
+        const rarityVisual = lastCatch ? rarityVisuals[lastCatch.rarity] : null;
         return (
           <Pressable key={user.uid} style={[styles.podiumCard, { backgroundColor: medal.background, borderColor: medal.border }, index === 0 && styles.podiumLeader]} onPress={() => onSelectUser(user)}>
             <View style={[styles.podiumShine, { backgroundColor: medal.shine }]} />
@@ -165,8 +224,24 @@ function Podium({ metricLabel, metricValue, users, onSelectUser }: { metricLabel
             <CharacterAvatarImage characterId={user.characterId} size={index === 0 ? 66 : 56} />
             <BugArtImage bugId={medal.bugId} size={index === 0 ? 42 : 34} />
             <Text style={[styles.podiumRank, { color: medal.text }]}>#{index + 1}</Text>
-            <Text adjustsFontSizeToFit ellipsizeMode="tail" minimumFontScale={0.72} numberOfLines={1} style={[styles.podiumName, index === 0 && styles.podiumLeaderName, { color: medal.text }]}>{user.displayName}</Text>
-            <Text style={styles.podiumPoints}>{metricValue(user)} {metricLabel}</Text>
+            <Text adjustsFontSizeToFit ellipsizeMode="tail" minimumFontScale={0.8} numberOfLines={1} style={[styles.podiumName, { color: medal.text }]}>{user.displayName}</Text>
+            <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={styles.podiumPoints}>{metricValue(user)} {metricLabel}</Text>
+            <View style={styles.podiumFooter}>
+              <Text ellipsizeMode="tail" numberOfLines={1} style={[styles.podiumPresence, { color: medal.text }]}>{presenceLabel(user, t)}</Text>
+              {lastCatch && lastCatchEntry && rarityVisual ? (
+                <View style={styles.podiumLastCatch}>
+                  <View style={[styles.podiumLastCatchBug, { borderColor: rarityVisual.color }]}>
+                    <BugArtImage bugId={lastCatch.bugId} size={22} />
+                  </View>
+                  <View style={styles.podiumLastCatchInfo}>
+                    <Text ellipsizeMode="tail" numberOfLines={1} style={[styles.podiumLastCatchText, { color: medal.text }]}>{bugDexEntryName(lastCatchEntry, t)}</Text>
+                    <Text numberOfLines={1} style={[styles.podiumRarityStars, { color: rarityVisual.color }]}>{rarityVisual.stars}</Text>
+                  </View>
+                </View>
+              ) : (
+                <Text ellipsizeMode="tail" numberOfLines={1} style={[styles.podiumLastCatchText, { color: medal.text }]}>{t("leader.noLastCatch")}</Text>
+              )}
+            </View>
           </Pressable>
         );
       })}
@@ -242,6 +317,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     color: "#15724f",
+    flexShrink: 0,
     fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
@@ -314,24 +390,156 @@ const styles = StyleSheet.create({
   podiumName: {
     color: "#17211c",
     flexShrink: 1,
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "900",
-    lineHeight: 23,
+    lineHeight: 20,
     marginTop: 2,
-    maxWidth: "100%"
+    maxWidth: "100%",
+    minWidth: 0,
+    textAlign: "center"
   },
   podiumLeaderName: {
-    fontSize: 24,
-    lineHeight: 28
+    fontSize: 16,
+    lineHeight: 20
   },
   podiumPoints: {
     color: "#52665d",
     fontSize: 11,
     fontWeight: "900",
-    marginTop: 3
+    marginTop: 3,
+    maxWidth: "100%",
+    textAlign: "center"
+  },
+  podiumFooter: {
+    alignItems: "center",
+    gap: 3,
+    marginTop: 7,
+    maxWidth: "100%"
+  },
+  podiumPresence: {
+    fontSize: 9,
+    fontWeight: "900",
+    opacity: 0.86
+  },
+  podiumLastCatch: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4,
+    maxWidth: "100%"
+  },
+  podiumLastCatchBug: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 7,
+    borderWidth: 2,
+    height: 28,
+    justifyContent: "center",
+    width: 28
+  },
+  podiumLastCatchInfo: {
+    flexShrink: 1,
+    minWidth: 0
+  },
+  podiumLastCatchText: {
+    flexShrink: 1,
+    fontSize: 9,
+    fontWeight: "900",
+    maxWidth: "100%",
+    opacity: 0.88
+  },
+  podiumRarityStars: {
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: -1,
+    lineHeight: 10
   },
   listContent: {
     paddingBottom: 120
+  },
+  seasonCard: {
+    backgroundColor: "#f7faf6",
+    borderColor: "#d7bd57",
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 7,
+    marginBottom: 10,
+    padding: 10
+  },
+  seasonHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10
+  },
+  seasonDetails: {
+    gap: 7,
+    paddingTop: 8
+  },
+  seasonDropdownIcon: {
+    color: "#d7bd57",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  seasonHeaderText: {
+    flex: 1,
+    minWidth: 0
+  },
+  seasonMeta: {
+    color: "#53645d",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 14
+  },
+  seasonOwnRankLabel: {
+    color: "#53645d",
+    fontSize: 9,
+    fontWeight: "900"
+  },
+  seasonOwnRankPill: {
+    alignItems: "center",
+    backgroundColor: "#102018",
+    borderColor: "#d7bd57",
+    borderRadius: 10,
+    borderWidth: 1,
+    minWidth: 54,
+    paddingHorizontal: 8,
+    paddingVertical: 5
+  },
+  seasonOwnRankValue: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  seasonOwnReward: {
+    color: "#102018",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  seasonRewardChip: {
+    backgroundColor: "#ffffff",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 3
+  },
+  seasonRewardChipText: {
+    fontSize: 10,
+    fontWeight: "900"
+  },
+  seasonRewardRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5
+  },
+  seasonRule: {
+    color: "#33443c",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 14
+  },
+  seasonTitle: {
+    color: "#102018",
+    fontSize: 16,
+    fontWeight: "900"
   },
   rankModeButton: {
     alignItems: "center",

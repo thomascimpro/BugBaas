@@ -1,10 +1,11 @@
-import { collection, doc, getDocs, onSnapshot, query, runTransaction, setDoc, updateDoc, where } from "firebase/firestore";
+import { collection, doc, getDocs, limit, onSnapshot, query, runTransaction, setDoc, updateDoc, where } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, TradeRequest, User } from "../types";
 import { entryByBugId, listBugDexInventory } from "./bugDexService";
 
 const demoTrades: TradeRequest[] = [];
 const maxTradeBugIdsPerSide = 6;
+const tradeListLimit = 50;
 
 function nowIso() {
   return new Date().toISOString();
@@ -59,8 +60,8 @@ export async function listTradeRequests(user: User): Promise<TradeRequest[]> {
     return mergeTradeLists(demoTrades.filter((trade) => trade.fromUserId === user.uid || trade.toUserId === user.uid));
   }
 
-  const fromSnapshot = await getDocs(query(collection(db, "trades"), where("fromUserId", "==", user.uid)));
-  const toSnapshot = await getDocs(query(collection(db, "trades"), where("toUserId", "==", user.uid)));
+  const fromSnapshot = await getDocs(query(collection(db, "trades"), where("fromUserId", "==", user.uid), limit(tradeListLimit)));
+  const toSnapshot = await getDocs(query(collection(db, "trades"), where("toUserId", "==", user.uid), limit(tradeListLimit)));
   return mergeTradeLists([...fromSnapshot.docs, ...toSnapshot.docs].map((item) => item.data() as TradeRequest));
 }
 
@@ -74,7 +75,7 @@ export function subscribeIncomingTradeRequestCount(user: User, onCount: (count: 
     return () => undefined;
   }
 
-  const incomingTradesQuery = query(collection(db, "trades"), where("toUserId", "==", user.uid), where("status", "==", "Open"));
+  const incomingTradesQuery = query(collection(db, "trades"), where("toUserId", "==", user.uid), where("status", "==", "Open"), limit(tradeListLimit));
   return onSnapshot(incomingTradesQuery, (snapshot) => {
     const trades = snapshot.docs.map((item) => item.data() as TradeRequest);
     onCount(countIncomingTradeRequestsForUser(trades, user.uid));
@@ -82,7 +83,7 @@ export function subscribeIncomingTradeRequestCount(user: User, onCount: (count: 
 }
 
 export async function createTradeRequest(fromUser: User, toUser: User, offerBugIdsInput: string[] | string, requestBugIdsInput: string[] | string): Promise<TradeRequest> {
-  if (fromUser.uid === toUser.uid) throw new Error("Kies een collega om mee te ruilen.");
+  if (fromUser.uid === toUser.uid) throw new Error("Kies een speler om mee te ruilen.");
   const offerBugIds = (Array.isArray(offerBugIdsInput) ? offerBugIdsInput : [offerBugIdsInput]).filter(Boolean);
   const requestBugIds = (Array.isArray(requestBugIdsInput) ? requestBugIdsInput : [requestBugIdsInput]).filter(Boolean);
   if (!offerBugIds.length || !requestBugIds.length) throw new Error("Kies bugs om te ruilen.");
@@ -99,7 +100,7 @@ export async function createTradeRequest(fromUser: User, toUser: User, offerBugI
   const requestCounts = aggregateBugIds(requestBugIds);
   for (const [bugId, amount] of requestCounts) {
     const requested = recipientInventory.find((item) => item.bugId === bugId);
-    if (!requested || ownedCount(requested) < amount) throw new Error("Deze collega heeft deze bug niet meer.");
+    if (!requested || ownedCount(requested) < amount) throw new Error("Deze speler heeft deze bug niet meer.");
   }
 
   const now = nowIso();

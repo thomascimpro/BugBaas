@@ -2,12 +2,24 @@
   "expo": {
     "name": "BugBaas",
     "slug": "bugbaas",
-    "version": "2.5.3",
+    "version": "2.10.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
-      "**/*"
+      "assets/*.png",
+      "assets/*.jpg",
+      "assets/badges/*.png",
+      "assets/bugdex/*.png",
+      "assets/generated/*.png",
+      "assets/generated/*.jpg",
+      "assets/leaderboard/*.png",
+      "assets/minigames/extracted/*.png",
+      "assets/buddy/kenney/emotes/*.png",
+      "assets/buddy/kenney/pets/*.png",
+      "assets/buddy/kenney/state/*.png",
+      "assets/buddy/kenney/ui/*.png",
+      "assets/buddy/kenney/extracted/ui-pack/PNG/Yellow/Default/*.png"
     ],
     "android": {
       "package": "nl.cimpro.bugbaas",

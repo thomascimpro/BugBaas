@@ -6,6 +6,7 @@ export type MovementRadarResult = {
   awarded: number;
   bugIds: BugArtId[];
   estimatedKm: number;
+  estimatedWeekKm?: number;
   reason?: string;
 };
 
@@ -31,6 +32,7 @@ export type MovementRadarProgress = {
   awardedToday: number;
   claimableRewards: number;
   dataTypes?: MovementDataTypeStatus[];
+  estimatedWeekKm?: number;
   goals: MovementRadarGoal[];
   maxRewards: number;
   reason?: string;

@@ -21,8 +21,11 @@ export type User = {
   duelDraws?: number;
   duelLosses?: number;
   duelRating?: number;
+  duelRatingDecayThroughDay?: string;
   duelRatingLastDuelId?: string;
   duelRatingUpdatedAt?: string;
+  duelSeasonId?: string;
+  duelSeasonResetAt?: string;
   duelWins?: number;
   nameSet?: boolean;
   helpSeen?: boolean;
@@ -147,6 +150,59 @@ export type BugDexUnlock = {
   sources: string[];
 };
 
+export type BugMasteryRank = "rookie" | "trained" | "skilled" | "veteran" | "elite" | "master";
+export type BugMasteryRole = "attack" | "speed" | "shield" | "chaos" | "support";
+export type BugMasterySkillKind = "active" | "master" | "passive";
+export type BugMasteryXpSource =
+  | "active_squad_duel"
+  | "active_squad_solo"
+  | "boss_defeat"
+  | "buddy_care"
+  | "duplicate_unlock"
+  | "duel_draw"
+  | "duel_reward"
+  | "duel_win"
+  | "movement_radar"
+  | "new_unlock"
+  | "skill_trigger"
+  | "walking";
+
+export type BugMasterySkill = {
+  id: string;
+  kind: BugMasterySkillKind;
+  role: BugMasteryRole;
+  unlockedAtLevel: 3 | 5 | 10 | 15 | 20;
+};
+
+export type BugMastery = {
+  bugId: string;
+  level: number;
+  xp: number;
+  lifetimeXp: number;
+  rank: BugMasteryRank;
+  role: BugMasteryRole;
+  unlockedSkillIds: string[];
+  selectedSkillIds?: string[];
+  activeUses: number;
+  duelUses: number;
+  soloUses: number;
+  walkedKm: number;
+  lastXpAt?: string;
+  lastTradeId?: string;
+  sourceTotals: Record<string, number>;
+  dailySourceTotals?: Record<string, number>;
+  updatedAt: string;
+};
+
+export type BugMasteryXpEvent = {
+  id: string;
+  amount: number;
+  bugId: string;
+  createdAt: string;
+  localDay: string;
+  source: BugMasteryXpSource;
+};
+
 export type NotificationType = "trade" | "new_bug" | "comment" | "bug_update" | "bugdex" | "movement" | "duel";
 
 export type NotificationSettings = Record<NotificationType, boolean>;
@@ -173,8 +229,14 @@ export type BugSmashDuelScore = {
   submittedAt: string;
 };
 
+export type ArcadeMode = "tap_duel" | "web_runner" | "nest_defense" | "bug_glide" | "bug_tower";
+
 export type BugSmashDuel = {
   id: string;
+  arcadeMode?: ArcadeMode;
+  claimedArcadeMode?: ArcadeMode;
+  arcadeSeed?: string;
+  arcadeVersion?: number;
   fromUserId: string;
   fromUserName: string;
   matchType?: "direct" | "random";
@@ -193,6 +255,19 @@ export type BugSmashDuel = {
   resultSeenBy?: string[];
   ratingAppliedAt?: string;
   ratingDeltas?: Record<string, number>;
+};
+
+export type ArcadeRunResult = {
+  mode: ArcadeMode;
+  score: number;
+  durationMs: number;
+  pickups: number;
+  hits: number;
+  combo: number;
+  streak: number;
+  timestamp: string;
+  localHighScore: number;
+  ratingPreview?: number;
 };
 
 export type TradeStatus = "Open" | "Geaccepteerd" | "Afgewezen" | "Geannuleerd";

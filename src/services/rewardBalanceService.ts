@@ -1,7 +1,7 @@
 export const dailyLoginXp = 5;
-export const duelLossXp = 5;
-export const duelWinXp = 10;
-export const movementRadarXpPerBug = 3;
+export const duelLossXp = 2.5;
+export const duelWinXp = 5;
+export const movementRadarXpPerBug = 8;
 export const weeklyMissionXp = 10;
 export const weeklyMissionBonusXp = 10;
 

@@ -1,19 +1,30 @@
-import { collection, doc, getDocs, onSnapshot, query, runTransaction, setDoc, where } from "firebase/firestore";
+import { collection, doc, getDocs, limit, onSnapshot, query, runTransaction, setDoc, where } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
-import { BugSmashDuel, BugSmashDuelScore, User } from "../types";
+import { ArcadeMode, BugSmashDuel, BugSmashDuelScore, User } from "../types";
+import { createArcadeSeed } from "./arcadeResultService";
+import { BugDexDropResult, grantBugDexReward, grantBugDexRewardInTransaction, pickBugDexRewardEntry, repairBugDexRewardInTransaction, writeBugDexUnlockBestEffort } from "./bugDexService";
 import { badgesForUser, bugDexEntries, titleForPoints } from "./pointsService";
 import { duelLossXp, duelWinXp } from "./rewardBalanceService";
 import { starterBoostedXp } from "./starterBoostService";
 
 const demoDuels = new Map<string, BugSmashDuel>();
-const demoDuelRewardEvents = new Set<string>();
+const demoDuelRewardEvents = new Map<string, { bugId?: string; minimumCount?: number; result: BugSmashDuelClaimResult["result"] }>();
 
 export const bugSmashDuelDurationMs = 30000;
 export const bugSmashDuelStartDelayMs = 5000;
 export const bugSmashDuelBugCount = 56;
-const randomDuelDailyLimit = 5;
 const defaultDuelRating = 1000;
 const minimumDuelRating = 100;
+const duelRatingDecayFloor = 1000;
+const duelRatingDecayPerDay = 5;
+const duelListLimit = 60;
+const openRandomDuelScoreTtlMs = 48 * 60 * 60 * 1000;
+const randomOpponentRepeatWindowMs = 15 * 60 * 1000;
+
+type CreateDuelOptions = {
+  arcadeMode?: ArcadeMode;
+  arcadeVersion?: number;
+};
 
 const scoreByRarity = {
   Gewoon: 1,
@@ -32,6 +43,23 @@ function localDayId(date = new Date()): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function localDayNumber(dayId: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayId);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const value = Date.UTC(year, month - 1, day);
+  const date = new Date(value);
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return Math.floor(value / 86400000);
+}
+
+function localDayIdFromNumber(dayNumber: number): string {
+  const date = new Date(dayNumber * 86400000);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 function makeId() {
@@ -57,6 +85,42 @@ function pickBugIds(seed: number): string[] {
     .map((item) => item.id);
 }
 
+function buildBugSmashDuel(params: {
+  fromUser: User;
+  id: string;
+  matchType: "direct" | "random";
+  options?: CreateDuelOptions;
+  seed: number;
+  startAt?: string;
+  toUser: Pick<User, "displayName" | "uid">;
+}): BugSmashDuel {
+  const arcadeMode = params.options?.arcadeMode ?? "tap_duel";
+  const arcadeVersion = params.options?.arcadeVersion ?? 1;
+  return {
+    id: params.id,
+    arcadeMode,
+    ...(arcadeMode !== "tap_duel" ? {
+      arcadeSeed: createArcadeSeed(arcadeMode, params.id, arcadeVersion),
+      arcadeVersion
+    } : {}),
+    fromUserId: params.fromUser.uid,
+    fromUserName: params.fromUser.displayName,
+    matchType: params.matchType,
+    toUserId: params.toUser.uid,
+    toUserName: params.toUser.displayName,
+    status: "pending",
+    seed: params.seed,
+    bugIds: pickBugIds(params.seed),
+    createdAt: nowIso(),
+    ...(params.startAt ? { startAt: params.startAt } : {}),
+    updatedAt: nowIso(),
+    durationMs: bugSmashDuelDurationMs,
+    scores: {},
+    rewardClaimedBy: [],
+    resultSeenBy: []
+  };
+}
+
 function duelRef(duelId: string) {
   return doc(db, "bugSmashDuels", duelId);
 }
@@ -65,9 +129,73 @@ function userRef(userId: string) {
   return doc(db, "users", userId);
 }
 
+export type BugSmashDuelClaimResult = {
+  result: "draw" | "loss" | "win";
+  rewardGranted: boolean;
+  alreadyClaimed: boolean;
+  repaired: boolean;
+  user: User;
+  drop?: BugDexDropResult;
+};
+
 export function duelRatingForUser(user: Pick<User, "duelRating">): number {
   const rating = Math.round(user.duelRating ?? defaultDuelRating);
   return Number.isFinite(rating) ? Math.max(minimumDuelRating, rating) : defaultDuelRating;
+}
+
+export type DuelRatingDecayResult = {
+  decayedBy: number;
+  missedDays: number;
+  user: User;
+};
+
+export function calculateDuelRatingDecay(user: User, now = new Date()): DuelRatingDecayResult {
+  const updatedAt = user.duelRatingUpdatedAt ? new Date(user.duelRatingUpdatedAt) : null;
+  if (!updatedAt || !Number.isFinite(updatedAt.getTime())) return { decayedBy: 0, missedDays: 0, user };
+
+  const rankedDay = localDayNumber(localDayId(updatedAt));
+  const today = localDayNumber(localDayId(now));
+  if (rankedDay === null || today === null) return { decayedBy: 0, missedDays: 0, user };
+
+  const processedDay = user.duelRatingDecayThroughDay ? localDayNumber(user.duelRatingDecayThroughDay) : null;
+  const baseDay = Math.max(rankedDay, processedDay ?? rankedDay);
+  const lastCompleteDay = today - 1;
+  const missedDays = Math.max(0, lastCompleteDay - baseDay);
+  const currentRating = duelRatingForUser(user);
+  if (currentRating <= duelRatingDecayFloor) return { decayedBy: 0, missedDays, user };
+  const nextRating = Math.max(duelRatingDecayFloor, currentRating - missedDays * duelRatingDecayPerDay);
+  const decayedBy = currentRating - nextRating;
+  if (missedDays === 0 || decayedBy === 0) return { decayedBy: 0, missedDays, user };
+
+  return {
+    decayedBy,
+    missedDays,
+    user: {
+      ...user,
+      duelRating: nextRating,
+      duelRatingDecayThroughDay: localDayIdFromNumber(lastCompleteDay)
+    }
+  };
+}
+
+export async function applyDuelRatingDecay(user: User, now = new Date()): Promise<DuelRatingDecayResult> {
+  if (!isFirebaseConfigured) return calculateDuelRatingDecay(user, now);
+
+  return runTransaction(db, async (transaction) => {
+    const reference = userRef(user.uid);
+    const snapshot = await transaction.get(reference);
+    if (!snapshot.exists()) return { decayedBy: 0, missedDays: 0, user };
+
+    const currentUser = snapshot.data() as User;
+    const result = calculateDuelRatingDecay(currentUser, now);
+    if (result.decayedBy > 0) {
+      transaction.update(reference, {
+        duelRating: result.user.duelRating,
+        duelRatingDecayThroughDay: result.user.duelRatingDecayThroughDay
+      });
+    }
+    return result;
+  });
 }
 
 function duelGamesPlayed(user: Pick<User, "duelWins" | "duelLosses" | "duelDraws">): number {
@@ -112,8 +240,8 @@ function shouldApplyRandomDuelRating(before: BugSmashDuel, after: BugSmashDuel):
     && after.toUserId !== "random";
 }
 
-function duelDailyRewardEventId(opponentId: string, day = localDayId()) {
-  return `duel-daily-${day}-${encodeURIComponent(opponentId)}`;
+function duelRewardEventId(duelId: string, userId: string) {
+  return `duel-${encodeURIComponent(duelId)}-${encodeURIComponent(userId)}`;
 }
 
 function duelOpponentId(duel: BugSmashDuel, user: User) {
@@ -122,6 +250,14 @@ function duelOpponentId(duel: BugSmashDuel, user: User) {
 
 function isParticipant(duel: BugSmashDuel, user: User) {
   return duel.fromUserId === user.uid || duel.toUserId === user.uid;
+}
+
+function duelResultForUser(duel: BugSmashDuel, userId: string): BugSmashDuelClaimResult["result"] {
+  const fromScore = duel.scores?.[duel.fromUserId]?.score;
+  const toScore = duel.scores?.[duel.toUserId]?.score;
+  const completedDraw = typeof fromScore === "number" && typeof toScore === "number" && fromScore === toScore;
+  if (completedDraw || !duel.winnerId) return "draw";
+  return duel.winnerId === userId ? "win" : "loss";
 }
 
 function isActiveDuelBetween(duel: BugSmashDuel, firstUserId: string, secondUserId: string) {
@@ -134,31 +270,80 @@ function duelCreatedToday(duel: BugSmashDuel, day = localDayId()): boolean {
   return localDayId(new Date(duel.createdAt)) === day;
 }
 
-function isRandomDuelTodayForUser(duel: BugSmashDuel, userId: string, day = localDayId()): boolean {
-  return duel.matchType === "random" && duelCreatedToday(duel, day) && (duel.fromUserId === userId || duel.toUserId === userId);
+function sameDuelPair(duel: BugSmashDuel, firstUserId: string, secondUserId: string): boolean {
+  return (duel.fromUserId === firstUserId && duel.toUserId === secondUserId)
+    || (duel.fromUserId === secondUserId && duel.toUserId === firstUserId);
 }
 
-function isRandomDuelTodayBetween(duel: BugSmashDuel, firstUserId: string, secondUserId: string, day = localDayId()): boolean {
-  const samePair = (duel.fromUserId === firstUserId && duel.toUserId === secondUserId)
-    || (duel.fromUserId === secondUserId && duel.toUserId === firstUserId);
-  return duel.matchType === "random" && duelCreatedToday(duel, day) && samePair;
+function duelCompletedAt(duel: BugSmashDuel): string {
+  const fromSubmittedAt = duel.scores?.[duel.fromUserId]?.submittedAt ?? "";
+  const toSubmittedAt = duel.scores?.[duel.toUserId]?.submittedAt ?? "";
+  if (fromSubmittedAt && toSubmittedAt) return fromSubmittedAt > toSubmittedAt ? fromSubmittedAt : toSubmittedAt;
+  return duel.updatedAt;
+}
+
+function duelRecentActivityAt(duel: BugSmashDuel): string {
+  if (duel.status === "completed") return duelCompletedAt(duel);
+  return duel.startAt ?? duel.updatedAt ?? duel.createdAt;
+}
+
+function recentRandomOpponentIdsForUser(duels: BugSmashDuel[], userId: string, mode: ArcadeMode = "tap_duel", now = Date.now()): Set<string> {
+  const cutoff = now - randomOpponentRepeatWindowMs;
+  return new Set(duels.flatMap((duel) => {
+    if (duel.matchType !== "random" || (duel.fromUserId !== userId && duel.toUserId !== userId)) return [];
+    if (duelMode(duel) !== mode) return [];
+    const opponentId = duel.fromUserId === userId ? duel.toUserId : duel.fromUserId;
+    if (!opponentId || opponentId === "random") return [];
+    const activityAt = new Date(duelRecentActivityAt(duel)).getTime();
+    return Number.isFinite(activityAt) && activityAt >= cutoff ? [opponentId] : [];
+  }));
+}
+
+function duelCompletedTodayBetween(duel: BugSmashDuel, firstUserId: string, secondUserId: string, day = localDayId()): boolean {
+  return duel.status === "completed"
+    && sameDuelPair(duel, firstUserId, secondUserId)
+    && localDayId(new Date(duelCompletedAt(duel))) === day;
+}
+
+function isExpiredOpenRandomDuelScore(duel: BugSmashDuel, now = Date.now()): boolean {
+  if (duel.matchType !== "random" || duel.status !== "pending" || duel.toUserId !== "random") return false;
+  const submittedAt = duel.scores?.[duel.fromUserId]?.submittedAt;
+  if (!submittedAt) return false;
+  const submittedAtMs = new Date(submittedAt).getTime();
+  return Number.isFinite(submittedAtMs) && now - submittedAtMs >= openRandomDuelScoreTtlMs;
+}
+
+function expireOpenRandomDuelScore(duel: BugSmashDuel, now = nowIso()): BugSmashDuel {
+  if (!isExpiredOpenRandomDuelScore(duel, new Date(now).getTime())) return duel;
+  return {
+    ...duel,
+    status: "expired",
+    updatedAt: now
+  };
+}
+
+function scaledDuelXp(baseXp: number): number {
+  return Math.round(baseXp);
+}
+
+function duelMode(duel: BugSmashDuel): ArcadeMode {
+  return duel.arcadeMode ?? "tap_duel";
 }
 
 function pickRandomOpponent(fromUser: User, candidates: User[], duels: BugSmashDuel[]): User {
-  const day = localDayId();
-  const ownRandomCount = duels.filter((duel) => isRandomDuelTodayForUser(duel, fromUser.uid, day)).length;
-  if (ownRandomCount >= randomDuelDailyLimit) throw new Error("Je hebt vandaag al 5 random duels gestart.");
+  const recentOpponentIds = recentRandomOpponentIdsForUser(duels, fromUser.uid, "tap_duel");
   const eligible = candidates.filter((candidate) =>
     candidate.uid !== fromUser.uid
     && candidate.active !== false
-    && !duels.some((duel) => isActiveDuelBetween(duel, fromUser.uid, candidate.uid))
-    && !duels.some((duel) => isRandomDuelTodayBetween(duel, fromUser.uid, candidate.uid, day))
+    && !duels.some((duel) => !isExpiredOpenRandomDuelScore(duel) && isActiveDuelBetween(duel, fromUser.uid, candidate.uid))
   );
   if (!eligible.length) throw new Error("Geen random tegenstander beschikbaar.");
-  return eligible[Math.floor(Math.random() * eligible.length)];
+  const preferred = eligible.filter((candidate) => !recentOpponentIds.has(candidate.uid));
+  const pool = preferred.length ? preferred : eligible;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
-export async function createBugSmashDuel(fromUser: User, toUser: User, matchType: "direct" | "random" = "direct"): Promise<BugSmashDuel> {
+export async function createBugSmashDuel(fromUser: User, toUser: User, matchType: "direct" | "random" = "direct", options: CreateDuelOptions = {}): Promise<BugSmashDuel> {
   if (fromUser.uid === toUser.uid) throw new Error("Je kunt jezelf niet uitdagen.");
   if (!isFirebaseConfigured) {
     const existing = Array.from(demoDuels.values()).find((duel) => isActiveDuelBetween(duel, fromUser.uid, toUser.uid));
@@ -173,23 +358,14 @@ export async function createBugSmashDuel(fromUser: User, toUser: User, matchType
   }
   const id = isFirebaseConfigured ? doc(collection(db, "bugSmashDuels")).id : makeId();
   const seed = Date.now() + Math.floor(Math.random() * 100000);
-  const duel: BugSmashDuel = {
+  const duel = buildBugSmashDuel({
     id,
-    fromUserId: fromUser.uid,
-    fromUserName: fromUser.displayName,
+    fromUser,
     matchType,
-    toUserId: toUser.uid,
-    toUserName: toUser.displayName,
-    status: "pending",
+    options,
     seed,
-    bugIds: pickBugIds(seed),
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-    durationMs: bugSmashDuelDurationMs,
-    scores: {},
-    rewardClaimedBy: [],
-    resultSeenBy: []
-  };
+    toUser
+  });
 
   if (!isFirebaseConfigured) {
     demoDuels.set(id, duel);
@@ -206,31 +382,19 @@ export async function createRandomBugSmashDuel(fromUser: User, candidates: User[
   return createBugSmashDuel(fromUser, opponent, "random");
 }
 
-export async function createOpenRandomBugSmashDuel(fromUser: User): Promise<BugSmashDuel> {
-  const duels = await listBugSmashDuels(fromUser);
-  const ownRandomCount = duels.filter((duel) => isRandomDuelTodayForUser(duel, fromUser.uid)).length;
-  if (ownRandomCount >= randomDuelDailyLimit) throw new Error("Je hebt vandaag al 5 random duels gestart.");
+export async function createOpenRandomBugSmashDuel(fromUser: User, options: CreateDuelOptions = {}): Promise<BugSmashDuel> {
   const id = isFirebaseConfigured ? doc(collection(db, "bugSmashDuels")).id : makeId();
   const seed = Date.now() + Math.floor(Math.random() * 100000);
   const startAt = new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString();
-  const duel: BugSmashDuel = {
+  const duel = buildBugSmashDuel({
     id,
-    fromUserId: fromUser.uid,
-    fromUserName: fromUser.displayName,
+    fromUser,
     matchType: "random",
-    toUserId: "random",
-    toUserName: "Random",
-    status: "pending",
+    options,
     seed,
-    bugIds: pickBugIds(seed),
-    createdAt: nowIso(),
     startAt,
-    updatedAt: nowIso(),
-    durationMs: bugSmashDuelDurationMs,
-    scores: {},
-    rewardClaimedBy: [],
-    resultSeenBy: []
-  };
+    toUser: { displayName: "Random", uid: "random" }
+  });
 
   if (!isFirebaseConfigured) {
     demoDuels.set(id, duel);
@@ -241,19 +405,32 @@ export async function createOpenRandomBugSmashDuel(fromUser: User): Promise<BugS
   return duel;
 }
 
-export async function claimOpenRandomBugSmashDuel(user: User): Promise<BugSmashDuel | null> {
+export async function claimOpenRandomBugSmashDuel(user: User, options: CreateDuelOptions = {}): Promise<BugSmashDuel | null> {
   const ownDuels = await listBugSmashDuels(user);
-  const ownRandomCount = ownDuels.filter((duel) => isRandomDuelTodayForUser(duel, user.uid)).length;
-  if (ownRandomCount >= randomDuelDailyLimit) throw new Error("Je hebt vandaag al 5 random duels gedaan.");
+  const requestedMode = options.arcadeMode ?? "tap_duel";
+  const recentOpponentIds = recentRandomOpponentIdsForUser(ownDuels, user.uid, requestedMode);
+  const matchesArcadeMode = (duel: BugSmashDuel) => duelMode(duel) === requestedMode;
 
   if (!isFirebaseConfigured) {
-    const openDuel = Array.from(demoDuels.values()).find((duel) =>
-      duel.matchType === "random"
-      && duel.status === "pending"
-      && duel.toUserId === "random"
-      && duel.fromUserId !== user.uid
-      && !ownDuels.some((ownDuel) => isRandomDuelTodayBetween(ownDuel, user.uid, duel.fromUserId))
-    );
+    const now = nowIso();
+    Array.from(demoDuels.values()).forEach((duel) => {
+      const expired = expireOpenRandomDuelScore(duel, now);
+      if (expired !== duel) demoDuels.set(duel.id, expired);
+    });
+    const openDuels = Array.from(demoDuels.values())
+      .filter((duel) =>
+        duel.matchType === "random"
+        && duel.status === "pending"
+        && duel.toUserId === "random"
+        && duel.fromUserId !== user.uid
+        && Boolean(duel.scores?.[duel.fromUserId])
+        && !isExpiredOpenRandomDuelScore(duel)
+        && matchesArcadeMode(duel)
+        && !ownDuels.some((ownDuel) => !isExpiredOpenRandomDuelScore(ownDuel) && isActiveDuelBetween(ownDuel, user.uid, duel.fromUserId))
+    )
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const preferredOpenDuels = openDuels.filter((duel) => !recentOpponentIds.has(duel.fromUserId));
+  const openDuel = preferredOpenDuels[0];
     if (!openDuel) return null;
     const updated: BugSmashDuel = {
       ...openDuel,
@@ -273,13 +450,18 @@ export async function claimOpenRandomBugSmashDuel(user: User): Promise<BugSmashD
     where("status", "==", "pending"),
     where("toUserId", "==", "random")
   ));
-  const candidate = openSnapshot.docs
+  const candidates = openSnapshot.docs
     .map((item) => item.data() as BugSmashDuel)
     .filter((duel) =>
       duel.fromUserId !== user.uid
-      && !ownDuels.some((ownDuel) => isRandomDuelTodayBetween(ownDuel, user.uid, duel.fromUserId))
+      && Boolean(duel.scores?.[duel.fromUserId])
+      && !isExpiredOpenRandomDuelScore(duel)
+      && matchesArcadeMode(duel)
+      && !ownDuels.some((ownDuel) => !isExpiredOpenRandomDuelScore(ownDuel) && isActiveDuelBetween(ownDuel, user.uid, duel.fromUserId))
     )
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const preferredCandidates = candidates.filter((duel) => !recentOpponentIds.has(duel.fromUserId));
+  const candidate = preferredCandidates[0];
   if (!candidate) return null;
 
   return runTransaction(db, async (transaction) => {
@@ -288,8 +470,16 @@ export async function claimOpenRandomBugSmashDuel(user: User): Promise<BugSmashD
     if (!snapshot.exists()) return null;
     const duel = snapshot.data() as BugSmashDuel;
     if (duel.matchType !== "random" || duel.status !== "pending" || duel.toUserId !== "random" || duel.fromUserId === user.uid) return null;
+    if (!duel.scores?.[duel.fromUserId]) return null;
+    if (isExpiredOpenRandomDuelScore(duel)) {
+      const expired = expireOpenRandomDuelScore(duel);
+      transaction.update(ref, { status: expired.status, updatedAt: expired.updatedAt });
+      return null;
+    }
+    if (duelMode(duel) !== requestedMode) return null;
     const updated: BugSmashDuel = {
       ...duel,
+      ...(requestedMode !== "tap_duel" ? { claimedArcadeMode: requestedMode } : {}),
       startAt: new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString(),
       status: "accepted",
       toUserId: user.uid,
@@ -297,6 +487,7 @@ export async function claimOpenRandomBugSmashDuel(user: User): Promise<BugSmashD
       updatedAt: nowIso()
     };
     transaction.update(ref, {
+      ...(requestedMode !== "tap_duel" ? { claimedArcadeMode: requestedMode } : {}),
       startAt: updated.startAt,
       status: updated.status,
       toUserId: updated.toUserId,
@@ -309,17 +500,57 @@ export async function claimOpenRandomBugSmashDuel(user: User): Promise<BugSmashD
 
 export async function listBugSmashDuels(user: User): Promise<BugSmashDuel[]> {
   if (!isFirebaseConfigured) {
+    const now = nowIso();
+    Array.from(demoDuels.values()).forEach((duel) => {
+      const expired = expireOpenRandomDuelScore(duel, now);
+      if (expired !== duel) demoDuels.set(duel.id, expired);
+    });
     return Array.from(demoDuels.values())
       .filter((duel) => isParticipant(duel, user))
+      .map((duel) => expireOpenRandomDuelScore(duel))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  const sent = await getDocs(query(collection(db, "bugSmashDuels"), where("fromUserId", "==", user.uid)));
-  const received = await getDocs(query(collection(db, "bugSmashDuels"), where("toUserId", "==", user.uid)));
+  const sent = await getDocs(query(collection(db, "bugSmashDuels"), where("fromUserId", "==", user.uid), limit(duelListLimit)));
+  const received = await getDocs(query(collection(db, "bugSmashDuels"), where("toUserId", "==", user.uid), limit(duelListLimit)));
   const byId = new Map<string, BugSmashDuel>();
   sent.docs.forEach((item) => byId.set(item.id, item.data() as BugSmashDuel));
   received.docs.forEach((item) => byId.set(item.id, item.data() as BugSmashDuel));
-  return Array.from(byId.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return Array.from(byId.values()).map((duel) => expireOpenRandomDuelScore(duel)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function listOpenRandomBugSmashDuels(user: User): Promise<BugSmashDuel[]> {
+  const filterOpen = (duel: BugSmashDuel) =>
+    duel.matchType === "random"
+    && duel.status === "pending"
+    && duel.toUserId === "random"
+    && duel.fromUserId === user.uid
+    && Boolean(duel.scores?.[duel.fromUserId])
+    && !isExpiredOpenRandomDuelScore(duel);
+
+  if (!isFirebaseConfigured) {
+    const now = nowIso();
+    Array.from(demoDuels.values()).forEach((duel) => {
+      const expired = expireOpenRandomDuelScore(duel, now);
+      if (expired !== duel) demoDuels.set(duel.id, expired);
+    });
+    return Array.from(demoDuels.values())
+      .map((duel) => expireOpenRandomDuelScore(duel))
+      .filter(filterOpen)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  const openSnapshot = await getDocs(query(
+    collection(db, "bugSmashDuels"),
+    where("matchType", "==", "random"),
+    where("status", "==", "pending"),
+    where("toUserId", "==", "random"),
+    limit(duelListLimit)
+  ));
+  return openSnapshot.docs
+    .map((item) => expireOpenRandomDuelScore(item.data() as BugSmashDuel))
+    .filter(filterOpen)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 export function countBugSmashDuelActionsForUser(duels: BugSmashDuel[], userId: string): number {
@@ -331,6 +562,7 @@ export function countIncomingBugSmashDuelActionsForUser(duels: BugSmashDuel[], u
 }
 
 function isIncomingBugSmashDuelActionForUser(duel: BugSmashDuel, userId: string): boolean {
+  if (isExpiredOpenRandomDuelScore(duel)) return false;
   if (duel.toUserId !== userId) return false;
   if (duel.status === "pending") return true;
   if (duel.status === "accepted") return !duel.scores?.[userId];
@@ -338,6 +570,7 @@ function isIncomingBugSmashDuelActionForUser(duel: BugSmashDuel, userId: string)
 }
 
 export function isBugSmashDuelActionForUser(duel: BugSmashDuel, userId: string): boolean {
+  if (isExpiredOpenRandomDuelScore(duel)) return false;
   if (duel.fromUserId !== userId && duel.toUserId !== userId) return false;
   const opponentId = duel.fromUserId === userId ? duel.toUserId : duel.fromUserId;
   const ownScore = duel.scores?.[userId];
@@ -374,8 +607,8 @@ export function subscribeBugSmashDuelActionCount(user: User, onCount: (count: nu
     publish();
   };
 
-  const unsubscribeSent = onSnapshot(query(collection(db, "bugSmashDuels"), where("fromUserId", "==", user.uid)), (snapshot) => syncSnapshot(sentDuels, snapshot));
-  const unsubscribeReceived = onSnapshot(query(collection(db, "bugSmashDuels"), where("toUserId", "==", user.uid)), (snapshot) => syncSnapshot(receivedDuels, snapshot));
+  const unsubscribeSent = onSnapshot(query(collection(db, "bugSmashDuels"), where("fromUserId", "==", user.uid), limit(duelListLimit)), (snapshot) => syncSnapshot(sentDuels, snapshot));
+  const unsubscribeReceived = onSnapshot(query(collection(db, "bugSmashDuels"), where("toUserId", "==", user.uid), limit(duelListLimit)), (snapshot) => syncSnapshot(receivedDuels, snapshot));
   return () => {
     unsubscribeSent();
     unsubscribeReceived();
@@ -388,7 +621,7 @@ export function subscribeIncomingBugSmashDuelActionCount(user: User, onCount: (c
     return () => undefined;
   }
 
-  return onSnapshot(query(collection(db, "bugSmashDuels"), where("toUserId", "==", user.uid)), (snapshot) => {
+  return onSnapshot(query(collection(db, "bugSmashDuels"), where("toUserId", "==", user.uid), limit(duelListLimit)), (snapshot) => {
     const duels = snapshot.docs.map((item) => item.data() as BugSmashDuel);
     onCount(countIncomingBugSmashDuelActionsForUser(duels, user.uid));
   });
@@ -510,6 +743,11 @@ export async function submitBugSmashDuelScore(user: User, duelId: string, score:
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error("Duel niet gevonden.");
     const currentDuel = snapshot.data() as BugSmashDuel;
+    if (isExpiredOpenRandomDuelScore(currentDuel)) {
+      const expired = expireOpenRandomDuelScore(currentDuel);
+      transaction.update(ref, { status: expired.status, updatedAt: expired.updatedAt });
+      throw new Error("Duel score is verlopen.");
+    }
     let updated = submit(currentDuel);
     if (shouldApplyRandomDuelRating(currentDuel, updated)) {
       const fromRef = userRef(updated.fromUserId);
@@ -573,15 +811,21 @@ function preferredSubmittedScore(existing: BugSmashDuelScore | undefined, candid
   return normalizedExisting;
 }
 
-export async function claimBugSmashDuelReward(user: User, duelId: string): Promise<{ result: "loss" | "win"; rewardGranted: boolean; user: User } | null> {
+export async function claimBugSmashDuelReward(user: User, duelId: string): Promise<BugSmashDuelClaimResult | null> {
   if (!isFirebaseConfigured) {
     const duel = demoDuels.get(duelId);
-    if (!duel || duel.status !== "completed" || !isParticipant(duel, user) || !duel.winnerId || (duel.rewardClaimedBy ?? []).includes(user.uid)) return null;
-    const result = duel.winnerId === user.uid ? "win" : "loss";
-    const eventKey = `${user.uid}:${duelDailyRewardEventId(duelOpponentId(duel, user))}`;
-    const rewardGranted = !demoDuelRewardEvents.has(eventKey);
-    if (rewardGranted) demoDuelRewardEvents.add(eventKey);
-    const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, rewardGranted ? result === "win" ? duelWinXp : duelLossXp : 0));
+    if (!duel || duel.status !== "completed" || !isParticipant(duel, user)) return null;
+    const result = duelResultForUser(duel, user.uid);
+    const eventKey = duelRewardEventId(duelId, user.uid);
+    const existingEvent = demoDuelRewardEvents.get(eventKey);
+    const alreadyClaimed = (duel.rewardClaimedBy ?? []).includes(user.uid);
+    const bugDexRewardEligible = result === "win" || result === "draw";
+    const rewardGranted = !existingEvent;
+    const baseXp = result === "win" ? duelWinXp : duelLossXp;
+    const drop = bugDexRewardEligible && rewardGranted ? await grantBugDexReward(user, "duel_win") : undefined;
+    if (bugDexRewardEligible && rewardGranted && drop?.rewardType === "bug") demoDuelRewardEvents.set(eventKey, { bugId: drop.entry.id, minimumCount: drop.item.count, result });
+    if (!bugDexRewardEligible && rewardGranted) demoDuelRewardEvents.set(eventKey, { result });
+    const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, rewardGranted ? scaledDuelXp(baseXp) : 0));
     const updatedUser = { ...user, totalPoints, title: titleForPoints(totalPoints) };
     updatedUser.badges = badgesForUser(updatedUser);
     demoDuels.set(duelId, {
@@ -590,31 +834,50 @@ export async function claimBugSmashDuelReward(user: User, duelId: string): Promi
       resultSeenBy: Array.from(new Set([...(duel.resultSeenBy ?? []), user.uid])),
       updatedAt: nowIso()
     });
-    return { result, rewardGranted, user: updatedUser };
+    return { alreadyClaimed, drop, repaired: false, result, rewardGranted, user: updatedUser };
   }
 
-  return runTransaction(db, async (transaction) => {
+  const claim = await runTransaction(db, async (transaction) => {
     const ref = duelRef(duelId);
-    const userRef = doc(db, "users", user.uid);
+    const currentUserRef = userRef(user.uid);
     const snapshot = await transaction.get(ref);
-    const userSnapshot = await transaction.get(userRef);
+    const userSnapshot = await transaction.get(currentUserRef);
     if (!snapshot.exists() || !userSnapshot.exists()) return null;
     const duel = snapshot.data() as BugSmashDuel;
-    if (duel.status !== "completed" || !isParticipant(duel, user) || !duel.winnerId || (duel.rewardClaimedBy ?? []).includes(user.uid)) return null;
-    const result = duel.winnerId === user.uid ? "win" : "loss";
-    const eventRef = doc(db, "users", user.uid, "duelRewardEvents", duelDailyRewardEventId(duelOpponentId(duel, user)));
+    if (duel.status !== "completed" || !isParticipant(duel, user)) return null;
+    const result = duelResultForUser(duel, user.uid);
+    const bugDexRewardEligible = result === "win" || result === "draw";
+    const eventRef = doc(db, "users", user.uid, "duelRewardEvents", duelRewardEventId(duelId, user.uid));
     const eventSnapshot = await transaction.get(eventRef);
-    const rewardGranted = !eventSnapshot.exists();
+    const alreadyClaimed = (duel.rewardClaimedBy ?? []).includes(user.uid);
+    const existingEvent = eventSnapshot.exists() ? eventSnapshot.data() as { rewardBugId?: string; minimumCount?: number; result?: string } : null;
     const currentUser = userSnapshot.data() as User;
-    const totalPoints = Math.max(0, currentUser.totalPoints + starterBoostedXp(currentUser, rewardGranted ? result === "win" ? duelWinXp : duelLossXp : 0));
-    const updatedUser = { ...currentUser, totalPoints, title: titleForPoints(totalPoints) };
-    updatedUser.badges = badgesForUser(updatedUser);
-    transaction.update(ref, {
-      rewardClaimedBy: Array.from(new Set([...(duel.rewardClaimedBy ?? []), user.uid])),
-      resultSeenBy: Array.from(new Set([...(duel.resultSeenBy ?? []), user.uid])),
-      updatedAt: nowIso()
-    });
-    if (rewardGranted) {
+    const baseXp = result === "win" ? duelWinXp : duelLossXp;
+    let drop: BugDexDropResult | undefined;
+    let repaired = false;
+    let rewardGranted = false;
+    if (bugDexRewardEligible) {
+      if (existingEvent?.rewardBugId) {
+        const repair = await repairBugDexRewardInTransaction(transaction, currentUser, existingEvent.rewardBugId, "duel_win", Math.max(1, Number(existingEvent.minimumCount ?? 1)), nowIso(), false);
+        drop = repair;
+        repaired = repair.repaired;
+      } else {
+        const entry = pickBugDexRewardEntry(currentUser, "duel_win");
+        const grant = await grantBugDexRewardInTransaction(transaction, currentUser, entry.id, "duel_win", nowIso(), false);
+        drop = grant;
+        rewardGranted = true;
+        transaction.set(eventRef, {
+          createdAt: nowIso(),
+          day: localDayId(),
+          duelId,
+          opponentId: duelOpponentId(duel, user),
+          result,
+          rewardBugId: entry.id,
+          minimumCount: grant.item.count
+        });
+      }
+    } else if (!existingEvent) {
+      rewardGranted = true;
       transaction.set(eventRef, {
         createdAt: nowIso(),
         day: localDayId(),
@@ -622,14 +885,30 @@ export async function claimBugSmashDuelReward(user: User, duelId: string): Promi
         opponentId: duelOpponentId(duel, user),
         result
       });
-      transaction.update(userRef, {
+    }
+    const totalPoints = Math.max(0, currentUser.totalPoints + starterBoostedXp(currentUser, rewardGranted ? scaledDuelXp(baseXp) : 0));
+    const updatedUser = { ...currentUser, totalPoints, title: titleForPoints(totalPoints) };
+    updatedUser.badges = badgesForUser(updatedUser);
+    if (!alreadyClaimed) {
+      transaction.update(ref, {
+        rewardClaimedBy: Array.from(new Set([...(duel.rewardClaimedBy ?? []), user.uid])),
+        resultSeenBy: Array.from(new Set([...(duel.resultSeenBy ?? []), user.uid])),
+        updatedAt: nowIso()
+      });
+    }
+    if (rewardGranted) {
+      transaction.update(currentUserRef, {
         badges: updatedUser.badges,
         title: updatedUser.title,
         totalPoints: updatedUser.totalPoints
       });
     }
-    return { result, rewardGranted, user: updatedUser };
+    return { alreadyClaimed, drop, repaired, result, rewardGranted, user: updatedUser };
   });
+  if (claim?.drop?.rewardType === "bug") {
+    void writeBugDexUnlockBestEffort(user.uid, claim.drop.entry, "duel_win", new Date().toISOString());
+  }
+  return claim;
 }
 
 export async function acknowledgeBugSmashDuelResult(user: User, duelId: string): Promise<boolean> {

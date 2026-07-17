@@ -101,6 +101,149 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(['lastTradeId']) || request.resource.data.lastTradeId is string);
     }
 
+    function validBugMasteryData(bugId) {
+      return request.resource.data.keys().hasOnly([
+          'activeUses',
+          'bugId',
+          'dailySourceTotals',
+          'duelUses',
+          'lastXpAt',
+          'lastTradeId',
+          'level',
+          'lifetimeXp',
+          'rank',
+          'role',
+          'selectedSkillIds',
+          'soloUses',
+          'sourceTotals',
+          'unlockedSkillIds',
+          'updatedAt',
+          'walkedKm',
+          'xp'
+        ])
+        && request.resource.data.bugId == bugId
+        && request.resource.data.level is int
+        && request.resource.data.level >= 1
+        && request.resource.data.level <= 20
+        && request.resource.data.xp is int
+        && request.resource.data.xp >= 0
+        && request.resource.data.lifetimeXp is int
+        && request.resource.data.lifetimeXp >= 0
+        && request.resource.data.rank in ['rookie', 'trained', 'skilled', 'veteran', 'elite', 'master']
+        && request.resource.data.role in ['attack', 'speed', 'shield', 'chaos', 'support']
+        && request.resource.data.unlockedSkillIds is list
+        && request.resource.data.activeUses is int
+        && request.resource.data.duelUses is int
+        && request.resource.data.soloUses is int
+        && request.resource.data.walkedKm is number
+        && request.resource.data.sourceTotals is map
+        && request.resource.data.updatedAt is string
+        && (!request.resource.data.keys().hasAny(['dailySourceTotals']) || request.resource.data.dailySourceTotals is map)
+        && (!request.resource.data.keys().hasAny(['lastXpAt']) || request.resource.data.lastXpAt is string)
+        && (!request.resource.data.keys().hasAny(['lastTradeId']) || request.resource.data.lastTradeId is string)
+        && (!request.resource.data.keys().hasAny(['selectedSkillIds']) || request.resource.data.selectedSkillIds is list);
+    }
+
+    function tradeMasteryCopy(userId, bugId) {
+      return signedIn()
+        && validBugMasteryData(bugId)
+        && acceptedTradeData()
+        && tradeGain(userId, bugId);
+    }
+
+    function validBugMasteryEventData(eventId) {
+      return request.resource.data.keys().hasOnly(['amount', 'bugId', 'createdAt', 'id', 'localDay', 'source'])
+        && request.resource.data.id == eventId
+        && request.resource.data.amount is int
+        && request.resource.data.amount >= 0
+        && request.resource.data.bugId is string
+        && request.resource.data.createdAt is string
+        && request.resource.data.localDay is string
+        && request.resource.data.source in [
+          'active_squad_duel',
+          'active_squad_solo',
+          'boss_defeat',
+          'buddy_care',
+          'duplicate_unlock',
+          'duel_draw',
+          'duel_reward',
+          'duel_win',
+          'movement_radar',
+          'new_unlock',
+          'skill_trigger',
+          'walking'
+        ];
+    }
+
+    function validBugMasteryDailyData() {
+      return request.resource.data.keys().hasOnly(['total', 'updatedAt'])
+        && request.resource.data.total is int
+        && request.resource.data.total >= 0
+        && request.resource.data.total <= 220
+        && request.resource.data.updatedAt is string;
+    }
+
+    function validArcadeMode(mode) {
+      return mode in ['web_runner', 'nest_defense', 'bug_glide', 'bug_tower'];
+    }
+
+    function validDuelMode(mode) {
+      return mode in ['tap_duel', 'web_runner', 'nest_defense', 'bug_glide', 'bug_tower'];
+    }
+
+    function isTaggedTapDuel(data) {
+      return data.keys().hasAny(['arcadeMode']) && data.arcadeMode == 'tap_duel';
+    }
+
+    function isTapOrLegacyDuel(data) {
+      return !data.keys().hasAny(['arcadeMode']) || isTaggedTapDuel(data);
+    }
+
+    function isNonTapArcadeDuel(data) {
+      return data.keys().hasAny(['arcadeMode']) && validArcadeMode(data.arcadeMode);
+    }
+
+    function validRankedBugTowerRun(mode) {
+      let data = request.resource.data;
+      let hasRankedContext = data.keys().hasAny(['duelId', 'ranked']);
+      return !hasRankedContext
+        || (mode == 'bug_tower'
+          && data.keys().hasAll(['duelId', 'ranked'])
+          && data.duelId is string
+          && data.ranked == true
+          && exists(/databases/$(database)/documents/bugSmashDuels/$(data.duelId))
+          && get(/databases/$(database)/documents/bugSmashDuels/$(data.duelId)).data.arcadeMode == 'bug_tower'
+          && (get(/databases/$(database)/documents/bugSmashDuels/$(data.duelId)).data.fromUserId == request.auth.uid
+            || get(/databases/$(database)/documents/bugSmashDuels/$(data.duelId)).data.toUserId == request.auth.uid)
+          && get(/databases/$(database)/documents/bugSmashDuels/$(data.duelId)).data.scores.keys().hasAny([request.auth.uid])
+          && get(/databases/$(database)/documents/bugSmashDuels/$(data.duelId)).data.scores[request.auth.uid].score == data.score);
+    }
+
+    function validArcadeRunData(mode) {
+      return validArcadeMode(mode)
+        && request.resource.data.keys().hasOnly(['combo', 'duelId', 'durationMs', 'hits', 'localHighScore', 'mode', 'pickups', 'ranked', 'score', 'streak', 'timestamp', 'userId'])
+        && validRankedBugTowerRun(mode)
+        && request.resource.data.mode == mode
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.score is int
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 50000
+        && request.resource.data.durationMs is int
+        && request.resource.data.durationMs >= 0
+        && request.resource.data.durationMs <= 90000
+        && request.resource.data.pickups is int
+        && request.resource.data.pickups >= 0
+        && request.resource.data.hits is int
+        && request.resource.data.hits >= 0
+        && request.resource.data.combo is int
+        && request.resource.data.combo >= 0
+        && request.resource.data.streak is int
+        && request.resource.data.streak >= 0
+        && request.resource.data.localHighScore is int
+        && request.resource.data.localHighScore >= 0
+        && request.resource.data.timestamp is string;
+    }
+
     function acceptedTradeData() {
       return request.resource.data.lastTradeId is string
         && getAfter(/databases/$(database)/documents/trades/$(request.resource.data.lastTradeId)).data.status == 'Geaccepteerd'
@@ -430,6 +573,9 @@ service cloud.firestore {
     function validDuelCreate(duelId) {
       return signedIn()
         && request.resource.data.keys().hasOnly([
+          'arcadeMode',
+          'arcadeSeed',
+          'arcadeVersion',
           'bugIds',
           'createdAt',
           'durationMs',
@@ -449,6 +595,16 @@ service cloud.firestore {
         ])
         && request.resource.data.id == duelId
         && request.resource.data.fromUserId == request.auth.uid
+        && (!request.resource.data.keys().hasAny(['arcadeMode']) || validDuelMode(request.resource.data.arcadeMode))
+        && (!request.resource.data.keys().hasAny(['arcadeSeed']) || request.resource.data.arcadeSeed is string)
+        && (!request.resource.data.keys().hasAny(['arcadeVersion']) || (request.resource.data.arcadeVersion is int && request.resource.data.arcadeVersion >= 1 && request.resource.data.arcadeVersion <= 20))
+        && (
+          isTapOrLegacyDuel(request.resource.data)
+          || (
+            request.resource.data.keys().hasAll(['arcadeSeed', 'arcadeVersion'])
+            && request.resource.data.arcadeSeed.size() <= 160
+          )
+        )
         && request.resource.data.toUserId is string
         && request.resource.data.toUserId != request.auth.uid
         && request.resource.data.fromUserName is string
@@ -490,7 +646,18 @@ service cloud.firestore {
         && resource.data.status == 'pending'
         && resource.data.toUserId == 'random'
         && resource.data.fromUserId != request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['startAt', 'status', 'toUserId', 'toUserName', 'updatedAt'])
+        && (!resource.data.keys().hasAny(['arcadeMode']) || validDuelMode(resource.data.arcadeMode))
+        && (
+          (
+            isTapOrLegacyDuel(resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['startAt', 'status', 'toUserId', 'toUserName', 'updatedAt'])
+          )
+          || (
+            isNonTapArcadeDuel(resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['claimedArcadeMode', 'startAt', 'status', 'toUserId', 'toUserName', 'updatedAt'])
+            && request.resource.data.claimedArcadeMode == resource.data.arcadeMode
+          )
+        )
         && request.resource.data.status == 'accepted'
         && request.resource.data.toUserId == request.auth.uid
         && request.resource.data.toUserName is string
@@ -548,7 +715,7 @@ service cloud.firestore {
         && (!resource.data.scores.keys().hasAny([otherUserId]) || request.resource.data.scores[otherUserId] == resource.data.scores[otherUserId])
         && ownScore.score is int
         && ownScore.score >= 0
-        && ownScore.score <= 1200
+        && ownScore.score <= (resource.data.keys().hasAny(['arcadeMode']) && validArcadeMode(resource.data.arcadeMode) ? 50000 : 1200)
         && ownScore.caughtBugIds is list
         && ownScore.caughtBugIds.size() <= duelBugCount()
         && ownScore.bonusScore is int
@@ -604,12 +771,22 @@ service cloud.firestore {
         && request.resource.data.duelDraws == currentDuelDraws(resource.data) + (isDraw ? 1 : 0);
     }
 
+    function duelRatingDecayUserUpdate(userId) {
+      return signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['duelRating', 'duelRatingDecayThroughDay'])
+        && request.resource.data.duelRating is int
+        && request.resource.data.duelRating >= 1000
+        && request.resource.data.duelRating < currentDuelRating(resource.data)
+        && request.resource.data.duelRatingDecayThroughDay is string
+        && request.resource.data.duelRatingDecayThroughDay.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
     function claimOwnDuelReward() {
       let previousSeen = resource.data.keys().hasAny(['resultSeenBy']) ? resource.data.resultSeenBy : [];
       return signedIn()
         && resource.data.status == 'completed'
         && isDuelParticipant(resource.data)
-        && resource.data.winnerId is string
         && request.resource.data.updatedAt is string
         && resource.data.rewardClaimedBy is list
         && request.resource.data.rewardClaimedBy is list
@@ -629,7 +806,8 @@ service cloud.firestore {
           )
           ||
           (
-            resource.data.winnerId == request.auth.uid
+            resource.data.keys().hasAny(['winnerId'])
+            && resource.data.winnerId == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rewardClaimedBy', 'updatedAt'])
           )
         );
@@ -662,7 +840,7 @@ service cloud.firestore {
         )
         && (!request.resource.data.keys().hasAny(['active']) || request.resource.data.active == true);
       allow update: if signedIn()
-        && (validUserUpdate(userId) || randomDuelRatingUserUpdate(userId) || organizationCreateUserUpdate(userId) || organizationInviteUserUpdate(userId) || organizationRemoveMemberUpdate(userId));
+        && (validUserUpdate(userId) || randomDuelRatingUserUpdate(userId) || duelRatingDecayUserUpdate(userId) || organizationCreateUserUpdate(userId) || organizationInviteUserUpdate(userId) || organizationRemoveMemberUpdate(userId));
       allow delete: if signedIn() && resource.data.reporterId == request.auth.uid;
 
       match /bugdex/{bugId} {
@@ -691,6 +869,45 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /bugMastery/{bugId} {
+        allow read: if signedIn();
+        allow create, update: if signedIn()
+          && (
+            (request.auth.uid == userId && validBugMasteryData(bugId))
+            || tradeMasteryCopy(userId, bugId)
+          );
+        allow delete: if false;
+      }
+
+      match /buddy/{buddyDocId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && buddyDocId == 'state'
+          && request.resource.data.keys().hasOnly(['bugId', 'care', 'updatedAt'])
+          && request.resource.data.bugId is string
+          && request.resource.data.care is map
+          && request.resource.data.updatedAt is string;
+        allow delete: if false;
+      }
+
+      match /bugMasteryEvents/{eventId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if signedIn()
+          && request.auth.uid == userId
+          && validBugMasteryEventData(eventId);
+        allow update, delete: if false;
+      }
+
+      match /bugMasteryDaily/{dayId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && dayId.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          && validBugMasteryDailyData();
+        allow delete: if false;
+      }
+
       match /bugdexEvents/{eventId} {
         allow read: if signedIn() && request.auth.uid == userId;
         allow create: if signedIn()
@@ -705,19 +922,34 @@ service cloud.firestore {
         allow read: if signedIn() && request.auth.uid == userId;
         allow create: if signedIn()
           && request.auth.uid == userId
-          && eventId.matches('duel-daily-[0-9]{4}-[0-9]{2}-[0-9]{2}-.+')
+          && (
+            eventId.matches('duel-daily-[0-9]{4}-[0-9]{2}-[0-9]{2}-.+')
+            || eventId.matches('duel-.+')
+          )
           && request.resource.data.keys().hasOnly([
             'createdAt',
             'day',
             'duelId',
+            'minimumCount',
             'opponentId',
+            'rewardBugId',
             'result'
           ])
           && request.resource.data.createdAt is string
           && request.resource.data.day is string
           && request.resource.data.duelId is string
           && request.resource.data.opponentId is string
-          && request.resource.data.result in ['win', 'loss'];
+          && request.resource.data.result in ['win', 'loss', 'draw']
+          && (
+            !request.resource.data.keys().hasAny(['rewardBugId', 'minimumCount'])
+            || (
+              request.resource.data.keys().hasAll(['rewardBugId', 'minimumCount'])
+              && request.resource.data.result in ['win', 'draw']
+              && request.resource.data.rewardBugId is string
+              && request.resource.data.minimumCount is int
+              && request.resource.data.minimumCount >= 1
+            )
+          );
         allow update, delete: if false;
       }
 
@@ -762,6 +994,11 @@ service cloud.firestore {
             'rewardXp'
           ]);
         allow delete: if false;
+      }
+
+      match /duelSeasonClaims/{seasonId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create, update, delete: if false;
       }
 
       match /missionProgress/{progressId} {
@@ -957,6 +1194,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /duelSeasons/{seasonId} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
     match /trades/{tradeId} {
       allow read: if signedIn()
         && (resource.data.fromUserId == request.auth.uid || resource.data.toUserId == request.auth.uid);
@@ -1030,6 +1272,12 @@ service cloud.firestore {
         || claimOwnDuelReward()
         || acknowledgeDuelResult();
       allow delete: if false;
+    }
+
+    match /arcadeGameResults/{mode}/runs/{runId} {
+      allow read: if signedIn() && validArcadeMode(mode) && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && validArcadeRunData(mode);
+      allow update, delete: if false;
     }
   }
 }

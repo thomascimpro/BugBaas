@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Application from "expo-application";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, AppState, Image, ImageSourcePropType, Linking, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Image, ImageSourcePropType, Linking, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppNotification, BugComment, BugReport, NotificationSettings, User } from "./src/types";
 import { activateBugLamp, applyUserPoints, createOrganizationForUser, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, syncMovementKilometers, touchUserActivity, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
 import { activeBugSquadBonuses } from "./src/services/bugSquadService";
@@ -30,12 +30,12 @@ import { DisplayNameModal } from "./src/components/DisplayNameModal";
 import { InAppNotificationToast } from "./src/components/InAppNotificationToast";
 import { HelpTourOverlay } from "./src/components/HelpTourOverlay";
 import { allBugArtIds, BugArtId } from "./src/services/bugArt";
-import { CharacterId } from "./src/services/characterService";
+import { CharacterId, CharacterUnlockContext } from "./src/services/characterService";
 import { bugDexEntryName, LanguageProvider, rarityLabel, useI18n } from "./src/services/i18n";
 import { listBugs } from "./src/services/bugService";
-import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, entryByBugId, hasBugDexRewardAvailable, pickBugDexRewardEntry, pickQueuedBugDexRewardEntry, prepareDailyLoginBug, rollSpecificBugDexDrop } from "./src/services/bugDexService";
-import { badgeDefinitions, getTierForPoints, type BadgeDefinition, type BugDexEntry, type UserTier } from "./src/services/pointsService";
-import { claimMovementRadarBonuses, requestHealthConnectPermissions } from "./src/services/movementRadarService";
+import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, entryByBugId, grantBugDexReward, hasBugDexRewardAvailable, pickBugDexRewardEntry, pickQueuedBugDexRewardEntry, prepareDailyLoginBug, rollSpecificBugDexDrop } from "./src/services/bugDexService";
+import { badgeDefinitions, getTierForPoints, userTiers, type BadgeDefinition, type BugDexEntry, type UserTier } from "./src/services/pointsService";
+import { claimMovementRadarBonuses, claimMovementRadarBonusesForApp, claimQueuedRadarBugs, requestHealthConnectPermissions } from "./src/services/movementRadarService";
 import { movementRadarXpPerBug } from "./src/services/rewardBalanceService";
 import { checkLatestVersion, VersionNotice } from "./src/services/versionService";
 import { isStarterBoostActive } from "./src/services/starterBoostService";
@@ -59,6 +59,7 @@ import {
 } from "./src/services/notificationService";
 import { subscribeIncomingBugSmashDuelActionCount } from "./src/services/bugSmashDuelService";
 import { setRadarRequestCounts } from "./src/services/movementRadarService";
+import { getOwnDuelSeasonClaim, previousDuelSeasonId } from "./src/services/duelSeasonService";
 import { subscribeIncomingTradeRequestCount } from "./src/services/tradeService";
 
 export type RouteName = "home" | "bugs" | "new" | "detail" | "leaderboard" | "profile" | "userProfile" | "bugdex" | "settings" | "duel";
@@ -67,6 +68,7 @@ const helpTourVersion = "full-help-v2";
 const helpTourVersionKey = (uid: string) => `bugbaas:helpTour:${helpTourVersion}:${uid}`;
 const changelogSeenKey = (uid: string, version: string) => `bugbaas:changelog:${version}:${uid}`;
 const badgeUnlockSeenKey = (uid: string, badgeId: string) => `bugbaas:badgeUnlock:${uid}:${badgeId}`;
+const duelSeasonPopupSeenKey = (uid: string, seasonId: string) => `bugbaas:duelSeasonPopup:${uid}:${seasonId}`;
 const commentForegroundSpawnChance = 0.16;
 const upvoteForegroundSpawnChance = 0.1;
 const maxQueuedForegroundBugs = 12;
@@ -268,6 +270,7 @@ function AppContent() {
   const pendingForegroundRewardsRef = useRef<PendingForegroundReward[]>([]);
   const userRef = useRef<User | null>(null);
   const previousRankRef = useRef<{ uid: string; minPoints: number } | null>(null);
+  const queuedRankBugDexRewardsRef = useRef(new Set<string>());
   const previousBadgesRef = useRef<{ badges: string[]; uid: string } | null>(null);
   const queuedBadgeIdsRef = useRef(new Set<string>());
   const engagementSyncInProgress = useRef(new Set<string>());
@@ -309,6 +312,28 @@ function AppContent() {
   }, [pendingForegroundRewards]);
 
   useEffect(() => {
+    const currentUser = user;
+    if (!currentUser) return;
+    const uid = currentUser.uid;
+    const seasonId = previousDuelSeasonId();
+    let active = true;
+    async function checkDuelSeasonPopup() {
+      const seenKey = duelSeasonPopupSeenKey(uid, seasonId);
+      const seen = await AsyncStorage.getItem(seenKey);
+      if (seen || !active) return;
+      const claim = await getOwnDuelSeasonClaim(uid, seasonId).catch(() => null);
+      if (!claim || !active) return;
+      await AsyncStorage.setItem(seenKey, "1");
+      Alert.alert(
+        "Duel Season afgelopen",
+        `Je werd #${claim.rank}. Reward: ${claim.reward.label}. Iedereen begint deze maand weer op 1000 Duel rating.`
+      );
+    }
+    void checkDuelSeasonPopup();
+    return () => { active = false; };
+  }, [user?.uid]);
+
+  useEffect(() => {
     if (!user) {
       previousRankRef.current = null;
       setRankUpTier(null);
@@ -318,6 +343,12 @@ function AppContent() {
     const previous = previousRankRef.current;
     if (previous?.uid === user.uid && currentTier.minPoints > previous.minPoints) {
       setRankUpTier(currentTier);
+      const tierIndex = userTiers.findIndex((tier) => tier.minPoints === currentTier.minPoints);
+      const rewardKey = `${user.uid}:${currentTier.minPoints}`;
+      if (tierIndex >= 3 && !queuedRankBugDexRewardsRef.current.has(rewardKey)) {
+        queuedRankBugDexRewardsRef.current.add(rewardKey);
+        void grantBugDexReward(user, "rank_up").then(showBugDexDrop).catch(() => undefined);
+      }
     }
     previousRankRef.current = { uid: user.uid, minPoints: currentTier.minPoints };
   }, [user?.totalPoints, user?.uid]);
@@ -631,9 +662,9 @@ function AppContent() {
     setUser(await updateUserDisplayName(user, displayName));
   }
 
-  async function handleCharacterSave(characterId: CharacterId) {
+  async function handleCharacterSave(characterId: CharacterId, context?: CharacterUnlockContext) {
     if (!user) return;
-    setUser(await updateUserCharacter(user, characterId));
+    setUser(await updateUserCharacter(user, characterId, context));
   }
 
   async function handleCreateOrganization(organizationName: string) {
@@ -717,7 +748,7 @@ function AppContent() {
     if (drop.rewardType === "bug" && drop.isNew && notificationSettingsRef.current.bugdex) {
       void showBugDexUnlockNotification(bugDexEntryName(drop.entry, t), rarityLabel(drop.entry.rarity, t)).catch(() => undefined);
     }
-    if (activeForegroundRewardRef.current || pendingForegroundRewardsRef.current.length > 0) {
+    if (route !== "duel" && (activeForegroundRewardRef.current || pendingForegroundRewardsRef.current.length > 0)) {
       setBugDexDropQueue((queue) => [...queue, drop]);
       return;
     }
@@ -952,7 +983,7 @@ function AppContent() {
     movementCheckInProgress.current = true;
     try {
       const result = await claimMovementRadarBonuses(currentUser.uid, movementBoostForUser(currentUser));
-      await registerMovementKilometers(result.estimatedKm);
+      await registerMovementKilometers(result.estimatedKm, result.estimatedWeekKm);
       if (result.awarded > 0 && notificationSettingsRef.current.movement) {
         await showMovementRewardNotification(result.awarded);
       }
@@ -963,10 +994,10 @@ function AppContent() {
     }
   }
 
-  async function registerMovementKilometers(estimatedKm: number) {
+  async function registerMovementKilometers(estimatedKm: number, estimatedWeekKm?: number) {
     const currentUser = userRef.current;
     if (!currentUser || estimatedKm <= 0) return;
-    const updated = await syncMovementKilometers(currentUser, estimatedKm);
+    const updated = await syncMovementKilometers(currentUser, estimatedKm, estimatedWeekKm);
     setUser(updated);
     userRef.current = updated;
   }
@@ -1027,6 +1058,22 @@ function AppContent() {
     }
     if (type === "duel") {
       openBugSmashDuel(undefined, duelId);
+      return;
+    }
+    if (type === "movement") {
+      setSelectedBug(null);
+      setSelectedUser(null);
+      setRoute("home");
+      const queuedBugIds = await claimQueuedRadarBugs().catch(() => []);
+      if (queuedBugIds.length > 0) {
+        await showClaimedRadarBugs(queuedBugIds);
+        return;
+      }
+      if (currentUser) {
+        const result = await claimMovementRadarBonusesForApp(currentUser.uid, movementBoostForUser(currentUser)).catch(() => null);
+        if (result?.estimatedKm) await registerMovementKilometers(result.estimatedKm, result.estimatedWeekKm).catch(() => undefined);
+        if (result?.bugIds.length) await showClaimedRadarBugs(result.bugIds);
+      }
       return;
     }
     if (!bugId) return;

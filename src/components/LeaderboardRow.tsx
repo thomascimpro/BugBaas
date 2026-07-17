@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { entryByBugId } from "../services/bugDexService";
 import { BugDexRarity, bugDexEntries } from "../services/pointsService";
-import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
+import { bugDexEntryName, useI18n } from "../services/i18n";
 import { presenceLabel } from "../services/presenceService";
 import { User } from "../types";
 import { BugArtImage } from "./BugArtImage";
@@ -22,11 +22,19 @@ export type LastCatchSummary = {
 };
 
 const rarityColors: Record<BugDexRarity, string> = {
-  Gewoon: "#6f7f5f",
-  Zeldzaam: "#15724f",
-  Episch: "#356d7c",
-  Legendarisch: "#b83227",
-  Mythisch: "#7c3aed"
+  Gewoon: "#2f9e44",
+  Zeldzaam: "#228be6",
+  Episch: "#9c36b5",
+  Legendarisch: "#f59f00",
+  Mythisch: "#ef4444"
+};
+
+const rarityStars: Record<BugDexRarity, string> = {
+  Gewoon: "★",
+  Zeldzaam: "★★",
+  Episch: "★★★",
+  Legendarisch: "★★★★",
+  Mythisch: "★★★★★"
 };
 
 export function LeaderboardRow({ index, lastCatch, metricLabel, metricValue, user, onPress }: { index: number; lastCatch?: LastCatchSummary; metricLabel?: string; metricValue?: number; user: User; onPress: () => void }) {
@@ -49,8 +57,8 @@ export function LeaderboardRow({ index, lastCatch, metricLabel, metricValue, use
       </View>
       <View style={styles.body}>
         <View style={styles.nameRow}>
-          <Text adjustsFontSizeToFit ellipsizeMode="tail" minimumFontScale={0.78} numberOfLines={1} style={[styles.name, medal && styles.topThreeName]}>{user.displayName}</Text>
-          <Text style={[styles.status, medal && { backgroundColor: medal.pill, color: medal.pillText }]}>{status}</Text>
+          <Text adjustsFontSizeToFit ellipsizeMode="tail" minimumFontScale={0.82} numberOfLines={1} style={styles.name}>{user.displayName}</Text>
+          <Text ellipsizeMode="tail" numberOfLines={1} style={[styles.status, medal && { backgroundColor: medal.pill, color: medal.pillText }]}>{status}</Text>
         </View>
         <Text style={styles.subMeta}>{t("leader.bugDex", { caught: user.bugDexCount ?? 0, total: bugDexEntries.length })}</Text>
         <View style={styles.lastCatchRow}>
@@ -61,7 +69,7 @@ export function LeaderboardRow({ index, lastCatch, metricLabel, metricValue, use
               </View>
               <View style={styles.lastCatchTextBlock}>
                 <Text style={styles.lastCatchTitle} numberOfLines={1}>{bugDexEntryName(lastCatchEntry, t)}</Text>
-                <Text style={[styles.lastCatchMeta, { color: lastCatchColor }]} numberOfLines={2}>{rarityLabel(lastCatch.rarity, t)} - {formatLastCaughtAt(lastCatch.lastUnlockedAt, t)}</Text>
+                <Text style={[styles.lastCatchMeta, { color: lastCatchColor }]} numberOfLines={2}>{rarityStars[lastCatch.rarity]} - {formatLastCaughtAt(lastCatch.lastUnlockedAt, t)}</Text>
               </View>
             </>
           ) : (
@@ -70,8 +78,8 @@ export function LeaderboardRow({ index, lastCatch, metricLabel, metricValue, use
         </View>
       </View>
       <View style={[styles.scorePill, medal && { backgroundColor: medal.pill }]}>
-        <Text style={[styles.points, medal && { color: medal.pillText }]}>{metricValue ?? user.totalPoints}</Text>
-        <Text style={[styles.pointsLabel, medal && { color: medal.pillText }]}>{metricLabel ?? t("leader.score")}</Text>
+        <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={1} style={[styles.points, medal && { color: medal.pillText }]}>{metricValue ?? user.totalPoints}</Text>
+        <Text ellipsizeMode="tail" numberOfLines={1} style={[styles.pointsLabel, medal && { color: medal.pillText }]}>{metricLabel ?? t("leader.score")}</Text>
       </View>
     </Pressable>
   );
@@ -148,27 +156,30 @@ const styles = StyleSheet.create({
   nameRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 7
+    gap: 6,
+    minWidth: 0
   },
   name: {
     color: "#17211c",
     flex: 1,
     flexShrink: 1,
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: "900",
-    lineHeight: 26,
+    lineHeight: 20,
     minWidth: 0
   },
   topThreeName: {
-    fontSize: 25,
-    lineHeight: 29
+    fontSize: 16,
+    lineHeight: 20
   },
   status: {
     backgroundColor: "#e8f1e6",
     borderRadius: 8,
     color: "#15724f",
+    flexShrink: 1,
     fontSize: 9,
     fontWeight: "900",
+    maxWidth: 82,
     paddingHorizontal: 6,
     paddingVertical: 2
   },
@@ -228,7 +239,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#e8f1e6",
     borderRadius: 8,
-    minWidth: 54,
+    flexShrink: 0,
+    width: 66,
     paddingHorizontal: 8,
     paddingVertical: 7
   },
@@ -240,6 +252,7 @@ const styles = StyleSheet.create({
   pointsLabel: {
     color: "#66756f",
     fontSize: 10,
-    fontWeight: "800"
+    fontWeight: "800",
+    maxWidth: "100%"
   }
 });

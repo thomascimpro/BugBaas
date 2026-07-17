@@ -1,7 +1,7 @@
 import { User } from "../types";
 
 export const bugLampStreakLength = 5;
-export const bugLampDurationMs = 24 * 60 * 60 * 1000;
+export const bugLampDurationMs = 12 * 60 * 60 * 1000;
 export const bugLampMovementBoost = 1;
 export const bugLampRarityBoost = 0.025;
 

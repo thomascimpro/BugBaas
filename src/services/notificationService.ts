@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { AppNotification, BugComment, BugReport, NotificationSettings, NotificationType, User } from "../types";
-import { listUsers, updateUserNotificationPushToken } from "./userService";
+import { listUsersLight, updateUserNotificationPushToken } from "./userService";
 
 export const defaultNotificationSettings: NotificationSettings = {
   trade: true,
@@ -109,9 +109,36 @@ export async function showPhoneNotification(notification: AppNotification): Prom
   });
 }
 
+export async function scheduleBuddyTaskNotification(input: { actionLabel: string; body: string; endsAt: number; taskId: string; xp: number }): Promise<string> {
+  await initializePhoneNotifications();
+  const permissions = await Notifications.getPermissionsAsync();
+  if (!permissions.granted) return "";
+  const seconds = Math.max(1, Math.ceil((input.endsAt - Date.now()) / 1000));
+  return Notifications.scheduleNotificationAsync({
+    content: {
+      title: `${input.actionLabel} klaar`,
+      body: input.body,
+      autoDismiss: true,
+      color: "#15724f",
+      data: {
+        buddyTaskId: input.taskId,
+        type: "buddy"
+      },
+      priority: Notifications.AndroidNotificationPriority.MAX,
+      sound: true,
+      sticky: false,
+      vibrate: [0, 250, 120, 250]
+    },
+    trigger: Platform.OS === "android"
+      ? { channelId: phoneNotificationChannelId, seconds, type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL }
+      : { seconds, type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL }
+  });
+}
+
 export async function dismissPhoneNotification(notificationRequestId: string): Promise<void> {
   if (!notificationRequestId) return;
   await Notifications.dismissNotificationAsync(notificationRequestId).catch(() => undefined);
+  await Notifications.cancelScheduledNotificationAsync(notificationRequestId).catch(() => undefined);
 }
 
 export async function dismissPresentedNotificationsForTarget(target: { bugId?: string; duelId?: string; notificationId?: string; type?: string }): Promise<void> {
@@ -223,7 +250,7 @@ async function notifyRecipients(
 }
 
 export async function notifyNewBug(bug: BugReport, actor: User): Promise<void> {
-  const users = await listUsers();
+  const users = await listUsersLight();
   const reportType = bug.reportType ?? "bug";
   const title = reportType === "bug" ? "Nieuwe bug" : reportType === "tip" ? "Nieuwe tip" : reportType === "workaround" ? "Nieuwe trick" : "Nieuw idee";
   await notifyRecipients(users, actor, "new_bug", {

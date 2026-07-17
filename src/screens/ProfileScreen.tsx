@@ -8,9 +8,10 @@ import { StatusBadge } from "../components/StatusBadge";
 import { TierBadge } from "../components/TierBadge";
 import { getBadgeArtSource } from "../services/badgeArt";
 import { listBugs } from "../services/bugService";
-import { entryByBugId, listBugDexInventory } from "../services/bugDexService";
+import { entryByBugId, listBugDexInventory, listBugDexUnlocks } from "../services/bugDexService";
 import { bugDexSetById } from "../services/bugDexSetService";
-import { bugSquadBonusForEntry, BugSquadBonusCategory } from "../services/bugSquadService";
+import { listBugMastery, normalizeBugMastery } from "../services/bugMasteryService";
+import { bugSquadBonusForEntry, BugSquadBonusCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
 import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
 import { presenceLabel } from "../services/presenceService";
 import {
@@ -35,9 +36,9 @@ import {
   updateOrganizationName
 } from "../services/organizationService";
 import { BadgeDefinition, badgeDefinitions, BugDexEntry, BugDexRarity, bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
-import { bestUnlockedCharacterId, CharacterId, characterOptions, isCharacterUnlocked, safeCharacterId } from "../services/characterService";
-import { getUserById, listUsers, upvotePointValue } from "../services/userService";
-import { BugDexInventoryItem, BugReport, Organization, OrganizationInvite, User } from "../types";
+import { bestUnlockedCharacterId, CharacterId, CharacterUnlockContext, characterOptions, isCharacterUnlocked, safeCharacterId } from "../services/characterService";
+import { getUserById, listUsersLight, upvotePointValue } from "../services/userService";
+import { BugDexInventoryItem, BugDexUnlock, BugMastery, BugReport, Organization, OrganizationInvite, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 const bugDexCollectionImage = require("../../assets/generated/bugdex-collection-view-hd.jpg");
@@ -47,7 +48,7 @@ type Props = {
   isOwnProfile?: boolean;
   onBack: () => void;
   onLogout?: () => void;
-  onUpdateCharacter?: (characterId: CharacterId) => Promise<void>;
+  onUpdateCharacter?: (characterId: CharacterId, context?: CharacterUnlockContext) => Promise<void>;
   onUpdateDisplayName?: (displayName: string) => Promise<void>;
   onCreateOrganization?: (organizationName: string) => Promise<void>;
   onUserUpdated?: (user: User) => void;
@@ -87,9 +88,8 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   const [loadingBugs, setLoadingBugs] = useState(true);
   const [loadingBugDex, setLoadingBugDex] = useState(true);
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
-  const storedCharacterId = safeCharacterId(user.characterId);
-  const selectedCharacterId = isCharacterUnlocked(storedCharacterId, user.totalPoints) ? storedCharacterId : bestUnlockedCharacterId(user.totalPoints);
-  const selectedCharacter = characterOptions.find((item) => item.id === selectedCharacterId) ?? characterOptions[0];
+  const [unlockHistory, setUnlockHistory] = useState<BugDexUnlock[]>([]);
+  const [masteryByBugId, setMasteryByBugId] = useState<Record<string, BugMastery>>({});
   const userOrganizationIds = organizationIdsForUser(organizationUser);
   const userOrganizationNames = organizationNamesForUser(organizationUser);
   const currentOrganizationId = userOrganizationIds.includes(selectedOrganizationId) ? selectedOrganizationId : userOrganizationIds[0] ?? organizationIdForUser(organizationUser);
@@ -104,7 +104,13 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
     .filter((candidate) => !openInviteUserIds.has(candidate.uid));
   const selectedInviteUser = inviteCandidates.find((candidate) => candidate.uid === selectedInviteUserId) ?? null;
   const ownedBugDexIds = new Set(inventory.filter((item) => item.count > 0).map((item) => item.bugId));
-  const unlockedBadges = badgeDefinitions.filter((badge) => badgeUnlocked(user, badge, ownedBugDexIds));
+  const unlockedBugDexIds = new Set([...ownedBugDexIds, ...unlockHistory.map((item) => item.bugId)]);
+  const characterUnlockContext: CharacterUnlockContext = { unlockedBugDexIds, user };
+  const selectedCharacterUnlockContext: CharacterUnlockContext = { allowUnknownSetBadges: loadingBugDex, unlockedBugDexIds: loadingBugDex ? undefined : unlockedBugDexIds, user };
+  const storedCharacterId = safeCharacterId(user.characterId);
+  const selectedCharacterId = isCharacterUnlocked(storedCharacterId, user.totalPoints, selectedCharacterUnlockContext) ? storedCharacterId : bestUnlockedCharacterId(user.totalPoints, characterUnlockContext);
+  const selectedCharacter = characterOptions.find((item) => item.id === selectedCharacterId) ?? characterOptions[0];
+  const unlockedBadges = badgeDefinitions.filter((badge) => badgeUnlocked(user, badge, unlockedBugDexIds));
   const bugDexItems = inventory
     .map((item) => {
       const entry = entryByBugId(item.bugId);
@@ -113,6 +119,11 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
     })
     .filter((item): item is { entry: BugDexEntry; index: number; item: BugDexInventoryItem } => Boolean(item))
     .sort((a, b) => a.index - b.index);
+  const visibleBugDexCount = Math.max(user.bugDexCount ?? 0, bugDexItems.length);
+  const activeSquadIds = sanitizeActiveBugSquad(user.activeBugSquad);
+  const activeSquadEntries = activeSquadIds
+    .map((bugId) => entryByBugId(bugId))
+    .filter((entry): entry is BugDexEntry => Boolean(entry));
 
   useEffect(() => {
     setLoadingBugs(true);
@@ -120,9 +131,15 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
       .then((items) => setBugs(items.filter((bug) => (bug.reportType ?? "bug") === "bug" && bug.reporterId === user.uid)))
       .finally(() => setLoadingBugs(false));
     setLoadingBugDex(true);
-    listBugDexInventory(user)
-      .then(setInventory)
+    Promise.all([listBugDexInventory(user), listBugDexUnlocks(user)])
+      .then(([items, unlocks]) => {
+        setInventory(items);
+        setUnlockHistory(unlocks);
+      })
       .finally(() => setLoadingBugDex(false));
+    listBugMastery(user)
+      .then((items) => setMasteryByBugId(Object.fromEntries(items.map((item) => [item.bugId, item]))))
+      .catch(() => setMasteryByBugId({}));
   }, [user.uid]);
 
   useEffect(() => {
@@ -168,7 +185,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
       const [membersResult, invitesResult, usersResult] = await Promise.allSettled([
         listOrganizationMembers(orgUser, safeOrganizationId),
         listOrganizationInvites(orgUser, safeOrganizationId),
-        listUsers()
+        listUsersLight()
       ]);
       const nextMembers = membersResult.status === "fulfilled" ? membersResult.value : [];
       const nextInvites = invitesResult.status === "fulfilled" ? invitesResult.value : [];
@@ -333,7 +350,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   }
 
   const renderBadge = (badge: BadgeDefinition) => {
-    const unlocked = badgeUnlocked(user, badge, ownedBugDexIds);
+    const unlocked = badgeUnlocked(user, badge, unlockedBugDexIds);
     const badgeArt = getBadgeArtSource(badge.id);
     return (
       <View key={badge.id} style={[styles.badge, !unlocked && styles.badgeLocked]}>
@@ -400,7 +417,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
           <Text style={styles.label}>{t("home.bugs")}</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.value}>{user.bugDexCount ?? 0}/{bugDexEntries.length}</Text>
+          <Text style={styles.value}>{visibleBugDexCount}/{bugDexEntries.length}</Text>
           <Text style={styles.label}>BugDex</Text>
         </View>
       </View>
@@ -598,6 +615,30 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
         </View>
       )}
 
+      {!isOwnProfile && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t("bugdex.activeSquad")}</Text>
+          <Text style={styles.activeSquadMeta}>{t("bugdex.activeSquadMeta", { count: activeSquadEntries.length, max: maxActiveBugSquadSize })}</Text>
+          <View style={styles.profileSquadGrid}>
+            {activeSquadEntries.length ? activeSquadEntries.map((entry) => {
+              const color = rarityColor(entry.rarity);
+              const mastery = masteryByBugId[entry.id] ?? normalizeBugMastery(entry.id);
+              return (
+                <View key={entry.id} style={[styles.profileSquadCard, { borderColor: color, backgroundColor: `${color}14` }]}>
+                  <BugArtImage bugId={entry.id} size={58} />
+                  <Text style={styles.profileSquadName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>
+                  <View style={styles.profileSquadRarityRow}>
+                    <Text style={[styles.profileSquadRarity, { color }]} numberOfLines={1}>{rarityLabel(entry.rarity, t)}</Text>
+                    <View style={styles.profileSquadStars}>{rarityStars(entry.rarity).map((_, index) => <Text key={index} style={[styles.profileSquadStar, { color }]}>★</Text>)}</View>
+                  </View>
+                  <Text style={[styles.profileSquadLevel, { color }]}>{t("bugdex.mastery.levelShort", { level: mastery.level })}</Text>
+                </View>
+              );
+            }) : <Text style={styles.emptyText}>{t("profile.noBugDex")}</Text>}
+          </View>
+        </View>
+      )}
+
       <View style={styles.card}>
         <Pressable style={styles.bugDexFeatureButton} onPress={() => setBugDexVisible(true)}>
           <Image accessibilityIgnoresInvertColors resizeMode="cover" source={bugDexCollectionImage} style={styles.bugDexFeatureImage} />
@@ -636,7 +677,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
               <View style={styles.characterGrid}>
                 {characterOptions.map((option) => {
                   const selected = option.id === selectedCharacterId;
-                  const unlocked = isCharacterUnlocked(option.id, user.totalPoints);
+                  const unlocked = isCharacterUnlocked(option.id, user.totalPoints, characterUnlockContext);
                   return (
                     <Pressable
                       key={option.id}
@@ -645,7 +686,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
                       onPress={async () => {
                         setCharacterBusy(option.id);
                         try {
-                          await onUpdateCharacter(option.id);
+                          await onUpdateCharacter(option.id, characterUnlockContext);
                         } finally {
                           setCharacterBusy("");
                         }
@@ -653,7 +694,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
                     >
                       <CharacterAvatarImage characterId={option.id} selected={selected} size={66} />
                       <Text style={styles.characterName} numberOfLines={2}>{characterBusy === option.id ? "..." : option.label}</Text>
-                      {!unlocked && <Text style={styles.characterLockText} numberOfLines={1}>{t("profile.characterUnlock", { points: option.unlockPoints })}</Text>}
+                      {!unlocked && <Text style={styles.characterLockText} numberOfLines={1}>{option.unlockLabel ?? t("profile.characterUnlock", { points: option.unlockPoints })}</Text>}
                     </Pressable>
                   );
                 })}
@@ -808,19 +849,30 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
 
 function rarityColor(rarity: BugDexRarity): string {
   const colors: Record<BugDexRarity, string> = {
-    Gewoon: "#6f7f5f",
-    Zeldzaam: "#15724f",
-    Episch: "#356d7c",
-    Legendarisch: "#b83227",
-    Mythisch: "#7c3aed"
+    Gewoon: "#2f9e44",
+    Zeldzaam: "#228be6",
+    Episch: "#9c36b5",
+    Legendarisch: "#f59f00",
+    Mythisch: "#ef4444"
   };
   return colors[rarity];
 }
 
-function badgeUnlocked(user: User, badge: BadgeDefinition, ownedBugDexIds: Set<string>): boolean {
+function rarityStars(rarity: BugDexRarity): number[] {
+  const counts: Record<BugDexRarity, number> = {
+    Gewoon: 1,
+    Zeldzaam: 2,
+    Episch: 3,
+    Legendarisch: 4,
+    Mythisch: 5
+  };
+  return Array.from({ length: counts[rarity] });
+}
+
+function badgeUnlocked(user: User, badge: BadgeDefinition, unlockedBugDexIds: Set<string>): boolean {
   if (badge.bugDexSetId) {
     const set = bugDexSetById(badge.bugDexSetId);
-    return Boolean(set && set.bugIds.every((bugId) => ownedBugDexIds.has(bugId)));
+    return Boolean(set && set.bugIds.every((bugId) => unlockedBugDexIds.has(bugId)));
   }
   return (badge.minBugReports === undefined || user.bugCount >= badge.minBugReports) &&
     (badge.minBugDexCaught === undefined || (user.bugDexCount ?? 0) >= badge.minBugDexCaught) &&
@@ -1224,6 +1276,58 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900",
     marginBottom: 10
+  },
+  activeSquadMeta: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "900",
+    marginBottom: 10,
+    marginTop: -6
+  },
+  profileSquadGrid: {
+    flexDirection: "row",
+    gap: 8
+  },
+  profileSquadCard: {
+    alignItems: "center",
+    backgroundColor: "#f7faf6",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    minWidth: 0,
+    padding: 9
+  },
+  profileSquadName: {
+    color: "#102018",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 5,
+    maxWidth: "100%"
+  },
+  profileSquadRarityRow: {
+    alignItems: "center",
+    gap: 3,
+    marginTop: 3,
+    maxWidth: "100%"
+  },
+  profileSquadRarity: {
+    fontSize: 9,
+    fontWeight: "900",
+    maxWidth: "100%"
+  },
+  profileSquadStars: {
+    flexDirection: "row",
+    gap: 1
+  },
+  profileSquadStar: {
+    fontSize: 11,
+    fontWeight: "900",
+    lineHeight: 13
+  },
+  profileSquadLevel: {
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 3
   },
   bugDexFeatureButton: {
     backgroundColor: "#102018",

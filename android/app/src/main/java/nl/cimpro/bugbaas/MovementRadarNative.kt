@@ -42,6 +42,7 @@ data class MovementProgressSnapshot(
   val awardedToday: Int,
   val claimableRewards: Int,
   val dataTypes: List<MovementDataTypeSnapshot>,
+  val estimatedWeekKm: Double,
   val goals: List<MovementGoalSnapshot>,
   val maxRewards: Int,
   val reason: String? = null
@@ -51,6 +52,7 @@ data class MovementClaimSnapshot(
   val awarded: Int,
   val bugIds: List<String>,
   val estimatedKm: Double,
+  val estimatedWeekKm: Double = estimatedKm,
   val reason: String? = null
 )
 
@@ -91,7 +93,9 @@ object MovementRadarNative {
 
   suspend fun claimAvailable(context: Context, movementBoost: Double = 0.0, queueForWidget: Boolean = true): MovementClaimSnapshot {
     val rawSnapshot = readHealthConnectSnapshot(context)
-    if (!rawSnapshot.available) return MovementClaimSnapshot(0, emptyList(), 0.0, rawSnapshot.reason)
+    if (!rawSnapshot.available) return MovementClaimSnapshot(0, emptyList(), 0.0, reason = rawSnapshot.reason)
+    val weekSnapshot = readHealthConnectSnapshot(context, startOfIsoWeek())
+    val estimatedWeekKm = if (weekSnapshot.available) weekSnapshot.estimatedKm else rawSnapshot.estimatedKm
 
     val today = localDayId()
     val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -101,7 +105,7 @@ object MovementRadarNative {
     val earnedToday = earnedUnits(snapshot, targets)
     val claimable = maxOf(0, minOf(maxMovementRadarBugsPerDay, earnedToday) - awardedToday)
     storeNextCarryover(prefs, snapshot, targets)
-    if (claimable <= 0) return MovementClaimSnapshot(0, emptyList(), rawSnapshot.estimatedKm)
+    if (claimable <= 0) return MovementClaimSnapshot(0, emptyList(), rawSnapshot.estimatedKm, estimatedWeekKm)
 
     val bugIds = BugRadarWidgetProvider.pickRandomRadarBugIds(claimable)
     val awarded = if (queueForWidget) BugRadarWidgetProvider.enqueueRadarBugs(context, bugIds) else bugIds.size
@@ -111,12 +115,14 @@ object MovementRadarNative {
         .putInt(prefAwardedUnits, minOf(maxMovementRadarBugsPerDay, awardedToday + awarded))
         .apply()
     }
-    return MovementClaimSnapshot(awarded, bugIds.take(awarded), rawSnapshot.estimatedKm)
+    return MovementClaimSnapshot(awarded, bugIds.take(awarded), rawSnapshot.estimatedKm, estimatedWeekKm)
   }
 
   suspend fun progress(context: Context, movementBoost: Double = 0.0): MovementProgressSnapshot {
     val rawSnapshot = readHealthConnectSnapshot(context)
     if (!rawSnapshot.available) return emptyProgress(rawSnapshot.reason ?: "health_error", rawSnapshot.dataTypes)
+    val weekSnapshot = readHealthConnectSnapshot(context, startOfIsoWeek())
+    val estimatedWeekKm = if (weekSnapshot.available) weekSnapshot.estimatedKm else rawSnapshot.estimatedKm
 
     val targets = boostedTargets(movementBoost)
     val today = localDayId()
@@ -131,6 +137,7 @@ object MovementRadarNative {
       awardedToday = awardedToday,
       claimableRewards = claimable,
       dataTypes = snapshot.dataTypes,
+      estimatedWeekKm = estimatedWeekKm,
       goals = listOf(
         makeGoal("walking", "Lopen", snapshot.walkingMeters, targets.walking),
         makeGoal("running", "Hardlopen", snapshot.runningMeters, targets.running),
@@ -142,7 +149,7 @@ object MovementRadarNative {
 
   fun isMovementAction(action: String?): Boolean = action == actionMovementCheck
 
-  private suspend fun readHealthConnectSnapshot(context: Context): ExerciseSnapshot {
+  private suspend fun readHealthConnectSnapshot(context: Context, startOverride: Instant? = null): ExerciseSnapshot {
     val status = HealthConnectClient.getSdkStatus(context)
     if (status != HealthConnectClient.SDK_AVAILABLE) {
       return ExerciseSnapshot(false, dataTypes = unavailableDataTypes("health_connect_unavailable"), reason = "health_connect_unavailable")
@@ -160,7 +167,7 @@ object MovementRadarNative {
       }
 
       val zone = ZoneId.systemDefault()
-      val start = LocalDate.now(zone).atStartOfDay(zone).toInstant()
+      val start = startOverride ?: LocalDate.now(zone).atStartOfDay(zone).toInstant()
       val end = Instant.now()
       val sessions = if (canReadExercise) readMovementSessions(client, start, end) else emptyList()
 
@@ -241,8 +248,7 @@ object MovementRadarNative {
   }
 
   private fun trustedStepRecording(recordingMethod: Int): Boolean {
-    return recordingMethod == Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED
-      || recordingMethod == Metadata.RECORDING_METHOD_ACTIVELY_RECORDED
+    return recordingMethod != Metadata.RECORDING_METHOD_MANUAL_ENTRY
   }
 
   private suspend fun buildDataTypeStatuses(
@@ -390,6 +396,7 @@ object MovementRadarNative {
       awardedToday = 0,
       claimableRewards = 0,
       dataTypes = dataTypes,
+      estimatedWeekKm = 0.0,
       goals = listOf(
         makeGoal("walking", "Lopen", 0.0, walkingMetersPerRadarBug),
         makeGoal("running", "Hardlopen", 0.0, runningMetersPerRadarBug),
@@ -471,6 +478,12 @@ object MovementRadarNative {
 
   private fun localDayId(): String {
     return LocalDate.now(ZoneId.systemDefault()).toString()
+  }
+
+  private fun startOfIsoWeek(): Instant {
+    val zone = ZoneId.systemDefault()
+    val today = LocalDate.now(zone)
+    return today.minusDays((today.dayOfWeek.value - 1).toLong()).atStartOfDay(zone).toInstant()
   }
 
   private fun nextLocalDayId(): String {

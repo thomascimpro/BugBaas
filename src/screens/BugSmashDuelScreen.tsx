@@ -1,15 +1,24 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ActivityIndicator, Alert, Animated, Image, Modal, Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { ActivityIndicator, Alert, Animated, Image, ImageSourcePropType, ImageStyle, Modal, Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
+import { BugJarArt } from "../components/BugJarArt";
 import { BugSwatterHit, playBugSwatterFeedback } from "../components/BugSwatterHit";
+import { BugGlideGame } from "../components/minigames/BugGlideGame";
+import { BugTowerGame } from "../components/minigames/BugTowerGame";
+import { NestDefenseGame } from "../components/minigames/NestDefenseGame";
+import { WebRunnerGame } from "../components/minigames/WebRunnerGame";
+import { loadArcadeHighScore, saveArcadeRunResult } from "../services/arcadeResultService";
 import { BugDexDropResult, grantBugDexReward, listBugDexInventory } from "../services/bugDexService";
+import { awardBugMasteryXp, bugMasterySessionSkill, listBugMastery, normalizeBugMastery } from "../services/bugMasteryService";
+import { minigameAssets, SpriteRect } from "../services/minigameAssets";
 import { activeBugSquadBonusList, BugSquadAttackKind, bugSquadAttackKindForCategory, BugSquadBonusCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
 import { bugSmashDuelBalanceForUser, BugSmashDuelBalance } from "../services/bugSquadGameBalance";
 import {
   bugSmashDuelBugCount,
   bugSmashDuelDurationMs,
   bugSmashDuelStartDelayMs,
+  applyDuelRatingDecay,
   acknowledgeBugSmashDuelResult,
   cancelBugSmashDuel,
   claimBugSmashDuelReward,
@@ -17,6 +26,7 @@ import {
   createOpenRandomBugSmashDuel,
   claimOpenRandomBugSmashDuel,
   isBugSmashDuelActionForUser,
+  listOpenRandomBugSmashDuels,
   listBugSmashDuels,
   respondBugSmashDuel,
   submitBugSmashDuelScore,
@@ -32,9 +42,9 @@ import { soloCampaignConfig, soloCampaignBugIds, soloCampaignMaxLevel, soloCampa
 import { loadSoloCampaignProgress, saveSoloCampaignProgress } from "../services/soloCampaignProgressService";
 import { claimSoloCampaignBossDailyReward } from "../services/soloCampaignRewardService";
 import { recordSoloCampaignBossDefeated } from "../services/missionProgressService";
-import { activateSoloLampFocus, consumeSoloBugBomb, emptySoloPowerupInventory, grantSoloBossReward, loadSoloPowerupInventory, soloLampFocusActive, soloLampFocusRemainingMinutes, type SoloPowerupInventory } from "../services/soloPowerupService";
-import { listUsers, updateUserBugSquad } from "../services/userService";
-import { BugDexInventoryItem, BugSmashDuel, BugSmashDuelScore, User } from "../types";
+import { activateSoloLampFocus, consumeSoloBugBomb, emptySoloPowerupInventory, grantSoloBossReward, loadSoloPowerupInventory, soloLampFocusActive, soloLampFocusRemainingSeconds, type SoloPowerupInventory } from "../services/soloPowerupService";
+import { listUsersLight, updateUserBugSquad } from "../services/userService";
+import { ArcadeMode, ArcadeRunResult, BugDexInventoryItem, BugMastery, BugSmashDuel, BugSmashDuelScore, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
@@ -54,7 +64,15 @@ const squadJarImage = require("../../assets/generated/bug-squad-empty-jar-hd.png
 const trainingModeImage = require("../../assets/generated/arena-training-mode-hd.jpg");
 const soloCampaignImage = require("../../assets/generated/solo-duel-campaign-hd.jpg");
 const soloPowerupLampImage = require("../../assets/generated/solo-powerup-lamp-hd.jpg");
+const soloPowerupSprayImage = require("../../assets/generated/bugspray-hd.png");
 const soloPowerupBombImage = require("../../assets/generated/solo-powerup-bomb-hd.jpg");
+const arcadeShowcaseImage = require("../../assets/generated/ChatGPT Image 18 jun 2026, 22_34_06.png");
+const bugTowerImage = require("../../assets/minigames/bug-tower/bug-tower-background.png");
+const arcadeCardArt = {
+  bugGlide: { x: 390, y: 744, width: 756, height: 744 },
+  nestDefense: { x: 768, y: 20, width: 744, height: 724 },
+  webRunner: { x: 20, y: 20, width: 724, height: 724 }
+} as const;
 const soloBossImages = {
   1: require("../../assets/generated/solo-boss-stag-hd.png"),
   2: require("../../assets/generated/solo-boss-mantis-hd.png"),
@@ -78,12 +96,13 @@ const duelTargetFinalSpawnBufferMs = 650;
 const maxVisibleDuelTargets = 10;
 const soloBugBombHitCount = 2;
 const soloBugBombMaxTargets = 4;
-const soloLampFocusPulseCooldownMs = 4600;
-const soloLampFocusTapMultiplier = 0.85;
+const soloSprayTapRadius = 34;
+const soloSprayTapMaxTargets = 6;
 
 type HelperImpactKind = BugSquadAttackKind;
 type HelperAnimationStyle = "orb" | "pulse" | "slash";
 type MythicSpecialKind = "royal_freeze" | "prism_chain" | "pattern_break" | "candy_slow" | "longneck_scout" | "bloom_blade" | "lantern_signal" | "mirror_guard";
+type SoloBossMechanicKind = "armor" | "dash" | "core" | "swarm" | "rage";
 
 type MythicSpecialSpec = {
   animationStyle: HelperAnimationStyle;
@@ -129,14 +148,14 @@ type SoloRun = {
   mode: "campaign";
 };
 
-type ArenaMode = "duel" | "solo" | "training";
+type ArenaMode = "bug_glide" | "bug_tower" | "duel" | "nest_defense" | "solo" | "training" | "web_runner";
 
 const rarityColors: Record<BugDexRarity, string> = {
   Gewoon: "#2f9e44",
   Zeldzaam: "#228be6",
   Episch: "#9c36b5",
   Legendarisch: "#f59f00",
-  Mythisch: "#e03131"
+  Mythisch: "#ef4444"
 };
 
 const rarityStars: Record<BugDexRarity, string> = {
@@ -294,6 +313,12 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [users, setUsers] = useState<User[]>([]);
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
   const [duels, setDuels] = useState<BugSmashDuel[]>([]);
+  const [recentDuels, setRecentDuels] = useState<BugSmashDuel[]>([]);
+  const [openRandomDuels, setOpenRandomDuels] = useState<BugSmashDuel[]>([]);
+  const [recentDuelsOpen, setRecentDuelsOpen] = useState(false);
+  const [openRandomDuelsOpen, setOpenRandomDuelsOpen] = useState(false);
+  const [recentDuelsLoading, setRecentDuelsLoading] = useState(false);
+  const [openRandomDuelsLoading, setOpenRandomDuelsLoading] = useState(false);
   const [activeDuelId, setActiveDuelId] = useState(initialDuelId);
   const [activeDuel, setActiveDuel] = useState<BugSmashDuel | null>(null);
   const [trainingDuel, setTrainingDuel] = useState<BugSmashDuel | null>(null);
@@ -301,7 +326,10 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [soloWaveCleared, setSoloWaveCleared] = useState(false);
   const [runSubmitted, setRunSubmitted] = useState(false);
   const [arenaMode, setArenaMode] = useState<ArenaMode>("duel");
+  const [arcadeTrainingMode, setArcadeTrainingMode] = useState(false);
+  const [webRunnerBestScore, setWebRunnerBestScore] = useState(0);
   const [activeSquadIds, setActiveSquadIds] = useState<string[]>(sanitizeActiveBugSquad(user.activeBugSquad));
+  const [masteryByBugId, setMasteryByBugId] = useState<Record<string, BugMastery>>({});
   const [selectedOpponentId, setSelectedOpponentId] = useState(initialOpponent?.uid ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -310,6 +338,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [soloRewardNotice, setSoloRewardNotice] = useState("");
   const [soloBombFlash, setSoloBombFlash] = useState(false);
   const [soloBombPrimed, setSoloBombPrimed] = useState(false);
+  const [soloSprayHeld, setSoloSprayHeld] = useState(false);
   const [soloCampaignUnlockedWave, setSoloCampaignUnlockedWave] = useState(1);
   const [soloCampaignLives, setSoloCampaignLives] = useState(soloCampaignStartingLives);
   const [squadModalVisible, setSquadModalVisible] = useState(false);
@@ -340,10 +369,14 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const frozenTargetsRef = useRef<Record<string, FrozenTarget>>({});
   const targetTimeOffsetsRef = useRef<Record<string, number>>({});
   const soloBombPrimedRef = useRef(false);
-  const soloLampPulseAtRef = useRef(0);
+  const soloSprayHeldRef = useRef(false);
+  const soloSprayStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCatchAtRef = useRef(0);
   const lastHitSoundAtRef = useRef(0);
+  const lastSpraySoundAtRef = useRef(0);
   const soloBossRewardedRef = useRef(new Set<string>());
+  const soloMasteryAwardedRef = useRef(new Set<string>());
+  const masterySkillUsedRef = useRef(new Set<string>());
   const soloBossProgressRecordedRef = useRef(new Set<string>());
   const soloCampaignClearRewardedRef = useRef(new Set<string>());
   const assist = useMemo(() => bugSmashDuelBalanceForUser({ activeBugSquad: activeSquadIds }), [activeSquadIds]);
@@ -356,6 +389,17 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   }, [initialOpponent, user.uid, users]);
   const activeSquadBonuses = activeBugSquadBonusList(activeSquadIds);
   const selectedOpponentBlocked = selectedOpponentId ? duels.some((duel) => isActiveDuelBetweenUsers(duel, user.uid, selectedOpponentId)) : false;
+
+  useEffect(() => {
+    let active = true;
+    void applyDuelRatingDecay(user).then((result) => {
+      if (!active || result.decayedBy === 0) return;
+      onUserUpdated?.(result.user);
+    }).catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [user.uid]);
   const canStartChallenge = Boolean(selectedOpponentId && !selectedOpponentBlocked && !busy);
   const isAcknowledgedWaitingDuel = (duel: BugSmashDuel) => {
     const opponentId = duel.fromUserId === user.uid ? duel.toUserId : duel.fromUserId;
@@ -373,6 +417,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   });
 
   function resetRunState() {
+    stopSoloSpray();
     submittedRef.current = false;
     soloWaveClearedRef.current = false;
     scoreRef.current = 0;
@@ -383,15 +428,27 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     helperCooldownAtRef.current = {};
     frozenTargetsRef.current = {};
     targetTimeOffsetsRef.current = {};
-    soloLampPulseAtRef.current = 0;
     lastCatchAtRef.current = 0;
     lastHitSoundAtRef.current = 0;
+    lastSpraySoundAtRef.current = 0;
     setRunSubmitted(false);
     setSoloWaveCleared(false);
     setScore(0);
     setCaughtBugIds([]);
     setHitCounts({});
     setHelperImpacts([]);
+  }
+
+  function returnToArenaHome() {
+    setActiveDuelId("");
+    setActiveDuel(null);
+    setTrainingDuel(null);
+    setSoloRun(null);
+    setArenaMode("duel");
+    setArcadeTrainingMode(false);
+    setChallengeNotice("");
+    setError("");
+    resetRunState();
   }
 
   function buildCurrentDuelScore(): BugSmashDuelScore {
@@ -408,13 +465,15 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   async function saveDuelScoreNow(duel: BugSmashDuel, submittedScore: BugSmashDuelScore): Promise<BugSmashDuel> {
     const safeSubmittedScore = preferredDuelScore(localSubmittedScores[duel.id], normalizeDuelScore(submittedScore));
-    await savePendingDuelScore(user.uid, duel.id, safeSubmittedScore).catch(() => undefined);
-    setLocalSubmittedScores((current) => ({ ...current, [duel.id]: preferredDuelScore(current[duel.id], safeSubmittedScore) }));
     const existingSubmit = scoreSubmitPromisesRef.current[duel.id];
     if (existingSubmit) return existingSubmit;
     const submit = submitBugSmashDuelScore(user, duel.id, safeSubmittedScore.score, safeSubmittedScore.caughtBugIds, safeSubmittedScore.bonusScore)
       .then((savedDuel) => {
         void removePendingDuelScore(user.uid, savedDuel.id).catch(() => undefined);
+        setLocalSubmittedScores((current) => {
+          const savedScore = savedDuel.scores?.[user.uid] ?? safeSubmittedScore;
+          return { ...current, [savedDuel.id]: preferredDuelScore(current[savedDuel.id], savedScore) };
+        });
         setActiveDuel((current) => current?.id === savedDuel.id ? savedDuel : current);
         void refreshDuels().catch(() => undefined);
         setRetryingDuelIds((current) => {
@@ -423,6 +482,15 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           return next;
         });
         return savedDuel;
+      })
+      .catch(async (error) => {
+        await removePendingDuelScore(user.uid, duel.id).catch(() => undefined);
+        setLocalSubmittedScores((current) => {
+          const next = { ...current };
+          delete next[duel.id];
+          return next;
+        });
+        throw error;
       })
       .finally(() => {
         delete scoreSubmitPromisesRef.current[duel.id];
@@ -437,6 +505,40 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     setSoloCampaignUnlockedWave(nextWave);
     setSoloCampaignLives(nextLives);
     await saveSoloCampaignProgress(user.uid, { lives: nextLives, wave: nextWave }).catch(() => undefined);
+  }
+
+  async function awardActiveSquadMasteryXp(amount: number, source: "active_squad_duel" | "duel_win" | "duel_draw" | "active_squad_solo" | "boss_defeat", eventPrefix: string): Promise<boolean> {
+    const squadIds = sanitizeActiveBugSquad(activeSquadIds, inventory);
+    if (!squadIds.length) return false;
+    const settledResults = await Promise.allSettled(squadIds.map((bugId) =>
+      awardBugMasteryXp(user, bugId, amount, source, `${eventPrefix}:${bugId}`)
+    ));
+    const results = settledResults
+      .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof awardBugMasteryXp>>> => result.status === "fulfilled")
+      .map((result) => result.value);
+    const updatedMastery = results
+      .map((result) => result?.mastery)
+      .filter((mastery): mastery is BugMastery => Boolean(mastery));
+    if (updatedMastery.length) {
+      setMasteryByBugId((current) => ({
+        ...current,
+        ...Object.fromEntries(updatedMastery.map((mastery) => [mastery.bugId, mastery]))
+      }));
+    }
+    return results.some((result) => result?.awarded);
+  }
+
+  async function awardCompletedDuelMasteryXp(duel: BugSmashDuel, result: "win" | "loss" | "draw") {
+    if (!isDuelParticipant(duel, user)) return;
+    const prefix = `duel:${duel.id}:${user.uid}`;
+    await awardActiveSquadMasteryXp(4, "active_squad_duel", `${prefix}:complete`);
+    if (result === "win") await awardActiveSquadMasteryXp(3, "duel_win", `${prefix}:win`);
+    if (result === "draw") await awardActiveSquadMasteryXp(2, "duel_draw", `${prefix}:draw`);
+  }
+
+  function duelResultForUser(duel: BugSmashDuel): "win" | "loss" | "draw" {
+    if (!duel.winnerId) return "draw";
+    return duel.winnerId === user.uid ? "win" : "loss";
   }
 
   useEffect(() => {
@@ -457,7 +559,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   useEffect(() => {
     if (!acknowledgedWaitingLoaded) return () => undefined;
     let active = true;
-    void Promise.all([listUsers(), listBugSmashDuels(user), listBugDexInventory(user)]).then(([nextUsers, nextDuels, nextInventory]) => {
+    void Promise.all([listUsersLight(), listBugSmashDuels(user), listBugDexInventory(user)]).then(([nextUsers, nextDuels, nextInventory]) => {
       if (!active) return;
       setUsers(nextUsers);
       setDuels(nextDuels);
@@ -473,7 +575,32 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     return () => {
       active = false;
     };
-  }, [user.uid, activeDuelId, acknowledgedWaitingLoaded, acknowledgedWaitingDuelIds]);
+  }, [user.uid, acknowledgedWaitingLoaded, acknowledgedWaitingDuelIds]);
+
+  useEffect(() => {
+    let active = true;
+    void listBugMastery(user).then((items) => {
+      if (!active) return;
+      setMasteryByBugId(Object.fromEntries(items.map((item) => [item.bugId, item])));
+    }).catch(() => {
+      if (active) setMasteryByBugId({});
+    });
+    return () => {
+      active = false;
+    };
+  }, [user.uid]);
+
+  useEffect(() => {
+    let active = true;
+    void loadArcadeHighScore(user.uid, "web_runner").then((score) => {
+      if (active) setWebRunnerBestScore(score);
+    }).catch(() => {
+      if (active) setWebRunnerBestScore(0);
+    });
+    return () => {
+      active = false;
+    };
+  }, [arenaMode, user.uid]);
 
   useEffect(() => {
     let active = true;
@@ -494,15 +621,16 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   useEffect(() => {
     let active = true;
     const interval = setInterval(() => {
-      void listUsers().then((nextUsers) => {
+      void listUsersLight().then((nextUsers) => {
         if (active) setUsers(nextUsers);
       }).catch(() => undefined);
-    }, 30 * 1000);
+    }, 10 * 60 * 1000);
     return () => {
       active = false;
       clearInterval(interval);
     };
   }, [user.uid]);
+
 
   useEffect(() => {
     if (initialDuelId) setActiveDuelId(initialDuelId);
@@ -526,6 +654,10 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           && (duel.status === "pending" || duel.status === "accepted")
           && !duel.scores?.[opponentUserId];
         if (!isOwnSentWaitingDuel) {
+          void removePendingDuelScore(user.uid, duel.id).catch(() => undefined);
+          return;
+        }
+        if (duel.arcadeMode && duel.arcadeMode !== "tap_duel" && displayDuelScore(pendingScore) <= 0) {
           void removePendingDuelScore(user.uid, duel.id).catch(() => undefined);
           return;
         }
@@ -608,6 +740,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   const activeLocalStartAt = activeDuel ? localStartAtByDuelId[activeDuel.id] || activeDuel.startAt || "" : "";
   const activeDuelOwnScore = activeDuel?.scores?.[user.uid];
+  const activeArcadeMode = activeDuel?.arcadeMode && activeDuel.arcadeMode !== "tap_duel" ? activeDuel.arcadeMode : null;
+  const activeArcadeOwnScoreIsZero = Boolean(activeArcadeMode && activeDuelOwnScore && displayDuelScore(activeDuelOwnScore) <= 0);
   const retryingActiveDuel = Boolean(activeDuel && retryingDuelIds.has(activeDuel.id));
   const requesterCanPreplay = Boolean(activeDuel?.status === "pending" && activeDuel.fromUserId === user.uid);
   const duelCanRun = Boolean(activeDuel?.status === "accepted" || requesterCanPreplay);
@@ -636,14 +770,19 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           }
           submittedRef.current = true;
           setRunSubmitted(true);
-          if (!trainingDuel) {
+          if (!trainingDuel && (!runningDuel.arcadeMode || runningDuel.arcadeMode === "tap_duel")) {
             void saveDuelScoreNow(runningDuel, buildCurrentDuelScore()).catch(() => setError(t("duel.submitFailed")));
           }
         }
         return;
       }
       if (trainingDuel && submittedRef.current) return;
-      if (trainingDuel && soloRun?.mode === "campaign" && soloLampFocusActive(soloPowerups, timestamp)) runSoloLampFocusPulse(runningDuel, timestamp);
+      const soloSprayActive = trainingDuel && soloRun?.mode === "campaign" && soloLampFocusActive(soloPowerups, timestamp);
+      if (soloSprayActive && !soloSprayHeldRef.current) {
+        soloSprayHeldRef.current = true;
+        setSoloSprayHeld(true);
+      }
+      if (soloSprayHeldRef.current && !soloSprayActive) stopSoloSpray();
       const helperDuel = !trainingDuel && activeLocalStartAt ? { ...runningDuel, startAt: activeLocalStartAt } : runningDuel;
       runHelperTowers(helperDuel, timestamp);
     }, duelGameTickMs);
@@ -651,7 +790,61 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   }, [activeDuel?.id, activeDuel?.status, activeDuel?.startAt, activeDuel?.durationMs, trainingDuel?.id, trainingDuel?.startAt, trainingDuel?.durationMs, activeLocalStartAt, playerNeedsManualStart, assist, soloPowerups.lampFocusActiveUntil, soloRun?.mode, t, user]);
 
   async function refreshDuels() {
-    setDuels(await listBugSmashDuels(user));
+    const nextDuels = await listBugSmashDuels(user);
+    setDuels(nextDuels);
+    return nextDuels;
+  }
+
+  async function loadRecentDuels() {
+    setRecentDuelsLoading(true);
+    setError("");
+    try {
+      const nextDuels = await listBugSmashDuels(user);
+      setDuels(nextDuels);
+      setRecentDuels(nextDuels.filter((duel) => duel.status !== "cancelled"));
+    } catch {
+      setError(t("duel.loadDuelsFailed"));
+    } finally {
+      setRecentDuelsLoading(false);
+    }
+  }
+
+  async function loadOpenRandomDuels() {
+    setOpenRandomDuelsLoading(true);
+    setError("");
+    try {
+      setOpenRandomDuels(await listOpenRandomBugSmashDuels(user));
+    } catch {
+      setError(t("duel.loadDuelsFailed"));
+    } finally {
+      setOpenRandomDuelsLoading(false);
+    }
+  }
+
+  function toggleRecentDuels() {
+    const nextOpen = !recentDuelsOpen;
+    setRecentDuelsOpen(nextOpen);
+    if (nextOpen) void loadRecentDuels();
+  }
+
+  function toggleOpenRandomDuels() {
+    const nextOpen = !openRandomDuelsOpen;
+    setOpenRandomDuelsOpen(nextOpen);
+    if (nextOpen) void loadOpenRandomDuels();
+  }
+
+  function selectNextResultDuel(nextDuels: BugSmashDuel[], ignoredDuelIds: Set<string>) {
+    const resultDuel = nextDuels.find((duel) =>
+      duel.status === "completed"
+      && isDuelParticipant(duel, user)
+      && !duelResultSeenByUser(duel, user)
+      && !dismissedResultDuelIds.has(duel.id)
+      && !ignoredDuelIds.has(duel.id)
+    );
+    if (!resultDuel) return false;
+    setActiveDuelId(resultDuel.id);
+    setActiveDuel(resultDuel);
+    return true;
   }
 
   async function openSquadModal() {
@@ -696,17 +889,19 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     }
   }
 
-  async function startRandomChallenge() {
+  async function startRandomChallenge(mode: ArcadeMode = "tap_duel") {
     if (busy) return;
+    setArcadeTrainingMode(false);
     setTrainingDuel(null);
     setSoloRun(null);
     setBusy(true);
     setError("");
     setChallengeNotice(t("duel.randomFinding"));
+    const options = { arcadeMode: mode };
     try {
       const latestDuels = await listBugSmashDuels(user);
       setDuels(latestDuels);
-      const claimedRandomDuel = await claimOpenRandomBugSmashDuel(user);
+      const claimedRandomDuel = await claimOpenRandomBugSmashDuel(user, options);
       if (claimedRandomDuel) {
         const duel = claimedRandomDuel;
         await dismissPresentedNotificationsForTarget({ duelId: duel.id, type: "duel" }).catch(() => undefined);
@@ -722,7 +917,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         await refreshDuels();
         return;
       }
-      const duel = await createOpenRandomBugSmashDuel(user);
+      const duel = await createOpenRandomBugSmashDuel(user, options);
       const startAt = duel.startAt ?? new Date(Date.now() + bugSmashDuelStartDelayMs).toISOString();
       resetRunState();
       setSelectedOpponentId("");
@@ -799,34 +994,48 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
   async function claimReward() {
     if (!activeDuel || busy) return;
+    const duelToClaim = activeDuel;
     setBusy(true);
     setError("");
+    setDismissedResultDuelIds((current) => new Set([...current, duelToClaim.id]));
+    setActiveDuel({
+      ...duelToClaim,
+      rewardClaimedBy: Array.from(new Set([...(duelToClaim.rewardClaimedBy ?? []), user.uid])),
+      resultSeenBy: Array.from(new Set([...(duelToClaim.resultSeenBy ?? []), user.uid]))
+    });
     try {
-      const claim = await claimBugSmashDuelReward(user, activeDuel.id);
-      setDismissedResultDuelIds((current) => new Set([...current, activeDuel.id]));
-      await dismissPresentedNotificationsForTarget({ duelId: activeDuel.id, type: "duel" }).catch(() => undefined);
+      const claim = await claimBugSmashDuelReward(user, duelToClaim.id);
       if (!claim) {
-        await acknowledgeBugSmashDuelResult(user, activeDuel.id).catch(() => undefined);
-        await refreshDuels();
+        const nextDuels = await refreshDuels();
+        selectNextResultDuel(nextDuels, new Set([duelToClaim.id]));
         return;
       }
-      if (claim.rewardGranted) onUserUpdated?.(claim.user);
-      if (!claim.rewardGranted) {
-        setChallengeNotice(t("duel.dailyRewardAlreadyClaimed"));
-      }
-      if (claim.rewardGranted && claim.result === "win") {
-        try {
-          const drop = await grantBugDexReward(claim.user, "duel_win");
-          onRewardDrop?.(drop);
-          setChallengeNotice(t("duel.rewardClaimed"));
-        } catch {
-          setChallengeNotice(t("duel.rewardClaimedBugDexFailed"));
-        }
+      const claimedDuel = {
+        ...duelToClaim,
+        rewardClaimedBy: Array.from(new Set([...(duelToClaim.rewardClaimedBy ?? []), user.uid])),
+        resultSeenBy: Array.from(new Set([...(duelToClaim.resultSeenBy ?? []), user.uid]))
+      };
+      setActiveDuel(claimedDuel);
+      await dismissPresentedNotificationsForTarget({ duelId: duelToClaim.id, type: "duel" }).catch(() => undefined);
+      void awardCompletedDuelMasteryXp(duelToClaim, claim.result).catch(() => undefined);
+      if (claim.rewardGranted || claim.repaired) onUserUpdated?.(claim.user);
+      if (claim.drop) {
+        onRewardDrop?.(claim.drop);
+        setChallengeNotice(claim.repaired ? t("duel.rewardClaimed") : claim.result === "draw" ? t("duel.drawRewardClaimed") : t("duel.rewardClaimed"));
+      } else if (!claim.rewardGranted) {
+        setChallengeNotice(t("duel.rewardAlreadyClaimed"));
       } else if (claim.rewardGranted) {
         setChallengeNotice(t("duel.rewardClaimed"));
       }
-      await refreshDuels();
+      const nextDuels = await refreshDuels();
+      selectNextResultDuel(nextDuels, new Set([duelToClaim.id]));
     } catch (event) {
+      setDismissedResultDuelIds((current) => {
+        const next = new Set(current);
+        next.delete(duelToClaim.id);
+        return next;
+      });
+      setActiveDuel(duelToClaim);
       setError(event instanceof Error && event.message ? event.message : t("duel.rewardFailed"));
     } finally {
       setBusy(false);
@@ -840,8 +1049,10 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     setDismissedResultDuelIds((current) => new Set([...current, activeDuel.id]));
     try {
       await acknowledgeBugSmashDuelResult(user, activeDuel.id);
+      await awardCompletedDuelMasteryXp(activeDuel, duelResultForUser(activeDuel));
       await dismissPresentedNotificationsForTarget({ duelId: activeDuel.id, type: "duel" }).catch(() => undefined);
-      await refreshDuels();
+      const nextDuels = await refreshDuels();
+      selectNextResultDuel(nextDuels, new Set([activeDuel.id]));
     } catch {
       setError(t("duel.rewardFailed"));
     } finally {
@@ -849,11 +1060,42 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     }
   }
 
-  function hitBug(bugId: string) {
+  function hitBug(bugId: string, motion?: VisibleDuelTarget["motion"]) {
+    if (soloSprayHeldRef.current && trainingDuel && soloRun?.mode === "campaign" && motion) {
+      sprayBugArea(trainingDuel, bugId, motion, Date.now());
+      return;
+    }
     applyBugHit(bugId, "tap");
   }
 
-  function applyBugHit(bugId: string, source: "helper" | "tap", timestamp = now, duelOverride?: BugSmashDuel) {
+  function sprayBugArea(duel: BugSmashDuel, originBugId: string, originMotion: VisibleDuelTarget["motion"], timestamp: number) {
+    const campaign = soloRun?.mode === "campaign" ? soloRun : null;
+    if (!campaign || !soloLampFocusActive(soloPowerups, timestamp) || !isRunning(duel, timestamp)) return;
+    const targets = collectRenderedTargets(duel, timestamp, caughtBugIdsRef.current, assist, frozenTargetsRef.current, targetTimeOffsetsRef.current, campaign)
+      .map((target) => ({ ...target, distance: Math.hypot(target.motion.x - originMotion.x, target.motion.y - originMotion.y) }))
+      .filter((target) => target.distance <= soloSprayTapRadius)
+      .sort((first, second) => first.distance - second.distance)
+      .slice(0, soloSprayTapMaxTargets);
+    if (!targets.length) return;
+    addHelperImpact(
+      "spray_area",
+      originMotion.x,
+      originMotion.y,
+      "#38bdf8",
+      "splash",
+      t("duel.powerupSprayPulse"),
+      "orb",
+      { x: 18, y: 92 },
+      targets.map((target) => ({ id: `${target.bugId}:spray-area`, x: target.motion.x, y: target.motion.y }))
+    );
+    targets.forEach((target) => applyBugHit(target.bugId, "spray", timestamp, duel));
+    if (timestamp - lastSpraySoundAtRef.current > 110) {
+      lastSpraySoundAtRef.current = timestamp;
+      playBugSound("spray_hit");
+    }
+  }
+
+  function applyBugHit(bugId: string, source: "helper" | "spray" | "tap", timestamp = now, duelOverride?: BugSmashDuel) {
     const runningDuel = duelOverride ?? trainingDuel ?? (activeDuel && activeLocalStartAt ? { ...activeDuel, startAt: activeLocalStartAt } : activeDuel);
     if (!runningDuel || !isRunning(runningDuel, timestamp)) return;
     const entry = entryByBugId(bugId);
@@ -862,11 +1104,18 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     const bossLevel = soloBossLevelForTarget(runningDuel, targetIndex, soloCampaign);
     const requiredTaps = requiredTapsForTarget(entry.rarity, assist, targetIndex, soloTapMultiplier, bossLevel);
     const bossBreakBonus = soloBossBreakBonusForCatch(runningDuel, targetIndex, soloCampaign, timestamp, assist, targetTimeOffsetsRef.current[bugId] ?? 0);
-    const hitDamage = source === "tap" ? soloBossTapDamageForHit(runningDuel, targetIndex, soloCampaign, timestamp, assist, targetTimeOffsetsRef.current[bugId] ?? 0) : 1;
+    const bossTap = soloBossTapHitValue(runningDuel, targetIndex, soloCampaign, timestamp, assist, targetTimeOffsetsRef.current[bugId] ?? 0, source);
+    if (bossTap.blocked) {
+      if (source !== "helper") {
+        playBugSwatterFeedback(hitFeedbackFor(bugId));
+        setSoloRewardNotice(bossTap.notice);
+      }
+      return;
+    }
     const currentHits = hitCountsRef.current;
-    const nextHits = (currentHits[bugId] ?? 0) + hitDamage;
+    const nextHits = (currentHits[bugId] ?? 0) + bossTap.hits;
     hitCountsRef.current = { ...currentHits, [bugId]: nextHits };
-    if (source === "tap") playBugSwatterFeedback(hitFeedbackFor(bugId));
+    if (source !== "helper") playBugSwatterFeedback(hitFeedbackFor(bugId));
     setHitCounts(hitCountsRef.current);
     if (nextHits < requiredTaps) {
       const hitAt = Date.now();
@@ -882,7 +1131,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     lastCatchAtRef.current = catchAt;
     caughtBugIdsRef.current = caughtBugIdsRef.current.includes(bugId) ? caughtBugIdsRef.current : [...caughtBugIdsRef.current, bugId];
     scoreRef.current += scoreByRarity[entry.rarity] + soloBossScoreBonus(bossLevel) + bossBreakBonus + duelCatchBonusPoints(entry.rarity, bugId, assist) + duelComboBonusPoint(comboRef.current, assist.comboBonusEvery);
-    if (bossBreakBonus > 0) setSoloRewardNotice(`Boss break +${bossBreakBonus}`);
+    if (bossTap.notice) setSoloRewardNotice(bossTap.notice);
+    else if (bossBreakBonus > 0) setSoloRewardNotice(`Boss break +${bossBreakBonus}`);
     setCaughtBugIds(caughtBugIdsRef.current);
     setScore(scoreRef.current);
     if (runningDuel.toUserId === "bugbot" && soloCampaign && scoreRef.current + duelBonusScore(scoreRef.current, assist) >= soloCampaign.targetScore) {
@@ -891,34 +1141,6 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
       submittedRef.current = true;
       setRunSubmitted(true);
     }
-  }
-
-  function runSoloLampFocusPulse(duel: BugSmashDuel, timestamp: number) {
-    const campaign = soloRun?.mode === "campaign" ? soloRun : null;
-    if (!campaign || !isRunning(duel, timestamp)) return;
-    if (!soloLampPulseAtRef.current) {
-      soloLampPulseAtRef.current = timestamp + 1200;
-      return;
-    }
-    if (timestamp < soloLampPulseAtRef.current) return;
-    const targets = collectRenderedTargets(duel, timestamp, caughtBugIdsRef.current, assist, frozenTargetsRef.current, targetTimeOffsetsRef.current, campaign)
-      .filter((item) => item.motion.progress <= 0.88)
-      .sort((a, b) => targetPriority(b.entry.rarity, b.motion.progress, soloBossLevelForTarget(duel, b.index, campaign)) - targetPriority(a.entry.rarity, a.motion.progress, soloBossLevelForTarget(duel, a.index, campaign)));
-    const target = targets[0];
-    if (!target) return;
-    soloLampPulseAtRef.current = timestamp + soloLampFocusPulseCooldownMs;
-    addHelperImpact(
-      "lamp_focus",
-      target.motion.x,
-      target.motion.y,
-      "#fde047",
-      "zap",
-      t("duel.powerupLampPulse"),
-      "pulse",
-      { x: 50, y: 92 },
-      []
-    );
-    applyBugHit(target.bugId, "helper", timestamp, duel);
   }
 
   function runHelperTowers(duel: BugSmashDuel, timestamp: number) {
@@ -966,7 +1188,61 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
         const splashHits = helperSplashHitsForTarget(bonus, item, spec.special);
         for (let hit = 0; hit < splashHits; hit += 1) applyBugHit(item.bugId, "helper", timestamp, duel);
       });
+      triggerMasterySkill(duel, bonus, helperIndex, target, helperTargets, timestamp);
     });
+  }
+
+  function triggerMasterySkill(
+    duel: BugSmashDuel,
+    bonus: ReturnType<typeof activeBugSquadBonusList>[number],
+    helperIndex: number,
+    target: VisibleDuelTarget,
+    helperTargets: VisibleDuelTarget[],
+    timestamp: number
+  ) {
+    const mastery = masteryByBugId[bonus.bugId];
+    if (!mastery) return;
+    const skill = bugMasterySessionSkill(mastery);
+    if (!skill) return;
+    const sessionKey = `${duel.id}:${bonus.bugId}`;
+    if (masterySkillUsedRef.current.has(sessionKey)) return;
+    masterySkillUsedRef.current.add(sessionKey);
+    void awardBugMasteryXp(user, bonus.bugId, 1, "skill_trigger", `skill:${duel.id}:${bonus.bugId}:${skill.id}`).catch(() => undefined);
+
+    const spec = helperSpecForBonus(bonus);
+    const source = helperTowerSourcePosition(helperIndex, activeSquadBonuses.length);
+    const label = t("duel.masterySkillTrigger", { skill: t(`bugdex.mastery.skill.${skill.id}`) });
+    const masterBonus = skill.kind === "master" ? 1 : 0;
+    const nearbyTargets = helperTargets
+      .filter((item) => item.bugId !== target.bugId && distanceBetweenTargets(item, target) <= 26)
+      .slice(0, 1 + masterBonus);
+
+    if (mastery.role === "attack") {
+      for (let hit = 0; hit < 1 + masterBonus; hit += 1) applyBugHit(target.bugId, "helper", timestamp, duel);
+    } else if (mastery.role === "speed") {
+      freezeDuelTargets([target], timestamp, 520 + masterBonus * 180);
+      applyBugHit(target.bugId, "helper", timestamp, duel);
+    } else if (mastery.role === "shield") {
+      freezeDuelTargets([target], timestamp, 680 + masterBonus * 220);
+    } else if (mastery.role === "chaos") {
+      nearbyTargets.forEach((item) => applyBugHit(item.bugId, "helper", timestamp, duel));
+      if (masterBonus > 0) freezeDuelTargets(nearbyTargets, timestamp, 320);
+    } else {
+      scoreRef.current += 1 + masterBonus;
+      setScore(scoreRef.current);
+    }
+
+    addHelperImpact(
+      bonus.bugId,
+      target.motion.x,
+      target.motion.y,
+      masterySkillColor(mastery.role),
+      spec.kind,
+      label,
+      "pulse",
+      source,
+      nearbyTargets.map((item) => ({ id: item.bugId, x: item.motion.x, y: item.motion.y }))
+    );
   }
 
   function addHelperImpact(
@@ -1169,10 +1445,38 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     await recordSoloCampaignBossDefeated(user.uid);
   }
 
-  async function activateLampFocus() {
-    const result = await activateSoloLampFocus(user.uid);
-    setSoloPowerups(result.inventory);
-    setSoloRewardNotice(result.activated ? t("duel.powerupLampActivated") : t("duel.powerupEmpty"));
+  async function startSoloSpray() {
+    const timestamp = Date.now();
+    const campaign = soloRun?.mode === "campaign" ? soloRun : null;
+    if (!campaign || !trainingDuel || !isRunning(trainingDuel, timestamp)) return;
+    if (soloSprayHeldRef.current) return;
+    let inventory = soloPowerups;
+    if (!soloLampFocusActive(inventory, timestamp)) {
+      const result = await activateSoloLampFocus(user.uid);
+      inventory = result.inventory;
+      setSoloPowerups(inventory);
+      if (!result.activated) {
+        setSoloRewardNotice(t("duel.powerupEmpty"));
+        return;
+      }
+    }
+    soloSprayHeldRef.current = true;
+    setSoloSprayHeld(true);
+    setSoloRewardNotice(t("duel.powerupSprayActivated"));
+    playBugSound("spray_start");
+    const activeUntil = inventory.lampFocusActiveUntil ? Date.parse(inventory.lampFocusActiveUntil) : timestamp;
+    const stopInMs = Math.max(0, activeUntil - timestamp);
+    if (soloSprayStopTimeoutRef.current) clearTimeout(soloSprayStopTimeoutRef.current);
+    soloSprayStopTimeoutRef.current = setTimeout(stopSoloSpray, stopInMs);
+  }
+
+  function stopSoloSpray() {
+    if (soloSprayStopTimeoutRef.current) {
+      clearTimeout(soloSprayStopTimeoutRef.current);
+      soloSprayStopTimeoutRef.current = null;
+    }
+    soloSprayHeldRef.current = false;
+    setSoloSprayHeld(false);
   }
 
   async function primeSoloBugBomb() {
@@ -1249,11 +1553,26 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const ownRetryScore = ownSubmittedScore?.score ?? (activeDuel && runSubmitted && !opponentScore ? score + duelBonusScore(score, assist) : undefined);
   const ownRetryCaughtCount = ownSubmittedScore?.caughtBugIds.length ?? 0;
   const ownSentDuelWaitingForOpponent = Boolean(activeDuel?.fromUserId === user.uid && (activeDuel.status === "pending" || activeDuel.status === "accepted") && ownSubmittedScore && !opponentScore);
-  const canRetryOwnDuelScore = Boolean(activeDuel && ownRetryScore !== undefined && !opponentScore && ownSentDuelWaitingForOpponent && (ownRetryCaughtCount === 0 || ownRetryScore < duelRetryScoreThreshold));
+  const canRetryOwnDuelScore = Boolean(activeDuel && ownRetryScore !== undefined && !opponentScore && ownSentDuelWaitingForOpponent && ownRetryScore < duelRetryScoreThreshold);
   const awaitingOpponentResult = Boolean(ownSentDuelWaitingForOpponent && !retryingActiveDuel);
+  const randomOpenScoreWaiting = Boolean(activeDuel?.matchType === "random" && activeDuel.toUserId === "random" && ownSubmittedScore && !opponentScore);
   const showWaitingResultModal = Boolean(activeDuel && awaitingOpponentResult && !acknowledgedWaitingDuelIds.has(activeDuel.id));
-  const resultRewardPending = Boolean(activeDuel?.winnerId && isDuelParticipant(activeDuel, user) && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid));
+  const resultRewardPending = Boolean(activeDuel?.status === "completed" && isDuelParticipant(activeDuel, user) && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid));
   const showResultModal = Boolean(activeDuel?.status === "completed" && isDuelParticipant(activeDuel, user) && !duelResultSeenByUser(activeDuel, user) && !dismissedResultDuelIds.has(activeDuel.id));
+
+  useEffect(() => {
+    if (busy) return;
+    const resultDuel = duels.find((duel) =>
+      duel.status === "completed"
+      && isDuelParticipant(duel, user)
+      && !duelResultSeenByUser(duel, user)
+      && !dismissedResultDuelIds.has(duel.id)
+    );
+    if (!resultDuel || activeDuel?.id === resultDuel.id) return;
+    setActiveDuelId(resultDuel.id);
+    setActiveDuel(resultDuel);
+  }, [activeDuel?.id, busy, duels, dismissedResultDuelIds, user.uid]);
+
   const helperInfoItems = [
     { body: t("duel.helperInfo.zap"), name: t("duel.helper.zap") },
     { body: t("duel.helperInfo.sticky"), name: t("duel.helper.sticky") },
@@ -1262,14 +1581,14 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     { body: t("duel.helperInfo.burst"), name: t("duel.helper.burst") },
     { body: t("duel.helperInfo.mythic"), name: t("duel.helperInfo.mythicName") }
   ];
-  const visibleRecentDuels = duels.filter((duel) => duel.status !== "cancelled");
   const gameDuel = trainingDuel ?? playableDuel;
   const gameStartAt = gameDuel?.startAt ?? "";
   const countdown = gameStartAt ? Math.max(0, Math.ceil((Date.parse(gameStartAt) - now) / 1000)) : 0;
   const remainingSeconds = gameStartAt && gameDuel ? Math.max(0, Math.ceil((Date.parse(gameStartAt) + gameDuel.durationMs - now) / 1000)) : 0;
   const activeDuelScore = retryingActiveDuel ? (runSubmitted ? score + duelBonusScore(score, assist) : score) : ownSubmittedScore ? displayDuelScore(ownSubmittedScore) : (runSubmitted ? score + duelBonusScore(score, assist) : score);
   const incomingPendingDuel = activeDuel?.status === "pending" && activeDuel.toUserId === user.uid;
-  const fullscreenGame = Boolean(trainingDuel) || Boolean(duelCanRun && activeLocalStartAt && !playerNeedsManualStart && !awaitingOpponentResult && !runSubmitted);
+  const showActiveArcadeGame = Boolean(activeDuel && activeArcadeMode && duelCanRun && activeLocalStartAt && (!activeDuelOwnScore || activeArcadeOwnScoreIsZero) && !awaitingOpponentResult);
+  const fullscreenGame = showActiveArcadeGame || arenaMode === "web_runner" || arenaMode === "nest_defense" || arenaMode === "bug_glide" || arenaMode === "bug_tower" || Boolean(trainingDuel) || Boolean(duelCanRun && activeLocalStartAt && !playerNeedsManualStart && !awaitingOpponentResult && !runSubmitted);
   const gameScore = trainingDuel && runSubmitted ? score + duelBonusScore(score, assist) : trainingDuel ? score : activeDuelScore;
   const soloCampaign = soloRun?.mode === "campaign" ? soloRun : null;
   const soloProgress = gameStartAt && gameDuel ? Math.max(0, Math.min(1, (now - Date.parse(gameStartAt)) / gameDuel.durationMs)) : 0;
@@ -1277,14 +1596,30 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const soloCampaignWon = Boolean(soloCampaign && submittedRef.current && (soloWaveCleared || soloWaveClearedRef.current || gameScore >= soloCampaign.targetScore));
   const soloCampaignComplete = Boolean(soloCampaignWon && soloCampaign && soloCampaign.wave >= soloCampaignMaxWave);
   const lampFocusActive = soloLampFocusActive(soloPowerups, now);
-  const lampFocusMinutes = soloLampFocusRemainingMinutes(soloPowerups, now);
-  const soloTapMultiplier = soloCampaign && lampFocusActive ? soloLampFocusTapMultiplier : 1;
+  const lampFocusSeconds = soloLampFocusRemainingSeconds(soloPowerups, now);
+  const soloTapMultiplier = 1;
+  const canUseSoloSprayInGame = Boolean(gameDuel && soloCampaign && isRunning(gameDuel, now) && (soloSprayHeld || lampFocusActive || soloPowerups.lampFocusCharges > 0));
   const canUseSoloBugBombInGame = Boolean(gameDuel && soloCampaign && isRunning(gameDuel, now) && (soloBombPrimed || soloPowerups.bugBombCharges > 0));
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onFullscreenChange?.(fullscreenGame);
     return () => onFullscreenChange?.(false);
   }, [fullscreenGame, onFullscreenChange]);
+
+  useEffect(() => {
+    if (!soloCampaign || !trainingDuel || !soloCampaignWon) return;
+    const rewardKey = trainingDuel.id;
+    if (soloMasteryAwardedRef.current.has(rewardKey)) return;
+    soloMasteryAwardedRef.current.add(rewardKey);
+    void awardActiveSquadMasteryXp(2, "active_squad_solo", `solo:${rewardKey}:wave`).then((awarded) => {
+      if (awarded) setSoloRewardNotice((current) => current || t("duel.soloMasteryXp"));
+    }).catch(() => undefined);
+    if (soloCampaign.boss) {
+      void awardActiveSquadMasteryXp(6, "boss_defeat", `solo:${rewardKey}:boss`).then((awarded) => {
+        if (awarded) setSoloRewardNotice((current) => current || t("duel.soloMasteryXp"));
+      }).catch(() => undefined);
+    }
+  }, [soloCampaignWon, soloCampaign?.boss, trainingDuel?.id, activeSquadIds, inventory, user, t]);
 
   useEffect(() => {
     if (!soloCampaign || !trainingDuel || !soloCampaignWon || !soloCampaign.boss) return;
@@ -1322,6 +1657,83 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     });
   }, [onRewardDrop, soloCampaignComplete, trainingDuel?.id, user, t]);
 
+  async function submitArcadeRunResult(result: ArcadeRunResult) {
+    if (!activeDuel) return;
+    const finalScore = Math.max(1, Math.floor(Number(result.score) || 0));
+    const existingScore = activeDuel.scores?.[user.uid];
+    if (existingScore && displayDuelScore(existingScore) >= finalScore) return;
+    const score = normalizeDuelScore({
+      bonusScore: 0,
+      caughtBugIds: [],
+      score: finalScore,
+      submittedAt: result.timestamp
+    });
+    submittedRef.current = true;
+    setRunSubmitted(true);
+    try {
+      const savedDuel = await submitBugSmashDuelScore(user, activeDuel.id, score.score, score.caughtBugIds, score.bonusScore);
+      setActiveDuel(savedDuel);
+      setLocalSubmittedScores((current) => ({ ...current, [savedDuel.id]: savedDuel.scores?.[user.uid] ?? score }));
+      await removePendingDuelScore(user.uid, savedDuel.id).catch(() => undefined);
+      await refreshDuels();
+      void saveArcadeRunResult(
+        user.uid,
+        result,
+        result.mode === "bug_tower" ? { duelId: savedDuel.id, ranked: true } : undefined
+      ).catch(() => undefined);
+    } catch {
+      await removePendingDuelScore(user.uid, activeDuel.id).catch(() => undefined);
+      setLocalSubmittedScores((current) => {
+        const next = { ...current };
+        delete next[activeDuel.id];
+        return next;
+      });
+      setRunSubmitted(false);
+      submittedRef.current = false;
+      setError(t("duel.submitFailed"));
+    }
+  }
+
+  function confirmRankedStart(onConfirm: () => void) {
+    Alert.alert(t("arcade.rankedConfirmTitle"), t("arcade.rankedConfirmBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("arcade.rankedConfirmStart"), onPress: onConfirm }
+    ]);
+  }
+
+  async function recordArcadeRunResult(result: ArcadeRunResult) {
+    if (arcadeTrainingMode) return;
+    await saveArcadeRunResult(user.uid, result).catch(() => undefined);
+  }
+
+  if (!activeDuel && arenaMode === "web_runner") {
+    return <WebRunnerGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
+  }
+
+  if (!activeDuel && arenaMode === "nest_defense") {
+    return <NestDefenseGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
+  }
+  if (!activeDuel && arenaMode === "bug_glide") {
+    return <BugGlideGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
+  }
+  if (!activeDuel && arenaMode === "bug_tower") {
+    return <BugTowerGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
+  }
+
+  if (showActiveArcadeGame && activeDuel && activeArcadeMode) {
+    const commonProps = {
+      onBack: returnToArenaHome,
+      onResult: submitArcadeRunResult,
+      ranked: true,
+      seed: activeDuel.arcadeSeed,
+      user
+    };
+    if (activeArcadeMode === "web_runner") return <WebRunnerGame {...commonProps} />;
+    if (activeArcadeMode === "nest_defense") return <NestDefenseGame {...commonProps} />;
+    if (activeArcadeMode === "bug_glide") return <BugGlideGame {...commonProps} />;
+    if (activeArcadeMode === "bug_tower") return <BugTowerGame {...commonProps} />;
+  }
+
   if (fullscreenGame && gameDuel) {
     return (
       <View style={styles.fullscreenGame}>
@@ -1332,9 +1744,9 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           </View>
           <Text style={styles.gameTimer}>{remainingSeconds}s</Text>
           <View style={styles.gameHudPlayer}>
-            <Text style={styles.gameOpponent} numberOfLines={1}>{trainingDuel ? soloCampaign ? t("duel.soloPcScore", { score: soloPcScore, target: soloCampaign.targetScore }) : t("duel.trainingNoRewardsShort") : opponentScore ? `${opponentLabel(gameDuel, user)}: ${displayDuelScore(opponentScore)}` : t("duel.waitingScore")}</Text>
+            <Text style={styles.gameOpponent} numberOfLines={1}>{trainingDuel ? soloCampaign ? t("duel.soloPcScore", { score: soloPcScore, target: soloCampaign.targetScore }) : t("duel.trainingNoRewardsShort") : opponentLabel(gameDuel, user)}</Text>
             {trainingDuel ? (
-              <Pressable style={styles.gameExitButton} onPress={requestStopTraining}>
+              <Pressable style={styles.gameExitButton} onPress={returnToArenaHome}>
                 <Text style={styles.gameExitText}>x</Text>
               </Pressable>
             ) : null}
@@ -1352,29 +1764,27 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               {soloCampaign ? <Text style={styles.trainingResultBody}>{soloCampaign.boss ? t("duel.soloBossWave", { wave: soloCampaign.wave, level: soloCampaign.level, maxWave: soloCampaignMaxWave }) : t("duel.soloWave", { wave: soloCampaign.wave, level: soloCampaign.level, maxWave: soloCampaignMaxWave })}</Text> : null}
               {soloCampaign && soloRewardNotice ? (
                 <View style={styles.soloRewardCard}>
-                  <Image accessibilityIgnoresInvertColors resizeMode="cover" source={soloPowerupLampImage} style={styles.soloRewardImage} />
+                  <BugSprayIcon style={styles.soloRewardImage} />
                   <Text style={styles.soloRewardText}>{soloRewardNotice}</Text>
                 </View>
               ) : null}
               <Pressable style={sharedStyles.button} onPress={soloCampaign ? handleSoloCampaignResultAction : startTraining}>
                 <Text style={sharedStyles.buttonText}>{soloCampaign ? soloCampaignComplete ? t("duel.soloRestart") : soloCampaignWon ? t("duel.soloNextWave") : soloCampaignLives > 1 ? t("duel.soloRetryWave") : t("duel.soloRetry") : t("duel.trainingRetry")}</Text>
               </Pressable>
-              {!(soloCampaign && soloCampaignWon) && (
-                <Pressable style={sharedStyles.secondaryButton} onPress={soloCampaign ? requestStopTraining : stopTraining}>
-                  <Text style={sharedStyles.secondaryButtonText}>{t("common.done")}</Text>
-                </Pressable>
-              )}
+              <Pressable style={sharedStyles.secondaryButton} onPress={returnToArenaHome}>
+                <Text style={sharedStyles.secondaryButtonText}>{t("common.back")}</Text>
+              </Pressable>
             </View>
           ) : isRunning(gameDuel, now) ? (
             <>
-              {renderTargets(gameDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug, t, soloCampaign)}
+              {renderTargets(gameDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug, soloSprayHeld, soloCampaign)}
               {renderHelperImpacts(helperImpacts)}
               {renderHelperTowers(activeSquadBonuses, helperCooldownAtRef.current, now, t)}
               {soloCampaign && (
                 <View style={styles.soloPowerupGameBar}>
-                  <Pressable disabled={lampFocusActive || soloPowerups.lampFocusCharges <= 0} style={[styles.soloPowerupGameButton, (lampFocusActive || soloPowerups.lampFocusCharges <= 0) && styles.soloPowerupDisabled]} onPress={activateLampFocus}>
-                    <Image accessibilityIgnoresInvertColors resizeMode="cover" source={soloPowerupLampImage} style={styles.soloPowerupGameIcon} />
-                    <Text style={styles.soloPowerupGameText}>{lampFocusActive ? t("duel.powerupLampActive", { minutes: lampFocusMinutes }) : t("duel.powerupLampShort", { count: soloPowerups.lampFocusCharges })}</Text>
+                  <Pressable disabled={!canUseSoloSprayInGame || soloSprayHeld} style={[styles.soloPowerupGameButton, !canUseSoloSprayInGame && styles.soloPowerupDisabled, soloSprayHeld && styles.soloSprayActive]} onPress={() => void startSoloSpray()}>
+                    <BugSprayIcon compact style={styles.soloPowerupGameIcon} />
+                    <Text style={styles.soloPowerupGameText}>{soloSprayHeld ? t("duel.powerupSprayHeld", { seconds: lampFocusSeconds }) : lampFocusActive ? t("duel.powerupLampActive", { seconds: lampFocusSeconds }) : t("duel.powerupLampShort", { count: soloPowerups.lampFocusCharges })}</Text>
                   </Pressable>
                   <Pressable disabled={!canUseSoloBugBombInGame} style={[styles.soloPowerupGameButton, !canUseSoloBugBombInGame && styles.soloPowerupDisabled]} onPress={() => void useSoloBugBombNow(gameDuel, Date.now())}>
                     <Image accessibilityIgnoresInvertColors resizeMode="cover" source={soloPowerupBombImage} style={styles.soloPowerupGameIcon} />
@@ -1414,31 +1824,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {!activeDuel && (
+      {(!activeDuel || randomOpenScoreWaiting) && (
         <View style={styles.modeStack}>
-          <View style={styles.arenaModeRow}>
-            <Pressable style={[styles.arenaModeButton, arenaMode === "duel" && styles.arenaModeButtonActive]} onPress={() => setArenaMode("duel")}>
-              <Image accessibilityIgnoresInvertColors resizeMode="cover" source={duelHeroImage} style={styles.arenaModeImage} />
-              <View style={styles.arenaModeCopy}>
-                <Text numberOfLines={1} style={[styles.arenaModeText, arenaMode === "duel" && styles.arenaModeTextActive]}>Duel</Text>
-                <Text numberOfLines={1} style={[styles.arenaModeMeta, arenaMode === "duel" && styles.arenaModeMetaActive]}>{t("duel.modeDuelHint")}</Text>
-              </View>
-            </Pressable>
-            <Pressable style={[styles.arenaModeButton, arenaMode === "training" && styles.arenaModeButtonActive]} onPress={() => setArenaMode("training")}>
-              <Image accessibilityIgnoresInvertColors resizeMode="cover" source={trainingModeImage} style={styles.arenaModeImage} />
-              <View style={styles.arenaModeCopy}>
-                <Text numberOfLines={1} style={[styles.arenaModeText, arenaMode === "training" && styles.arenaModeTextActive]}>{t("duel.trainingTitle")}</Text>
-                <Text numberOfLines={1} style={[styles.arenaModeMeta, arenaMode === "training" && styles.arenaModeMetaActive]}>{t("duel.modeTrainingHint")}</Text>
-              </View>
-            </Pressable>
-            <Pressable style={[styles.arenaModeButton, arenaMode === "solo" && styles.arenaModeButtonActive]} onPress={() => setArenaMode("solo")}>
-              <Image accessibilityIgnoresInvertColors resizeMode="cover" source={soloCampaignImage} style={styles.arenaModeImage} />
-              <View style={styles.arenaModeCopy}>
-                <Text numberOfLines={1} style={[styles.arenaModeText, arenaMode === "solo" && styles.arenaModeTextActive]}>{t("duel.soloCampaignTitle")}</Text>
-                <Text numberOfLines={1} style={[styles.arenaModeMeta, arenaMode === "solo" && styles.arenaModeMetaActive]}>{t("duel.modeSoloHint")}</Text>
-              </View>
-            </Pressable>
-          </View>
           <View style={styles.arenaSquadPreview}>
             <View style={styles.arenaSquadPreviewHeader}>
               <View style={styles.modeHeaderText}>
@@ -1454,7 +1841,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 </Pressable>
               </View>
             </View>
-            {renderSquadJars(activeSquadIds, openSquadModal, { compact: true })}
+            {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal, { compact: true, masteryByBugId })}
           </View>
           {arenaMode === "duel" && (
           <View style={[styles.card, styles.duelModePanel]}>
@@ -1469,10 +1856,51 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               <Text style={styles.duelRatingValue}>{user.duelRating ?? 1000}</Text>
               <Text style={styles.duelRatingMeta}>{t("duel.rating")} - {user.duelWins ?? 0}W / {user.duelLosses ?? 0}L / {user.duelDraws ?? 0}D</Text>
             </View>
+            <View style={styles.arcadeHubCompact}>
+              <ArcadeModeCard
+                active={arenaMode === "duel"}
+                image={duelHeroImage}
+                title={t("arcade.tapDuel.title")}
+                onPress={() => confirmRankedStart(() => { void startRandomChallenge(); })}
+                onTrain={startTraining}
+              />
+              <ArcadeModeCard
+                active={false}
+                artRect={arcadeCardArt.webRunner}
+                title={t("arcade.webRunner.title")}
+                onPress={() => confirmRankedStart(() => { void startRandomChallenge("web_runner"); })}
+                onTrain={() => { setArcadeTrainingMode(true); setArenaMode("web_runner"); }}
+              />
+              <ArcadeModeCard
+                active={false}
+                artRect={arcadeCardArt.nestDefense}
+                title={t("arcade.nestDefense.title")}
+                onPress={() => confirmRankedStart(() => { void startRandomChallenge("nest_defense"); })}
+                onTrain={() => { setArcadeTrainingMode(true); setArenaMode("nest_defense"); }}
+              />
+              <ArcadeModeCard
+                active={false}
+                artRect={arcadeCardArt.bugGlide}
+                title={t("arcade.bugGlide.title")}
+                onPress={() => confirmRankedStart(() => { void startRandomChallenge("bug_glide"); })}
+                onTrain={() => { setArcadeTrainingMode(true); setArenaMode("bug_glide"); }}
+              />
+              <ArcadeModeCard
+                active={false}
+                image={bugTowerImage}
+                title={t("arcade.bugTower.title")}
+                onPress={() => confirmRankedStart(() => { void startRandomChallenge("bug_tower"); })}
+                onTrain={() => { setArcadeTrainingMode(true); setArenaMode("bug_tower"); }}
+              />
+            </View>
+            <View style={styles.arenaUtilityRow}>
+              <Pressable style={styles.arenaUtilityButton} onPress={() => setArenaMode("solo")}>
+                <Image accessibilityIgnoresInvertColors resizeMode="cover" source={soloCampaignImage} style={styles.arenaUtilityImage} />
+                <Text style={styles.arenaUtilityTitle}>{t("duel.soloCampaignTitle")}</Text>
+                <Text style={styles.arenaUtilityAction}>{t("duel.soloCampaignAction")}</Text>
+              </Pressable>
+            </View>
             {challengeNotice ? <Text style={styles.noticeText}>{challengeNotice}</Text> : null}
-            <Pressable disabled={busy} style={[sharedStyles.secondaryButton, busy && styles.disabled]} onPress={startRandomChallenge}>
-              <Text style={sharedStyles.secondaryButtonText}>{busy ? "..." : t("duel.randomChallenge")}</Text>
-            </Pressable>
           </View>
           )}
           {arenaMode === "training" && (
@@ -1509,13 +1937,13 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 <Text style={styles.soloCampaignFinePrint}>{t("duel.soloWeeklyReset")}</Text>
                 <View style={styles.soloPowerupPanel}>
                   <View style={styles.soloPowerupItem}>
-                    <Image accessibilityIgnoresInvertColors resizeMode="cover" source={soloPowerupLampImage} style={styles.soloPowerupImage} />
+                    <BugSprayIcon style={styles.soloPowerupImage} />
                     <View style={styles.soloPowerupCopy}>
                       <Text style={styles.soloPowerupName}>{t("duel.powerupLamp")}</Text>
-                      <Text style={styles.soloPowerupMeta}>{lampFocusActive ? t("duel.powerupLampActive", { minutes: lampFocusMinutes }) : t("duel.powerupLampMeta", { count: soloPowerups.lampFocusCharges })}</Text>
+                      <Text style={styles.soloPowerupMeta}>{lampFocusActive ? t("duel.powerupLampActive", { seconds: lampFocusSeconds }) : t("duel.powerupLampMeta", { count: soloPowerups.lampFocusCharges })}</Text>
                     </View>
-                    <Pressable disabled={lampFocusActive || soloPowerups.lampFocusCharges <= 0} style={[styles.soloPowerupUseButton, (lampFocusActive || soloPowerups.lampFocusCharges <= 0) && styles.soloPowerupDisabled]} onPress={activateLampFocus}>
-                      <Text style={styles.soloPowerupUseText}>{t("duel.powerupUse")}</Text>
+                    <Pressable disabled style={[styles.soloPowerupUseButton, styles.soloPowerupDisabled]}>
+                      <Text style={styles.soloPowerupUseText}>{t("duel.powerupHold")}</Text>
                     </Pressable>
                   </View>
                   <View style={styles.soloPowerupItem}>
@@ -1537,11 +1965,18 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             </View>
           </View>
           )}
+          {(arenaMode === "nest_defense" || arenaMode === "bug_glide") && (
+            <View style={styles.arcadePlaceholderPanel}>
+              <Text style={styles.modeEyebrow}>{t("arcade.status.comingNext")}</Text>
+              <Text style={styles.modeTitle}>{arenaMode === "nest_defense" ? t("arcade.nestDefense.title") : t("arcade.bugGlide.title")}</Text>
+              <Text style={styles.trainingBody}>{arenaMode === "nest_defense" ? t("arcade.nestDefense.body") : t("arcade.bugGlide.body")}</Text>
+            </View>
+          )}
           {challengeNotice ? <Text style={styles.noticeText}>{challengeNotice}</Text> : null}
         </View>
       )}
 
-      {activeDuel && (
+      {activeDuel && !randomOpenScoreWaiting && (
         <View style={styles.card}>
           <View style={styles.duelTitleRow}>
             <View>
@@ -1609,7 +2044,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                   <Text style={styles.countdown}>{countdown}</Text>
                 ) : isRunning(playableDuel, now) ? (
                   <>
-                    {renderTargets(playableDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug, t)}
+                    {renderTargets(playableDuel, now, caughtBugIds, hitCounts, assist, hitFeedbackValues, frozenTargetsRef.current, targetTimeOffsetsRef.current, hitBug)}
                     {renderHelperImpacts(helperImpacts)}
                     {renderHelperTowers(activeSquadBonuses, helperCooldownAtRef.current, now, t)}
                   </>
@@ -1623,13 +2058,17 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           {activeDuel.status === "completed" && (
             <View style={styles.resultBox}>
               <Text style={styles.resultTitle}>{resultLabel(activeDuel, user, t)}</Text>
+              <Text style={styles.resultLine}>{duelGameLabel(activeDuel, t)}</Text>
               <Text style={styles.resultLine}>{activeDuel.fromUserName}: {displayDuelScore(activeDuel.scores?.[activeDuel.fromUserId])}</Text>
               <Text style={styles.resultLine}>{activeDuel.toUserName}: {displayDuelScore(activeDuel.scores?.[activeDuel.toUserId])}</Text>
-              {activeDuel.winnerId && isDuelParticipant(activeDuel, user) && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid) && (
+              {activeDuel.status === "completed" && isDuelParticipant(activeDuel, user) && !(activeDuel.rewardClaimedBy ?? []).includes(user.uid) && (
                 <Pressable disabled={busy} style={sharedStyles.button} onPress={claimReward}>
-                  <Text style={sharedStyles.buttonText}>{busy ? "..." : activeDuel.winnerId === user.uid ? t("duel.claimReward") : t("duel.claimXp")}</Text>
+                  <Text style={sharedStyles.buttonText}>{busy ? "..." : duelClaimButtonLabel(activeDuel, user, t)}</Text>
                 </Pressable>
               )}
+              <Pressable style={sharedStyles.secondaryButton} onPress={returnToArenaHome}>
+                <Text style={sharedStyles.secondaryButtonText}>{t("common.back")}</Text>
+              </Pressable>
             </View>
           )}
         </View>
@@ -1647,7 +2086,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             </Pressable>
           </View>
         </View>
-        {renderSquadJars(activeSquadIds, openSquadModal)}
+        {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal, { masteryByBugId })}
         {renderSquadEffectCards(activeSquadBonuses, t)}
       </View>
 
@@ -1664,7 +2103,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
               </Pressable>
             </View>
             <Text style={styles.modalIntro}>{t("bugdex.activeSquadHint")}</Text>
-            {renderSquadJars(activeSquadIds, openSquadModal)}
+            {renderSquadJars(activeSquadIds, activeSquadBonuses, t, openSquadModal, { masteryByBugId })}
             {squadLoading ? (
               <View style={styles.modalState}>
                 <ActivityIndicator color="#15724f" />
@@ -1685,6 +2124,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                     const selected = activeSquadIds.includes(item.bugId);
                     const disabled = !selected && activeSquadIds.length >= maxActiveBugSquadSize;
                     const spriteKey = helperSpriteKeyForSpec(spec.kind, spec.special);
+                    const mastery = masteryByBugId[item.bugId] ?? normalizeBugMastery(item.bugId);
                     return (
                       <Pressable
                         key={item.bugId}
@@ -1698,6 +2138,10 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                         <View style={[styles.squadChoiceAttackBadge, selected && styles.squadChoiceAttackBadgeActive]}>
                           <Image accessibilityIgnoresInvertColors resizeMode="contain" source={duelEffectSprites[spriteKey]} style={styles.squadChoiceAttackIcon} />
                           <Text style={[styles.squadChoiceAttack, selected && styles.squadChoiceNameActive]} numberOfLines={1}>{t("duel.helperAttack", { attack: spec.special?.label ?? helperKindLabel(spec.kind, t) })}</Text>
+                        </View>
+                        <View style={[styles.squadMasteryMini, selected && styles.squadMasteryMiniActive]}>
+                          <Text style={[styles.squadMasteryMiniText, selected && styles.squadChoiceNameActive]} numberOfLines={1}>{t("bugdex.mastery.levelShort", { level: mastery.level })}</Text>
+                          <Text style={[styles.squadMasteryMiniRole, selected && styles.squadChoiceNameActive]} numberOfLines={1}>{t(`bugdex.mastery.role.${mastery.role}`)}</Text>
                         </View>
                         <Text style={[styles.squadChoiceMeta, selected && styles.squadChoiceMetaActive]} numberOfLines={2}>{squadBonusLabel(bonus.category, t)} {squadBonusValue(bonus.category, bonus.value)}</Text>
                         <Text style={[styles.squadSelectedPill, selected && styles.squadSelectedPillActive]}>{selected ? t("duel.active") : "+"}</Text>
@@ -1779,80 +2223,121 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
             <View style={styles.startModalCard}>
               <Text style={styles.startTitle}>{t("duel.resultReadyTitle")}</Text>
               <Text style={styles.startBody}>{resultLabel(activeDuel, user, t)}</Text>
+              <Text style={styles.resultLine}>{duelGameLabel(activeDuel, t)}</Text>
               <Text style={styles.resultLine}>{activeDuel.fromUserName}: {displayDuelScore(activeDuel.scores?.[activeDuel.fromUserId])}</Text>
               <Text style={styles.resultLine}>{activeDuel.toUserName}: {displayDuelScore(activeDuel.scores?.[activeDuel.toUserId])}</Text>
               <Text style={styles.noticeText}>{t("duel.resultReadyBody")}</Text>
               {resultRewardPending ? (
                 <Pressable disabled={busy} style={sharedStyles.button} onPress={claimReward}>
-                  <Text style={sharedStyles.buttonText}>{busy ? "..." : activeDuel.winnerId === user.uid ? t("duel.claimReward") : t("duel.claimXp")}</Text>
+                  <Text style={sharedStyles.buttonText}>{busy ? "..." : duelClaimButtonLabel(activeDuel, user, t)}</Text>
                 </Pressable>
               ) : (
                 <Pressable disabled={busy} style={sharedStyles.button} onPress={acknowledgeResult}>
                   <Text style={sharedStyles.buttonText}>{busy ? "..." : t("common.ok")}</Text>
                 </Pressable>
               )}
+              <Pressable style={sharedStyles.secondaryButton} onPress={returnToArenaHome}>
+                <Text style={sharedStyles.secondaryButtonText}>{t("common.back")}</Text>
+              </Pressable>
             </View>
           </View>
         </Modal>
       )}
 
-      {visibleRecentDuels.length > 0 && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t("duel.recent")}</Text>
-          {visibleRecentDuels.slice(0, 6).map((duel) => {
-            const rowOpponentId = duel.fromUserId === user.uid ? duel.toUserId : duel.fromUserId;
-            const rowOwnScore = duel.scores?.[user.uid];
-            const rowOpponentScore = duel.scores?.[rowOpponentId];
-            const rowMeta = rowOpponentScore && !rowOwnScore
-              ? `${opponentLabel(duel, user)}: ${displayDuelScore(rowOpponentScore)}`
-              : rowOwnScore && !rowOpponentScore
-                ? t("duel.yourScore", { score: displayDuelScore(rowOwnScore) })
-                : statusLabel(duel, t);
-            return (
-              <Pressable key={duel.id} style={styles.duelRow} onPress={() => setActiveDuelId(duel.id)}>
-                <Text style={styles.duelRowTitle} numberOfLines={1}>{opponentLabel(duel, user)}</Text>
-                <Text style={styles.duelRowMeta}>{rowMeta}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
+      <View style={styles.card}>
+        <Pressable style={styles.duelDropdownHeader} onPress={toggleRecentDuels}>
+          <Text style={[styles.cardTitle, styles.duelDropdownTitle]}>{t("duel.recent")}</Text>
+          <Text style={styles.duelDropdownChevron}>{recentDuelsOpen ? "v" : ">"}</Text>
+        </Pressable>
+        {recentDuelsOpen && (
+          <View>
+            {recentDuelsLoading ? <Text style={styles.duelEmptyText}>{t("duel.loading")}</Text> : null}
+            {!recentDuelsLoading && recentDuels.length === 0 ? <Text style={styles.duelEmptyText}>{t("duel.noRecentDuels")}</Text> : null}
+            {!recentDuelsLoading && recentDuels.slice(0, 6).map((duel) => {
+              const rowOpponentId = duel.fromUserId === user.uid ? duel.toUserId : duel.fromUserId;
+              const rowOwnScore = duel.scores?.[user.uid];
+              const rowOpponentScore = duel.scores?.[rowOpponentId];
+              const rowScoreMeta = rowOpponentScore && !rowOwnScore
+                ? `${opponentLabel(duel, user)}: ${displayDuelScore(rowOpponentScore)}`
+                : rowOwnScore && !rowOpponentScore
+                  ? t("duel.yourScore", { score: displayDuelScore(rowOwnScore) })
+                  : statusLabel(duel, t);
+              const rowMeta = `${duelGameLabel(duel, t)} - ${rowScoreMeta}`;
+              return (
+                <Pressable key={duel.id} style={styles.duelRow} onPress={() => setActiveDuelId(duel.id)}>
+                  <Text style={styles.duelRowTitle} numberOfLines={1}>{opponentLabel(duel, user)}</Text>
+                  <Text style={styles.duelRowMeta}>{rowMeta}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        <Pressable style={[styles.duelDropdownHeader, styles.duelDropdownHeaderSecondary]} onPress={toggleOpenRandomDuels}>
+          <Text style={[styles.cardTitle, styles.duelDropdownTitle]}>{t("duel.openRandom")}</Text>
+          <Text style={styles.duelDropdownChevron}>{openRandomDuelsOpen ? "v" : ">"}</Text>
+        </Pressable>
+        {openRandomDuelsOpen && (
+          <View>
+            {openRandomDuelsLoading ? <Text style={styles.duelEmptyText}>{t("duel.loading")}</Text> : null}
+            {!openRandomDuelsLoading && openRandomDuels.length === 0 ? <Text style={styles.duelEmptyText}>{t("duel.noOpenRandomDuels")}</Text> : null}
+            {!openRandomDuelsLoading && openRandomDuels.slice(0, 12).map((duel) => {
+              const rowScore = duel.scores?.[duel.fromUserId];
+              const rowMeta = `${duelGameLabel(duel, t)} - ${rowScore ? t("duel.openRandomScore", { score: displayDuelScore(rowScore) }) : statusLabel(duel, t)}`;
+              return (
+                <View key={duel.id} style={styles.duelRow}>
+                  <Text style={styles.duelRowTitle} numberOfLines={1}>{duel.fromUserName}</Text>
+                  <Text style={styles.duelRowMeta}>{rowMeta}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
     </ScrollView>
   );
 }
 
 function renderSquadJars(
   activeSquadIds: string[],
+  bonuses: ReturnType<typeof activeBugSquadBonusList>,
+  t: (key: string, params?: Record<string, string | number>) => string,
   onOpen: () => void,
-  options: { compact?: boolean; interactive?: boolean } = {}
+  options: { compact?: boolean; interactive?: boolean; masteryByBugId?: Record<string, BugMastery> } = {}
 ) {
   const compact = options.compact ?? false;
   const interactive = options.interactive ?? true;
+  const masteryByBugId = options.masteryByBugId ?? {};
   return (
     <View style={[styles.squadJars, compact && styles.squadJarsCompact]}>
       {Array.from({ length: maxActiveBugSquadSize }).map((_, index) => {
         const bugId = activeSquadIds[index];
         const entry = bugId ? entryByBugId(bugId) : null;
+        const bonus = bonuses.find((item) => item.bugId === bugId);
+        const mastery = bugId ? masteryByBugId[bugId] ?? normalizeBugMastery(bugId) : null;
         return (
           <Pressable key={index} disabled={!interactive} style={styles.squadJarWrap} onPress={onOpen}>
             <View style={[styles.squadJar, compact && styles.squadJarCompact, entry && { borderColor: rarityColors[entry.rarity] }]}>
-              <View pointerEvents="none" style={[styles.squadJarLid, compact && styles.squadJarLidCompact, entry && { backgroundColor: rarityColors[entry.rarity], borderColor: rarityColors[entry.rarity] }]} />
-              <View pointerEvents="none" style={[styles.squadJarGlow, compact && styles.squadJarGlowCompact, entry && { backgroundColor: `${rarityColors[entry.rarity]}26` }]} />
-              <View pointerEvents="none" style={[styles.squadJarShine, compact && styles.squadJarShineCompact]} />
-              <Image accessibilityIgnoresInvertColors resizeMode="contain" source={squadJarImage} style={[styles.squadJarImage, compact && styles.squadJarImageCompact]} />
               {entry ? (
                 <>
-                  <View pointerEvents="none" style={[styles.squadJarBugWrap, compact && styles.squadJarBugWrapCompact]}>
-                    <BugArtImage bugId={entry.id} size={compact ? 26 : 58} />
-                  </View>
+                  <BugJarArt bugId={entry.id} rarity={entry.rarity} size={compact ? 48 : 54} style={styles.squadJarArt} />
                   <RarityStars rarity={entry.rarity} compact={compact} style={[styles.squadJarRarity, compact && styles.squadJarRarityCompact]} />
+                  {mastery && (
+                    <View style={[styles.squadJarMastery, compact && styles.squadJarMasteryCompact]}>
+                      <Text style={[styles.squadJarMasteryText, compact && styles.squadJarMasteryTextCompact]} numberOfLines={1}>{t("bugdex.mastery.levelShort", { level: mastery.level })}</Text>
+                      {!compact && <Text style={styles.squadJarMasteryRole} numberOfLines={1}>{t(`bugdex.mastery.role.${mastery.role}`)}</Text>}
+                    </View>
+                  )}
+                  {!compact && <Text style={styles.squadJarName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>}
+                  {!compact && bonus && <Text style={styles.squadJarBonus} numberOfLines={1}>{squadBonusLabel(bonus.category, t)}</Text>}
                 </>
               ) : (
                 <>
                   <Text style={[styles.squadJarEmpty, compact && styles.squadJarEmptyCompact]}>+</Text>
+                  {!compact && <Text style={styles.squadJarBonus}>{t("bugdex.squadEmptySlot")}</Text>}
                 </>
               )}
-              <View pointerEvents="none" style={[styles.squadJarBase, compact && styles.squadJarBaseCompact]} />
+              {!entry && <View pointerEvents="none" style={[styles.squadJarBase, compact && styles.squadJarBaseCompact]} />}
             </View>
           </Pressable>
         );
@@ -1926,6 +2411,117 @@ function renderHelperImpacts(impacts: HelperImpact[]) {
   );
 }
 
+function BossMechanicVisual({ active, color, kind }: { active: boolean; color: string; kind: SoloBossMechanicKind }) {
+  if (kind === "armor") {
+    return (
+      <View pointerEvents="none" style={[styles.bossArmorShell, active && styles.bossArmorShellActive, { borderColor: color }]}>
+        <View style={[styles.bossArmorCrack, styles.bossArmorCrackOne, active && { backgroundColor: color }]} />
+        <View style={[styles.bossArmorCrack, styles.bossArmorCrackTwo, active && { backgroundColor: color }]} />
+        <View style={[styles.bossArmorCrack, styles.bossArmorCrackThree, active && { backgroundColor: color }]} />
+      </View>
+    );
+  }
+  if (kind === "dash") {
+    return (
+      <View pointerEvents="none" style={styles.bossDashLayer}>
+        {[0, 1, 2].map((item) => <View key={item} style={[styles.bossDashTrail, active && styles.bossDashTrailActive, { borderColor: color, left: 10 + item * 18 }]} />)}
+      </View>
+    );
+  }
+  if (kind === "core") {
+    return (
+      <View pointerEvents="none" style={[styles.bossCoreWeakSpot, active && styles.bossCoreWeakSpotActive, { borderColor: color }]}>
+        <View style={[styles.bossCoreInner, { backgroundColor: color }]} />
+        <View style={[styles.bossCoreLine, styles.bossCoreLineVertical, { backgroundColor: color }]} />
+        <View style={[styles.bossCoreLine, styles.bossCoreLineHorizontal, { backgroundColor: color }]} />
+      </View>
+    );
+  }
+  if (kind === "swarm") {
+    return (
+      <View pointerEvents="none" style={styles.bossSwarmLayer}>
+        {[0, 1, 2, 3, 4, 5].map((item) => <View key={item} style={[styles.bossSwarmDot, active && styles.bossSwarmDotActive, { backgroundColor: color, left: 14 + (item % 3) * 30, top: 15 + Math.floor(item / 3) * 56 }]} />)}
+      </View>
+    );
+  }
+  return (
+    <View pointerEvents="none" style={styles.bossRageLayer}>
+      {[0, 1, 2, 3].map((item) => <View key={item} style={[styles.bossRageSpike, active && styles.bossRageSpikeActive, { backgroundColor: color, transform: [{ rotate: `${item * 45}deg` }] }]} />)}
+    </View>
+  );
+}
+
+function BossTargetArt({ bossLevel, bugArtSize, mechanic }: { bossLevel: number; bugArtSize: number; mechanic: ReturnType<typeof soloBossMechanicForLevel> | null }) {
+  const idle = useRef(new Animated.Value(0)).current;
+  const action = useRef(new Animated.Value(0)).current;
+  const active = Boolean(mechanic?.active);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(idle, { duration: 880, toValue: 1, useNativeDriver: true }),
+        Animated.timing(idle, { duration: 880, toValue: 0, useNativeDriver: true })
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [idle]);
+
+  useEffect(() => {
+    action.setValue(0);
+    if (!mechanic) return;
+    const activeMove = mechanic.kind === "dash" ? 360 : mechanic.kind === "rage" ? 190 : mechanic.kind === "swarm" ? 240 : 280;
+    const idleMove = mechanic.kind === "dash" ? 520 : 680;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(action, { duration: active ? activeMove : idleMove, toValue: 1, useNativeDriver: true }),
+        Animated.timing(action, { duration: active ? activeMove : idleMove, toValue: 0, useNativeDriver: true })
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [action, active, mechanic?.kind]);
+
+  const idleY = idle.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+  const idleTilt = idle.interpolate({ inputRange: [0, 1], outputRange: ["-2deg", "2deg"] });
+  const actionX = action.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: mechanic?.kind === "dash" && active ? [0, 18, -16, 10, 0] : mechanic?.kind === "rage" && active ? [0, -7, 7, -5, 0] : [0, 0, 0, 0, 0]
+  });
+  const actionY = action.interpolate({
+    inputRange: [0, 0.35, 0.7, 1],
+    outputRange: mechanic?.kind === "armor" && active ? [0, -14, 3, 0] : mechanic?.kind === "swarm" && active ? [0, -6, 4, 0] : [0, -3, 2, 0]
+  });
+  const actionScale = action.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: mechanic?.kind === "core" && active ? [1, 1.08, 1] : mechanic?.kind === "rage" && active ? [1, 1.06, 1] : [1, 1.03, 1]
+  });
+  const actionRotate = action.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: mechanic?.kind === "rage" && active ? ["-6deg", "6deg", "-6deg"] : ["0deg", "0deg", "0deg"]
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.bossArtWrap,
+        {
+          transform: [
+            { translateX: actionX },
+            { translateY: Animated.add(idleY, actionY) },
+            { rotate: idleTilt },
+            { rotateZ: actionRotate },
+            { scale: actionScale }
+          ]
+        }
+      ]}
+    >
+      <Image accessibilityIgnoresInvertColors resizeMode="contain" source={soloBossImageForLevel(bossLevel)} style={{ height: bugArtSize, width: bugArtSize }} />
+    </Animated.View>
+  );
+}
+
 function renderTargets(
   duel: BugSmashDuel,
   timestamp: number,
@@ -1935,8 +2531,8 @@ function renderTargets(
   hitFeedbackValues: Map<string, Animated.Value>,
   frozenTargets: Record<string, FrozenTarget>,
   targetTimeOffsets: Record<string, number>,
-  onHit: (bugId: string) => void,
-  t: ReturnType<typeof useI18n>["t"],
+  onHit: (bugId: string, motion: VisibleDuelTarget["motion"]) => void,
+  sprayMode = false,
   soloCampaign?: SoloCampaignConfig | null
 ) {
   return collectRenderedTargets(duel, timestamp, caughtBugIds, assist, frozenTargets, targetTimeOffsets, soloCampaign)
@@ -1946,8 +2542,8 @@ function renderTargets(
     const requiredTaps = requiredTapsForTarget(entry.rarity, assist, index, 1, bossLevel);
     const hits = hitCounts[bugId] ?? 0;
     const feedback = hitFeedbackValues.get(bugId);
-    const targetSize = bossLevel ? 112 + bossLevel * 7 : Math.round(46 * assist.hitboxMultiplier * targetHitboxMultiplierForRarity(entry.rarity));
-    const bugArtSize = bossLevel ? targetSize - 12 : Math.min(46, Math.round(38 * targetHitboxMultiplierForRarity(entry.rarity)));
+    const targetSize = bossLevel ? Math.round((112 + bossLevel * 7) * duelTargetZoomScale) : Math.round(46 * duelTargetZoomScale * assist.hitboxMultiplier * targetHitboxMultiplierForRarity(entry.rarity));
+    const bugArtSize = bossLevel ? Math.max(40, targetSize - 12) : Math.min(46, Math.round(38 * duelTargetZoomScale * targetHitboxMultiplierForRarity(entry.rarity)));
     const bossMechanic = bossLevel ? soloBossMechanicForLevel(bossLevel, motion.progress) : null;
     return (
       <Pressable
@@ -1965,9 +2561,9 @@ function renderTargets(
             width: targetSize
           }
         ]}
-        onPressIn={() => onHit(bugId)}
+        onPressIn={() => onHit(bugId, motion)}
       >
-        {feedback && <BugSwatterHit bugSize={44} feedback={feedback} style={styles.targetSwatter} />}
+        {feedback && !sprayMode && <BugSwatterHit bugSize={44} feedback={feedback} style={styles.targetSwatter} />}
         {frozen && (
           <View pointerEvents="none" style={styles.targetFreezeBadge}>
             <Text style={styles.targetFreezeText}>TIME</Text>
@@ -1979,11 +2575,18 @@ function renderTargets(
             {bossMechanic && (
               <View pointerEvents="none" style={[styles.bossWeakRing, bossMechanic.active && styles.bossWeakRingActive, { borderColor: bossMechanic.color }]} />
             )}
-            <Image accessibilityIgnoresInvertColors resizeMode="contain" source={soloBossImageForLevel(bossLevel)} style={{ height: bugArtSize, width: bugArtSize }} />
+            {bossMechanic && <BossMechanicVisual active={bossMechanic.active} color={bossMechanic.color} kind={bossMechanic.kind} />}
+            <BossTargetArt bossLevel={bossLevel} bugArtSize={bugArtSize} mechanic={bossMechanic} />
             <Text style={styles.bossTargetLabel}>BOSS L{bossLevel}</Text>
             {bossMechanic && (
               <View pointerEvents="none" style={[styles.bossMechanicBadge, bossMechanic.active && styles.bossMechanicBadgeActive, { borderColor: bossMechanic.color }]}>
-                <Text style={[styles.bossMechanicText, bossMechanic.active && { color: bossMechanic.color }]}>{bossMechanic.active ? `${bossMechanic.activeLabel} x${bossMechanic.tapDamage}` : bossMechanic.label}</Text>
+                <View style={styles.bossMechanicTitleRow}>
+                  <Text style={[styles.bossMechanicState, (bossMechanic.active || bossMechanic.phase === "danger") && { backgroundColor: bossMechanic.color, color: "#102018" }]}>{bossMechanic.active ? "NOW" : bossMechanic.phase === "danger" ? "DANGER" : "NEXT"}</Text>
+                  <Text numberOfLines={1} style={[styles.bossMechanicTitle, (bossMechanic.active || bossMechanic.phase === "danger") && { color: bossMechanic.color }]}>{bossMechanic.active ? `${bossMechanic.activeLabel} +${bossMechanic.bonus}` : bossMechanic.phase === "danger" ? bossMechanic.dangerLabel : bossMechanic.label}</Text>
+                </View>
+                <View style={styles.bossMechanicTrack}>
+                  <View style={[styles.bossMechanicFill, { backgroundColor: bossMechanic.color, width: `${Math.round(bossMechanic.windowProgress * 100)}%` }]} />
+                </View>
               </View>
             )}
           </>
@@ -2060,6 +2663,8 @@ function helperRarityPreference(category: BugSquadBonusCategory) {
   if (category === "combo_boost") return 0.9;
   return 0.75;
 }
+
+const duelTargetZoomScale = 0.92;
 
 function targetHitboxMultiplierForRarity(rarity: BugDexRarity) {
   if (rarity === "Mythisch") return 1.18;
@@ -2249,6 +2854,14 @@ function helperColorForKind(kind: HelperImpactKind) {
   return "#d7bd57";
 }
 
+function masterySkillColor(role: BugMastery["role"]) {
+  if (role === "attack") return "#ef4444";
+  if (role === "speed") return "#22c55e";
+  if (role === "shield") return "#38bdf8";
+  if (role === "chaos") return "#a78bfa";
+  return "#f2a000";
+}
+
 function helperKindLabel(kind: HelperImpactKind, t: (key: string) => string) {
   return t(`duel.helper.${kind}`);
 }
@@ -2383,12 +2996,57 @@ function HelperTowerPulse({ color, ready }: { color: string; ready: boolean }) {
   );
 }
 
+function BugSprayIcon({ style }: { compact?: boolean; style?: StyleProp<ImageStyle> }) {
+  return <Image accessibilityIgnoresInvertColors resizeMode="contain" source={soloPowerupSprayImage} style={style} />;
+}
+
 function HelperImpactEffect({ impact }: { impact: HelperImpact }) {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(pulse, { duration: 680, toValue: 1, useNativeDriver: true }).start();
   }, [pulse]);
+
+  if (impact.bugId === "spray_area") {
+    return (
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.sprayImpactTool,
+          {
+            left: `${impact.x}%`,
+            opacity: pulse.interpolate({ inputRange: [0, 0.12, 0.78, 1], outputRange: [0, 1, 0.82, 0] }),
+            top: `${impact.y}%`,
+            transform: [
+              { translateX: pulse.interpolate({ inputRange: [0, 1], outputRange: [-8, -18] }) },
+              { translateY: pulse.interpolate({ inputRange: [0, 1], outputRange: [-12, -24] }) },
+              { rotate: "-18deg" },
+              { scale: pulse.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0.72, 1.08, 0.96] }) }
+            ]
+          }
+        ]}
+      >
+        <BugSprayIcon compact style={styles.sprayImpactCan} />
+        {[0, 1, 2].map((item) => (
+          <Animated.View
+            key={item}
+            style={[
+              styles.sprayImpactJet,
+              {
+                opacity: pulse.interpolate({ inputRange: [0, 0.18 + item * 0.08, 0.84, 1], outputRange: [0, 0.8, 0.28, 0] }),
+                top: 9 + item * 6,
+                transform: [
+                  { translateX: pulse.interpolate({ inputRange: [0, 1], outputRange: [12, 58 + item * 8] }) },
+                  { translateY: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, item * 8 - 8] }) },
+                  { scaleX: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.4] }) }
+                ]
+              }
+            ]}
+          />
+        ))}
+      </Animated.View>
+    );
+  }
 
   const angle = Math.atan2(impact.y - impact.sourceY, impact.x - impact.sourceX) * 180 / Math.PI;
   const spriteKey = helperSpriteKeyForImpact(impact);
@@ -2865,7 +3523,7 @@ function targetMotion(index: number, seed: number, elapsedMs: number, rarity: Bu
   const lane = (index * 37 + seed) % 82;
   const wave = (index % 5) + 2;
   const rarityLifetime = rarity === "Gewoon" ? 3900 : rarity === "Zeldzaam" ? 5000 : rarity === "Episch" ? 6200 : rarity === "Legendarisch" ? 7400 : 8600;
-  const duration = rarityLifetime * assist.speedMultiplier * (bossLevel > 0 ? 2.8 + bossLevel * 0.25 : 1);
+  const duration = rarityLifetime * assist.speedMultiplier * (bossLevel > 0 ? 5.5 + bossLevel * 0.5 : 1);
   const lastSpawnAt = Math.max(0, duelDurationMs - duelTargetFinalSpawnBufferMs);
   const spawnMultiplier = Math.max(0.5, Math.min(1.1, spawnSpacingMultiplier));
   const spawnProgress = targetCount > 1 ? Math.max(0, Math.min(1, index / (targetCount - 1))) : 0;
@@ -2877,9 +3535,21 @@ function targetMotion(index: number, seed: number, elapsedMs: number, rarity: Bu
   const progress = (elapsedMs - spawnStart) / duration;
   if (progress < 0 || progress > 1) return { visible: false, progress, x: 0, y: 0, rotate: 0 };
   if (bossLevel > 0) {
-    const x = 5 + progress * 78;
-    const y = Math.max(5, Math.min(70, 26 + bossLevel * 5 + Math.sin(progress * Math.PI * 3 + seed) * 9));
-    const rotate = Math.sin(progress * Math.PI * 2) * 5;
+    const mechanic = soloBossMechanicForLevel(bossLevel, progress);
+    const dashActive = mechanic.kind === "dash" && mechanic.active;
+    const dangerBoost = mechanic.phase === "danger" ? 1.35 : 1;
+    const drop = Math.max(0, Math.sin(progress * Math.PI * (2 + bossLevel) + seed * 0.11)) ** 6;
+    const slowDrift = Math.sin(progress * Math.PI * 1.25 + seed * 0.05) * 18;
+    const hopPhase = Math.sin(progress * Math.PI * (4 + bossLevel) + seed * 0.03);
+    const sideStep = Math.sin(progress * Math.PI * 7 + seed * 0.07);
+    const laneSwap = Math.sin(progress * Math.PI * 3 + bossLevel);
+    const baseX = 12 + ((progress * 38 + slowDrift + sideStep * 12 * dangerBoost + laneSwap * 8) % 72);
+    const dashX = 8 + ((Math.sin(progress * Math.PI * 8 + seed) + 1) / 2) * 72;
+    const x = Math.max(6, Math.min(80, dashActive ? dashX : baseX));
+    const baseY = 16 + bossLevel * 3 + Math.sin(progress * Math.PI * 2.2 + seed) * 8 * dangerBoost - Math.max(0, hopPhase) * 14 + drop * 34;
+    const dashY = 20 + Math.sin(progress * Math.PI * 11 + seed) * 18;
+    const y = Math.max(8, Math.min(66, dashActive ? dashY : baseY));
+    const rotate = Math.sin(progress * Math.PI * (dashActive ? 12 : 2)) * (dashActive ? 12 : 7);
     return { visible: true, progress, x, y, rotate };
   }
   const direction = index % 2 === 0 ? 1 : -1;
@@ -2901,7 +3571,7 @@ function soloBossLevelForTarget(duel: BugSmashDuel, targetIndex: number, soloCam
 }
 
 function soloBossTapMultiplier(level: number) {
-  return level > 0 ? (2.8 + level * 0.9) * 2 : 1;
+  return level > 0 ? 10.0 + level * 4.95 : 1;
 }
 
 function soloBossScoreBonus(level: number) {
@@ -2910,25 +3580,6 @@ function soloBossScoreBonus(level: number) {
 
 function soloBossBreakBonus(level: number) {
   return level > 0 ? 5 + level * 2 : 0;
-}
-
-function soloBossTapDamageForHit(
-  duel: BugSmashDuel,
-  targetIndex: number,
-  soloCampaign: SoloCampaignConfig | null,
-  timestamp: number,
-  assist: BugSmashDuelBalance,
-  targetTimeOffset: number
-) {
-  const bossLevel = soloBossLevelForTarget(duel, targetIndex, soloCampaign);
-  if (!bossLevel) return 1;
-  const bugId = duel.bugIds[targetIndex];
-  const entry = entryByBugId(bugId);
-  if (!entry) return 1;
-  const startAt = duel.startAt ? Date.parse(duel.startAt) : timestamp;
-  const motion = targetMotion(targetIndex, duel.seed, timestamp - startAt - targetTimeOffset, entry.rarity, assist, bossLevel, soloCampaign?.spawnSpacingMultiplier ?? 1, duel.durationMs, duel.bugIds.length);
-  const mechanic = soloBossMechanicForLevel(bossLevel, motion.progress);
-  return mechanic.active ? mechanic.tapDamage : 1;
 }
 
 function soloBossBreakBonusForCatch(
@@ -2950,22 +3601,56 @@ function soloBossBreakBonusForCatch(
   return mechanic.active ? mechanic.bonus : 0;
 }
 
+function soloBossTapHitValue(
+  duel: BugSmashDuel,
+  targetIndex: number,
+  soloCampaign: SoloCampaignConfig | null,
+  timestamp: number,
+  assist: BugSmashDuelBalance,
+  targetTimeOffset: number,
+  source: "helper" | "spray" | "tap"
+) {
+  const bossLevel = soloBossLevelForTarget(duel, targetIndex, soloCampaign);
+  if (!bossLevel || source === "helper") return { blocked: false, hits: 1, notice: "" };
+  const bugId = duel.bugIds[targetIndex];
+  const entry = entryByBugId(bugId);
+  if (!entry) return { blocked: false, hits: 1, notice: "" };
+  const startAt = duel.startAt ? Date.parse(duel.startAt) : timestamp;
+  const motion = targetMotion(targetIndex, duel.seed, timestamp - startAt - targetTimeOffset, entry.rarity, assist, bossLevel, soloCampaign?.spawnSpacingMultiplier ?? 1, duel.durationMs, duel.bugIds.length);
+  const mechanic = soloBossMechanicForLevel(bossLevel, motion.progress);
+
+  // Boss state machine: each boss has a readable safe/telegraph phase and a short response window.
+  if (mechanic.kind === "armor" && !mechanic.active) return { blocked: false, hits: 1, notice: "ARMOR -1" };
+  if (mechanic.kind === "armor" && mechanic.active) return { blocked: false, hits: 4, notice: "BREAK +4" };
+  if (mechanic.kind === "core" && mechanic.active) return { blocked: false, hits: 4, notice: "CORE +4" };
+  if (mechanic.kind === "dash" && mechanic.active) return { blocked: false, hits: 3, notice: "DASH +3" };
+  if (mechanic.kind === "rage" && mechanic.active) return { blocked: false, hits: 3, notice: "RAGE +3" };
+  if (mechanic.kind === "swarm" && mechanic.active) return { blocked: false, hits: 3, notice: "SWARM +3" };
+  return { blocked: false, hits: 1, notice: mechanic.phase === "danger" ? "DANGER" : "" };
+}
+
 function soloBossMechanicForLevel(level: number, progress: number) {
-  const specs = [
-    { activeLabel: "BREAK", color: "#facc15", label: "ARMOR", windowEnd: 0.72, windowStart: 0.48 },
-    { activeLabel: "PUNISH", color: "#fb7185", label: "DASH", windowEnd: 0.66, windowStart: 0.42 },
-    { activeLabel: "CORE HIT", color: "#38bdf8", label: "CORE", windowEnd: 0.78, windowStart: 0.56 },
-    { activeLabel: "CLEAR", color: "#f97316", label: "SWARM", windowEnd: 0.74, windowStart: 0.5 },
-    { activeLabel: "RESET", color: "#a78bfa", label: "RAGE", windowEnd: 0.7, windowStart: 0.46 }
+  const specs: Array<{ activeLabel: string; color: string; dangerLabel: string; kind: SoloBossMechanicKind; label: string; windowEnd: number; windowStart: number }> = [
+    { activeLabel: "BREAK ARMOR", color: "#facc15", dangerLabel: "SHIELD UP", kind: "armor", label: "ARMOR SOON", windowEnd: 0.72, windowStart: 0.48 },
+    { activeLabel: "HIT DASH", color: "#fb7185", dangerLabel: "DASH LANE", kind: "dash", label: "DASH SOON", windowEnd: 0.66, windowStart: 0.42 },
+    { activeLabel: "HIT CORE", color: "#38bdf8", dangerLabel: "AIM CORE", kind: "core", label: "CORE SOON", windowEnd: 0.78, windowStart: 0.56 },
+    { activeLabel: "CLEAR SWARM", color: "#f97316", dangerLabel: "SWARM", kind: "swarm", label: "SWARM SOON", windowEnd: 0.74, windowStart: 0.5 },
+    { activeLabel: "STOP RAGE", color: "#a78bfa", dangerLabel: "RAGE", kind: "rage", label: "RAGE SOON", windowEnd: 0.7, windowStart: 0.46 }
   ];
   const spec = specs[Math.max(1, Math.min(soloCampaignMaxLevel, level)) - 1];
   const cycleCount = 3 + level;
   const phase = ((Math.max(0, Math.min(1, progress)) * cycleCount) + level * 0.17) % 1;
+  const windowProgress = phase < spec.windowStart
+    ? Math.max(0.08, phase / spec.windowStart)
+    : phase <= spec.windowEnd
+      ? Math.max(0.12, (phase - spec.windowStart) / (spec.windowEnd - spec.windowStart))
+      : 1;
   return {
     ...spec,
     active: phase >= spec.windowStart && phase <= spec.windowEnd,
     bonus: soloBossBreakBonus(level),
-    tapDamage: 2
+    phase: phase < spec.windowStart ? "telegraph" : phase <= spec.windowEnd ? "response" : "danger",
+    windowProgress
   };
 }
 
@@ -3050,8 +3735,93 @@ function opponentLabel(duel: BugSmashDuel, user: User) {
   return duel.fromUserId === user.uid ? duel.toUserName : duel.fromUserName;
 }
 
+function duelGameLabel(duel: BugSmashDuel, t: (key: string, params?: Record<string, string | number>) => string) {
+  if (duel.arcadeMode === "web_runner") return t("arcade.webRunner.title");
+  if (duel.arcadeMode === "nest_defense") return t("arcade.nestDefense.title");
+  if (duel.arcadeMode === "bug_glide") return t("arcade.bugGlide.title");
+  if (duel.arcadeMode === "bug_tower") return t("arcade.bugTower.title");
+  return t("arcade.tapDuel.title");
+}
+
 function isDuelParticipant(duel: BugSmashDuel, user: User) {
   return duel.fromUserId === user.uid || duel.toUserId === user.uid;
+}
+
+function ArcadeModeCard({
+  active,
+  artRect,
+  image,
+  title,
+  onPress,
+  onTrain
+}: {
+  active: boolean;
+  artRect?: SpriteRect;
+  image?: ImageSourcePropType;
+  title: string;
+  onPress: () => void;
+  onTrain?: () => void;
+}) {
+  return (
+    <View style={[styles.arcadeCard, active && styles.arcadeCardActive]}>
+      {artRect ? (
+        <ArcadeCardSprite rect={artRect} />
+      ) : image ? (
+        <Image accessibilityIgnoresInvertColors resizeMode="cover" source={image} style={styles.arcadeCardImage} />
+      ) : (
+        <View style={styles.arcadeCardFallback}>
+          <Text style={styles.arcadeCardFallbackText}>{title.slice(0, 1)}</Text>
+        </View>
+      )}
+      <View style={styles.arcadeCardCopy}>
+        <Text style={styles.arcadeCardTitle}>{title}</Text>
+      </View>
+      <View style={styles.arcadeActionRow}>
+        <Pressable style={styles.arcadeStatusPill} onPress={onPress}>
+          <Text style={styles.arcadeStatusText}>Start</Text>
+        </Pressable>
+        {onTrain ? (
+          <Pressable style={[styles.arcadeStatusPill, styles.arcadeTrainPill]} onPress={onTrain}>
+            <Text style={[styles.arcadeStatusText, styles.arcadeTrainText]}>Train</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function ArcadeCardSprite({ rect }: { rect: SpriteRect }) {
+  const [size, setSize] = useState({ height: 86, width: 112 });
+  const sheetSize = 1536;
+  const scale = Math.max(size.width / rect.width, size.height / rect.height);
+  const imageSize = sheetSize * scale;
+  const rectWidth = rect.width * scale;
+  const rectHeight = rect.height * scale;
+  const centeredLeft = -rect.x * scale - Math.max(0, (rectWidth - size.width) / 2);
+  const centeredTop = -rect.y * scale - Math.max(0, (rectHeight - size.height) / 2);
+  const left = Math.min(0, Math.max(size.width - imageSize, centeredLeft));
+  const top = Math.min(0, Math.max(size.height - imageSize, centeredTop));
+  return (
+    <View
+      style={[styles.arcadeCardImage, styles.arcadeCardSpriteClip]}
+      onLayout={(event) => {
+        const { height, width } = event.nativeEvent.layout;
+        if (height > 0 && width > 0) setSize({ height, width });
+      }}
+    >
+      <Image
+        accessibilityIgnoresInvertColors
+        source={arcadeShowcaseImage}
+        style={{
+          height: imageSize,
+          left,
+          position: "absolute",
+          top,
+          width: imageSize
+        }}
+      />
+    </View>
+  );
 }
 
 function isActiveDuelBetweenUsers(duel: BugSmashDuel, firstUserId: string, secondUserId: string) {
@@ -3060,29 +3830,15 @@ function isActiveDuelBetweenUsers(duel: BugSmashDuel, firstUserId: string, secon
   return samePair && (duel.status === "pending" || duel.status === "accepted");
 }
 
-function duelDailyRewardClaimedAgainstOpponent(duels: BugSmashDuel[], userId: string, opponentId: string) {
-  return duels.some((duel) => {
-    const samePair = (duel.fromUserId === userId && duel.toUserId === opponentId)
-      || (duel.fromUserId === opponentId && duel.toUserId === userId);
-    if (!samePair || duel.status !== "completed" || !(duel.rewardClaimedBy ?? []).includes(userId)) return false;
-    return localDayIdFromIso(duel.updatedAt) === localDayIdFromIso(new Date().toISOString());
-  });
+function duelCompletedAt(duel: BugSmashDuel) {
+  const fromSubmittedAt = duel.scores?.[duel.fromUserId]?.submittedAt ?? "";
+  const toSubmittedAt = duel.scores?.[duel.toUserId]?.submittedAt ?? "";
+  if (fromSubmittedAt && toSubmittedAt) return fromSubmittedAt > toSubmittedAt ? fromSubmittedAt : toSubmittedAt;
+  return duel.updatedAt;
 }
 
 function canPlayRandomDuelToday(candidate: BugSmashDuel, duels: BugSmashDuel[], userId: string) {
-  const today = localDayIdFromIso(new Date().toISOString());
-  const opponentId = candidate.fromUserId === userId ? candidate.toUserId : candidate.fromUserId;
-  const randomToday = duels.filter((duel) =>
-    duel.matchType === "random"
-    && localDayIdFromIso(duel.createdAt) === today
-    && (duel.fromUserId === userId || duel.toUserId === userId)
-  );
-  const sameOpponentToday = randomToday.some((duel) => {
-    if (duel.id === candidate.id) return false;
-    const rowOpponentId = duel.fromUserId === userId ? duel.toUserId : duel.fromUserId;
-    return rowOpponentId === opponentId;
-  });
-  return randomToday.length <= 5 && !sameOpponentToday;
+  return candidate.fromUserId !== userId && !duels.some((duel) => isActiveDuelBetweenUsers(duel, userId, candidate.fromUserId));
 }
 
 function localDayIdFromIso(iso: string) {
@@ -3105,6 +3861,11 @@ function statusLabel(duel: BugSmashDuel, t: (key: string) => string) {
 function resultLabel(duel: BugSmashDuel, user: User, t: (key: string) => string) {
   if (!duel.winnerId) return t("duel.tie");
   return duel.winnerId === user.uid ? t("duel.win") : t("duel.loss");
+}
+
+function duelClaimButtonLabel(duel: BugSmashDuel, user: User, t: (key: string) => string) {
+  if (!duel.winnerId || duel.winnerId === user.uid) return t("duel.claimReward");
+  return t("duel.claimXp");
 }
 
 function bugName(bugId: string, t: (key: string) => string) {
@@ -3175,6 +3936,106 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8
   },
+  arcadeCard: {
+    alignItems: "stretch",
+    backgroundColor: "#f8fbf5",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexBasis: "48%",
+    flexGrow: 1,
+    gap: 7,
+    minHeight: 154,
+    overflow: "hidden",
+    padding: 8
+  },
+  arcadeCardActive: {
+    borderColor: "#d7bd57",
+    borderWidth: 2
+  },
+  arcadeActionRow: {
+    flexDirection: "row",
+    gap: 6
+  },
+  arcadeCardCopy: {
+    flexShrink: 1,
+    minWidth: 0
+  },
+  arcadeCardFallback: {
+    alignItems: "center",
+    backgroundColor: "#102018",
+    borderColor: "#d7bd57",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 58,
+    justifyContent: "center",
+    width: 58
+  },
+  arcadeCardFallbackText: {
+    color: "#d7bd57",
+    fontSize: 28,
+    fontWeight: "900"
+  },
+  arcadeCardImage: {
+    borderRadius: 8,
+    height: 86,
+    width: "100%"
+  },
+  arcadeCardSpriteClip: {
+    overflow: "hidden"
+  },
+  arcadeCardTitle: {
+    color: "#102018",
+    fontSize: 15,
+    fontWeight: "900",
+    minHeight: 20
+  },
+  arcadeHub: {
+    gap: 10
+  },
+  arcadeHubCompact: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12
+  },
+  arcadePlaceholderPanel: {
+    backgroundColor: "#f8fbf5",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    padding: 14
+  },
+  arcadeStatusPill: {
+    flex: 1,
+    alignSelf: "stretch",
+    alignItems: "center",
+    backgroundColor: "#102018",
+    borderRadius: 8,
+    justifyContent: "center",
+    minHeight: 34,
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  arcadeStatusText: {
+    color: "#f8fbf5",
+    fontSize: 10,
+    fontWeight: "900"
+  },
+  arcadeTrainPill: {
+    backgroundColor: "#eef4ed",
+    borderColor: "#102018",
+    borderWidth: 1
+  },
+  arcadeTrainText: {
+    color: "#102018"
+  },
+  arcadeTitle: {
+    color: "#102018",
+    fontSize: 24,
+    fontWeight: "900"
+  },
   arenaSquadPreview: {
     backgroundColor: "#fdfefb",
     borderColor: "#d7e1d9",
@@ -3198,6 +4059,42 @@ const styles = StyleSheet.create({
   arenaSquadPreviewTitle: {
     color: "#102018",
     fontSize: 14,
+    fontWeight: "900"
+  },
+  arenaUtilityAction: {
+    backgroundColor: "#102018",
+    borderRadius: 8,
+    color: "#f8fbf5",
+    fontSize: 11,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    textAlign: "center"
+  },
+  arenaUtilityButton: {
+    backgroundColor: "#f8fbf5",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    gap: 8,
+    overflow: "hidden",
+    padding: 8
+  },
+  arenaUtilityImage: {
+    borderRadius: 8,
+    height: 86,
+    width: "100%"
+  },
+  arenaUtilityRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10
+  },
+  arenaUtilityTitle: {
+    color: "#102018",
+    fontSize: 15,
     fontWeight: "900"
   },
   arenaModeText: {
@@ -3288,6 +4185,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
+  duelDropdownChevron: {
+    color: "#102018",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  duelDropdownHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  duelDropdownHeaderSecondary: {
+    borderTopColor: "#d7e1d9",
+    borderTopWidth: 1,
+    marginTop: 12,
+    paddingTop: 12
+  },
+  duelDropdownTitle: {
+    marginBottom: 0
+  },
+  duelEmptyText: {
+    color: "#53645d",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 8
+  },
   duelTitleRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -3306,6 +4228,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     overflow: "hidden",
+    paddingBottom: 74,
     position: "relative"
   },
   fullscreenGame: {
@@ -3489,6 +4412,140 @@ const styles = StyleSheet.create({
   helperSplashSprite: {
     position: "absolute",
     zIndex: 8
+  },
+  sprayImpactCan: {
+    height: 42,
+    width: 42
+  },
+  bugSprayBase: {
+    backgroundColor: "#111827",
+    borderRadius: 999,
+    bottom: 3,
+    height: 3,
+    position: "absolute",
+    width: "44%"
+  },
+  bugSprayBugMark: {
+    alignItems: "center",
+    backgroundColor: "#fee2e2",
+    borderColor: "#991b1b",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 13,
+    justifyContent: "center",
+    marginTop: 2,
+    width: 13
+  },
+  bugSprayBugText: {
+    color: "#991b1b",
+    fontSize: 9,
+    fontWeight: "900",
+    lineHeight: 10
+  },
+  bugSprayBugTextCompact: {
+    fontSize: 7,
+    lineHeight: 8
+  },
+  bugSprayCan: {
+    alignItems: "center",
+    backgroundColor: "#e5e7eb",
+    borderColor: "#0f172a",
+    borderRadius: 7,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+    borderWidth: 1.5,
+    flex: 1,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: "72%"
+  },
+  bugSprayCap: {
+    backgroundColor: "#0ea5e9",
+    borderBottomColor: "#0f172a",
+    borderBottomWidth: 1,
+    height: 6,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0
+  },
+  bugSprayHighlight: {
+    backgroundColor: "rgba(255,255,255,0.62)",
+    borderRadius: 999,
+    height: "78%",
+    left: 4,
+    position: "absolute",
+    top: 7,
+    width: 4
+  },
+  bugSprayHead: {
+    alignItems: "center",
+    flexDirection: "row",
+    height: 9,
+    justifyContent: "center",
+    marginBottom: -1,
+    width: "86%"
+  },
+  bugSprayIcon: {
+    alignItems: "center",
+    backgroundColor: "#bfdbfe",
+    borderColor: "rgba(15,23,42,0.45)",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 46,
+    justifyContent: "center",
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    width: 46
+  },
+  bugSprayIconCompact: {
+    borderRadius: 6,
+    height: 24,
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+    width: 24
+  },
+  bugSprayLabel: {
+    color: "#0f172a",
+    fontSize: 7,
+    fontWeight: "900",
+    lineHeight: 8,
+    marginTop: 6,
+    textAlign: "center"
+  },
+  bugSprayLabelCompact: {
+    fontSize: 3.2,
+    lineHeight: 4,
+    marginTop: 4
+  },
+  bugSprayNozzle: {
+    backgroundColor: "#111827",
+    borderRadius: 2,
+    height: 4,
+    width: 10
+  },
+  bugSprayTrigger: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#111827",
+    borderRadius: 2,
+    borderWidth: 1,
+    height: 7,
+    marginRight: -1,
+    width: 10
+  },
+  sprayImpactJet: {
+    backgroundColor: "rgba(125,211,252,0.72)",
+    borderRadius: 999,
+    height: 5,
+    left: 23,
+    position: "absolute",
+    width: 34
+  },
+  sprayImpactTool: {
+    marginLeft: -20,
+    marginTop: -20,
+    position: "absolute",
+    zIndex: 12
   },
   helperImpactOrb: {
     backgroundColor: "rgba(255,255,255,0.1)",
@@ -4458,11 +5515,14 @@ const styles = StyleSheet.create({
     textShadowRadius: 8
   },
   soloPowerupGameBar: {
-    bottom: 14,
+    bottom: 10,
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
-    left: 14,
+    justifyContent: "center",
+    left: 10,
     position: "absolute",
+    right: 10,
     zIndex: 11
   },
   soloPowerupGameButton: {
@@ -4473,18 +5533,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 6
+    maxWidth: 164,
+    minHeight: 38,
+    minWidth: 118,
+    paddingHorizontal: 7,
+    paddingVertical: 5
   },
   soloPowerupGameIcon: {
     borderRadius: 6,
-    height: 28,
-    width: 28
+    height: 24,
+    width: 24
   },
   soloPowerupGameText: {
     color: "#ffffff",
-    fontSize: 11,
-    fontWeight: "900"
+    flexShrink: 1,
+    fontSize: 10,
+    fontWeight: "900",
+    lineHeight: 12
   },
   soloPowerupCopy: {
     flex: 1,
@@ -4492,6 +5557,10 @@ const styles = StyleSheet.create({
   },
   soloPowerupDisabled: {
     opacity: 0.45
+  },
+  soloSprayActive: {
+    backgroundColor: "#0ea5e9",
+    borderColor: "#bae6fd"
   },
   soloPowerupImage: {
     borderRadius: 8,
@@ -4623,6 +5692,35 @@ const styles = StyleSheet.create({
     height: 20,
     width: 20
   },
+  squadMasteryMini: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 5,
+    marginTop: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    width: "100%"
+  },
+  squadMasteryMiniActive: {
+    backgroundColor: "#234435",
+    borderColor: "#69c88d"
+  },
+  squadMasteryMiniRole: {
+    color: "#53645d",
+    flex: 1,
+    fontSize: 10,
+    fontWeight: "900",
+    textAlign: "right"
+  },
+  squadMasteryMiniText: {
+    color: "#102018",
+    fontSize: 10,
+    fontWeight: "900"
+  },
   squadChoiceName: {
     color: "#102018",
     fontSize: 13,
@@ -4692,20 +5790,28 @@ const styles = StyleSheet.create({
     borderColor: "rgba(16,32,24,0.12)",
     borderRadius: 8,
     borderWidth: 1,
-    height: 112,
+    height: 104,
     justifyContent: "center",
     overflow: "hidden",
-    padding: 8
+    padding: 6
   },
   squadJarCompact: {
     backgroundColor: "rgba(232,246,239,0.3)",
-    height: 58,
+    height: 70,
     padding: 3
+  },
+  squadJarArt: {
+    marginBottom: 2,
+    marginTop: 4,
+    zIndex: 3
   },
   squadJarBugWrap: {
     alignItems: "center",
+    bottom: 34,
+    left: 0,
     justifyContent: "center",
-    marginTop: 0,
+    position: "absolute",
+    right: 0,
     shadowColor: "#102018",
     shadowOffset: { height: 3, width: 0 },
     shadowOpacity: 0.22,
@@ -4713,22 +5819,30 @@ const styles = StyleSheet.create({
     zIndex: 3
   },
   squadJarBugWrapCompact: {
-    marginTop: -1
+    bottom: 25
   },
   squadJarBase: {
-    backgroundColor: "rgba(16,32,24,0.18)",
+    backgroundColor: "rgba(16,32,24,0.1)",
     borderRadius: 999,
-    bottom: 5,
-    height: 5,
-    left: 12,
+    bottom: 8,
+    height: 3,
+    left: 18,
     position: "absolute",
-    right: 12
+    right: 18
   },
   squadJarBaseCompact: {
-    bottom: 3,
-    height: 4,
-    left: 9,
-    right: 9
+    bottom: 8,
+    height: 2,
+    left: 18,
+    right: 18
+  },
+  squadJarBonus: {
+    color: "#53645d",
+    fontSize: 9,
+    fontWeight: "900",
+    marginTop: 1,
+    textAlign: "center",
+    zIndex: 4
   },
   squadJarEmpty: {
     color: "#6f7f5f",
@@ -4743,16 +5857,36 @@ const styles = StyleSheet.create({
   squadJarGlow: {
     backgroundColor: "rgba(215,189,87,0.15)",
     borderRadius: 999,
-    bottom: 16,
-    height: 62,
+    bottom: 24,
+    height: 42,
     position: "absolute",
-    width: 68,
+    width: 58,
     zIndex: 1
   },
   squadJarGlowCompact: {
-    bottom: 9,
-    height: 32,
-    width: 38
+    bottom: 18,
+    height: 30,
+    width: 42
+  },
+  squadJarGlass: {
+    backgroundColor: "rgba(255,255,255,0.38)",
+    borderColor: "rgba(16,32,24,0.12)",
+    borderRadius: 8,
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 5,
+    borderWidth: 1,
+    bottom: 14,
+    height: 60,
+    left: 16,
+    position: "absolute",
+    right: 16,
+    zIndex: 1
+  },
+  squadJarGlassCompact: {
+    bottom: 13,
+    height: 34,
+    left: 18,
+    right: 18
   },
   squadJarImage: {
     bottom: -5,
@@ -4763,42 +5897,78 @@ const styles = StyleSheet.create({
     top: -4,
     zIndex: 0
   },
-  squadJarImageCompact: {
-    bottom: -10,
-    left: -12,
-    opacity: 0.82,
-    right: -12,
-    top: -8
-  },
   squadJarLid: {
     alignSelf: "center",
-    backgroundColor: "#d7e1d9",
-    borderColor: "#c4d2c8",
+    backgroundColor: "rgba(253,254,251,0.96)",
+    borderColor: "rgba(16,32,24,0.12)",
     borderRadius: 999,
     borderWidth: 1,
     height: 10,
-    marginBottom: -2,
+    position: "absolute",
+    top: 15,
     width: 54,
-    zIndex: 2
+    zIndex: 3
   },
   squadJarLidCompact: {
     height: 7,
-    marginBottom: -1,
+    top: 14,
     width: 42
+  },
+  squadJarMastery: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.84)",
+    borderColor: "#d7e1d9",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    zIndex: 5
+  },
+  squadJarMasteryCompact: {
+    left: 6,
+    marginTop: 0,
+    paddingHorizontal: 5,
+    position: "absolute",
+    top: 8
+  },
+  squadJarMasteryRole: {
+    color: "#53645d",
+    fontSize: 8,
+    fontWeight: "900",
+    maxWidth: 54
+  },
+  squadJarMasteryText: {
+    color: "#102018",
+    fontSize: 8,
+    fontWeight: "900"
+  },
+  squadJarMasteryTextCompact: {
+    fontSize: 7
+  },
+  squadJarName: {
+    color: "#102018",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 2,
+    textAlign: "center",
+    width: "100%",
+    zIndex: 4
   },
   squadJarRarity: {
     borderRadius: 999,
-    bottom: 13,
-    left: 16,
-    marginTop: 0,
-    position: "absolute",
-    right: 16,
+    marginTop: 2,
+    maxWidth: "92%",
     zIndex: 4
   },
   squadJarRarityCompact: {
-    bottom: 3,
-    left: 5,
-    right: 5
+    bottom: 6,
+    left: 14,
+    marginTop: 0,
+    position: "absolute",
+    right: 14
   },
   squadJarShine: {
     backgroundColor: "rgba(255,255,255,0.7)",
@@ -4826,7 +5996,8 @@ const styles = StyleSheet.create({
     marginBottom: 6
   },
   squadJarWrap: {
-    flex: 1
+    flex: 1,
+    minHeight: 70
   },
   squadSelectedPill: {
     backgroundColor: "#fdfefb",
@@ -4882,6 +6053,11 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -10
   },
+  bossArtWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2
+  },
   bossWeakRing: {
     borderRadius: 999,
     borderWidth: 2,
@@ -4899,15 +6075,112 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.55,
     shadowRadius: 10
   },
-  bossMechanicBadge: {
-    backgroundColor: "rgba(16,32,24,0.88)",
-    borderColor: "#d7bd57",
+  bossArmorCrack: {
+    backgroundColor: "rgba(255,255,255,0.55)",
     borderRadius: 999,
-    borderWidth: 1,
-    bottom: -10,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    height: 3,
+    position: "absolute",
+    width: 34
+  },
+  bossArmorCrackOne: {
+    left: 21,
+    top: 32,
+    transform: [{ rotate: "24deg" }]
+  },
+  bossArmorCrackThree: {
+    right: 22,
+    top: 54,
+    transform: [{ rotate: "42deg" }]
+  },
+  bossArmorCrackTwo: {
+    left: 48,
+    top: 46,
+    transform: [{ rotate: "-55deg" }]
+  },
+  bossArmorShell: {
+    backgroundColor: "rgba(250,204,21,0.1)",
+    borderRadius: 14,
+    borderWidth: 3,
+    bottom: 9,
+    left: 9,
+    opacity: 0.55,
+    position: "absolute",
+    right: 9,
+    top: 9
+  },
+  bossArmorShellActive: {
+    backgroundColor: "rgba(250,204,21,0.22)",
+    borderStyle: "dashed",
+    opacity: 1
+  },
+  bossCoreInner: {
+    borderRadius: 8,
+    height: 16,
+    opacity: 0.9,
+    transform: [{ rotate: "45deg" }],
+    width: 16
+  },
+  bossCoreLine: {
+    borderRadius: 999,
     position: "absolute"
+  },
+  bossCoreLineHorizontal: {
+    height: 2,
+    width: 48
+  },
+  bossCoreLineVertical: {
+    height: 48,
+    width: 2
+  },
+  bossCoreWeakSpot: {
+    alignItems: "center",
+    backgroundColor: "rgba(56,189,248,0.12)",
+    borderRadius: 10,
+    borderWidth: 2,
+    height: 46,
+    justifyContent: "center",
+    opacity: 0.62,
+    position: "absolute",
+    width: 46,
+    zIndex: 3
+  },
+  bossCoreWeakSpotActive: {
+    backgroundColor: "rgba(56,189,248,0.25)",
+    borderWidth: 4,
+    opacity: 1
+  },
+  bossDashLayer: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0
+  },
+  bossDashTrail: {
+    borderRadius: 12,
+    borderWidth: 2,
+    bottom: 16,
+    opacity: 0.16,
+    position: "absolute",
+    top: 16,
+    width: 36
+  },
+  bossDashTrailActive: {
+    opacity: 0.62
+  },
+  bossMechanicBadge: {
+    backgroundColor: "rgba(16,32,24,0.92)",
+    borderColor: "#d7bd57",
+    borderRadius: 8,
+    borderWidth: 1,
+    bottom: -38,
+    left: 2,
+    minWidth: 118,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    position: "absolute",
+    right: 2,
+    zIndex: 5
   },
   bossMechanicBadgeActive: {
     backgroundColor: "rgba(253,254,251,0.94)",
@@ -4916,10 +6189,81 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 8
   },
-  bossMechanicText: {
+  bossMechanicTitle: {
     color: "#d7bd57",
+    flex: 1,
+    fontSize: 10,
+    fontWeight: "900",
+    minWidth: 0,
+    textAlign: "left"
+  },
+  bossMechanicTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 5,
+    marginBottom: 3,
+    minWidth: 0
+  },
+  bossMechanicState: {
+    backgroundColor: "rgba(215,189,87,0.22)",
+    borderRadius: 5,
+    color: "#d7bd57",
+    flexShrink: 0,
     fontSize: 8,
-    fontWeight: "900"
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 4,
+    paddingVertical: 1
+  },
+  bossMechanicTrack: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 999,
+    height: 4,
+    marginTop: 4,
+    overflow: "hidden"
+  },
+  bossMechanicFill: {
+    height: "100%"
+  },
+  bossRageLayer: {
+    alignItems: "center",
+    bottom: 0,
+    justifyContent: "center",
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0
+  },
+  bossRageSpike: {
+    borderRadius: 999,
+    height: 100,
+    opacity: 0.18,
+    position: "absolute",
+    width: 5
+  },
+  bossRageSpikeActive: {
+    opacity: 0.62
+  },
+  bossSwarmDot: {
+    borderColor: "rgba(255,255,255,0.62)",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 12,
+    opacity: 0.35,
+    position: "absolute",
+    width: 12
+  },
+  bossSwarmDotActive: {
+    height: 16,
+    opacity: 0.82,
+    width: 16
+  },
+  bossSwarmLayer: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0
   },
   targetFreezeBadge: {
     alignItems: "center",

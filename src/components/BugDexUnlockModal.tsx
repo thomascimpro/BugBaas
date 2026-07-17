@@ -14,11 +14,27 @@ type Props = {
 };
 
 const rarityColors: Record<BugDexRarity, string> = {
-  Gewoon: "#6f7f5f",
-  Zeldzaam: "#15724f",
-  Episch: "#356d7c",
-  Legendarisch: "#b83227",
-  Mythisch: "#7c3aed"
+  Gewoon: "#2f9e44",
+  Zeldzaam: "#228be6",
+  Episch: "#9c36b5",
+  Legendarisch: "#f59f00",
+  Mythisch: "#ef4444"
+};
+
+const rarityStarColors: Record<BugDexRarity, string> = {
+  Gewoon: "#2f9e44",
+  Zeldzaam: "#228be6",
+  Episch: "#9c36b5",
+  Legendarisch: "#f59f00",
+  Mythisch: "#ef4444"
+};
+
+const rarityStars: Record<BugDexRarity, number> = {
+  Gewoon: 1,
+  Zeldzaam: 2,
+  Episch: 3,
+  Legendarisch: 4,
+  Mythisch: 5
 };
 
 const premiumRarityStyles: Record<"Episch" | "Legendarisch" | "Mythisch", {
@@ -101,6 +117,8 @@ export function BugDexUnlockModal({ busy = false, drop, onClose }: Props) {
         ? t("bugdex.legendary")
         : t("bugdex.mythic")
     : "";
+  const starColor = isPointsReward ? "#d7bd57" : rarityStarColors[drop.entry.rarity];
+  const starCount = isPointsReward ? 0 : rarityStars[drop.entry.rarity];
   const bugFact = isPointsReward ? t("bugdex.dailyLogin") : bugDexEntryFact(drop.entry, t);
   const title = isDailyReward ? t("bugdex.daily") : drop.source === "combine" ? t("bugdex.combineDone") : drop.isNew ? t("bugdex.unlocked") : t("bugdex.duplicate");
   const subtitle = isPointsReward
@@ -149,6 +167,13 @@ export function BugDexUnlockModal({ busy = false, drop, onClose }: Props) {
             {isPointsReward ? <Text style={styles.pointsReward}>+{drop.points}</Text> : <BugArtImage bugId={drop.entry.id} size={138} style={isMythicBugReward && styles.mythicBugArt} />}
           </View>
           <Text style={[styles.name, premiumStyle && { color: premiumStyle.text }]}>{isPointsReward ? t("bugdex.pointsFound") : bugDexEntryName(drop.entry, t)}</Text>
+          {!isPointsReward && (
+            <View style={styles.rarityStarsRow}>
+              {Array.from({ length: starCount }).map((_, index) => (
+                <Text key={index} style={[styles.rarityStar, { color: starColor }]}>★</Text>
+              ))}
+            </View>
+          )}
           <Text style={[styles.meta, premiumStyle && { color: premiumStyle.text }]}>{bugFact}</Text>
           {!!streakText && <Text style={styles.streak}>{streakText}</Text>}
           <Pressable disabled={busy} style={[styles.button, busy && styles.buttonDisabled, premiumStyle && { backgroundColor: premiumStyle.border }]} onPress={onClose}>
@@ -263,6 +288,19 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 8,
     textAlign: "center"
+  },
+  rarityStarsRow: {
+    flexDirection: "row",
+    gap: 3,
+    marginTop: 4
+  },
+  rarityStar: {
+    fontSize: 18,
+    fontWeight: "900",
+    lineHeight: 22,
+    textShadowColor: "rgba(16,32,24,0.18)",
+    textShadowOffset: { height: 1, width: 0 },
+    textShadowRadius: 2
   },
   meta: {
     color: "#53645d",
