@@ -16,11 +16,11 @@ export const soloCampaignWavesPerLevel = 4;
 export const soloCampaignMaxWave = soloCampaignMaxLevel * soloCampaignWavesPerLevel;
 
 export const soloCampaignTargetsByLevel = [
-  [54, 64, 74, 84],
-  [66, 78, 90, 104],
-  [80, 94, 108, 126],
-  [94, 108, 124, 144],
-  [150, 164, 180, 198]
+  [54, 64, 74, 90],
+  [66, 78, 90, 112],
+  [80, 94, 108, 136],
+  [94, 108, 124, 156],
+  [150, 164, 180, 214]
 ];
 
 export function soloCampaignTargetRange(level: number) {

@@ -1,5 +1,82 @@
 # Test Results
 
+## 2026-07-17 release 2.10.0
+
+- Versiebronnen: package/Expo `2.10.0`, Android versionName `2.10.0`, versionCode `180`.
+- `npm run typecheck`: geslaagd.
+- `BUGBAAS_REQUIRE_ENV=1` en `NODE_ENV=production` normale `apk:release`: geslaagd (`BUILD SUCCESSFUL`, R8/minify en resource-optimalisatie actief).
+- APK: `dist/BugBaas-2.10.0.apk`, 72.010.767 bytes.
+- Metadata: package `nl.cimpro.bugbaas`, versionCode `180`, versionName `2.10.0`, minSdk `26`, targetSdk `36`.
+- Signing: APK Signature Scheme v2 geldig, 1 signer, certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA-256: `0473F1B67E305B41C959B14B491949DD6F574E6A607B8EAA4336FC4267829CFE`.
+- Device-smoke: niet uitgevoerd.
+
+## 2026-07-17 score tier expansion
+
+- Vier nieuwe scoretiers toegevoegd boven de bestaande grens van 2.400 punten.
+- Tien gerichte grenscontroles van 2.399 tot en met 40.000 punten: geslaagd.
+- `npm.cmd run typecheck`: geslaagd.
+- `git diff --check` op de tierbestanden: geslaagd; alleen bestaande LF/CRLF-waarschuwingen.
+
+## 2026-07-17 Nest Defense tap coordinates
+
+- Touches gebruiken nu `pageX/pageY` minus de via `measure` bepaalde speelveldoorsprong; geneste vijandcoördinaten worden niet meer als veldcoördinaten gelezen.
+- Hitselectie en de visuele impact gebruiken hetzelfde gemeten veldformaat en dezelfde tappositie.
+- Vijand-views hebben `pointerEvents="none"` en onderscheppen de bovenliggende speelveld-`Pressable` niet.
+- `npm run typecheck`: geslaagd.
+- Device-smoke is niet uitgevoerd.
+
+## 2026-07-17 Bug Glide left control strip
+
+- De blokkerende early return voor taps binnen de eerste 32 pixels is verwijderd; de bestaande links-van-de-bug physics geeft daar nu een impuls naar rechts.
+- De visuele strook gebruikt `pointerEvents="none"`, waardoor de bovenliggende speelveld-`Pressable` de tap ontvangt.
+- `npm run typecheck`: geslaagd.
+- Device-smoke is niet uitgevoerd.
+
+## 2026-07-17 ranked inactivity decay
+
+- Zes gerichte berekeningen geslaagd: gisteren gespeeld, een gemiste dag, vier gemiste dagen, bestaand checkpoint, gedeeltelijke floor-cap en rating onder de floor.
+- `npm run typecheck`: geslaagd.
+- `git diff --check` op de vier featurebestanden: geslaagd; alleen bestaande LF/CRLF-waarschuwingen.
+- Firestore rule toegevoegd die de eigen rating alleen laat dalen, nooit onder 1000, en alleen samen met een geldig dagcheckpoint.
+- Firestore rules geladen door de lokale Firebase Emulator op poort 8181: geslaagd; er is niets gedeployed.
+- Device-smoke is niet uitgevoerd.
+
+## 2026-07-17 Bug Tower
+
+- `npm.cmd run typecheck`: geslaagd na de definitieve sprite-schaalaanpassing.
+- `git diff --check` op alle Bug Tower-code, Android-module, vertalingen en rules: geslaagd; alleen bestaande LF/CRLF-waarschuwingen.
+- Imagegen-assets visueel gecontroleerd: spritesheet `1254x1254` met zes volledige poses en transparante achtergrond; torenachtergrond `1024x1536` met vrije centrale gameplaybaan.
+- Chroma-key conversie: 1.185.974 volledig transparante en 10.269 gedeeltelijk transparante pixels; randen visueel schoon.
+- React Native codegen voor AsyncStorage en Google Sign-In opnieuw gegenereerd: geslaagd.
+- `npm.cmd run apk:fast` met `NODE_ENV=production`: geslaagd. De Kotlin-daemon meldde een bestaande incrementele Google Sign-In-cachefout en compileerde daarna succesvol via fallback.
+- Fast-build APK: `android/app/build/outputs/apk/release/app-release.apk`, 76.117.648 bytes, opnieuw gebouwd op `2026-07-17 22:24:57` met ranked Firebase-context.
+- `aapt2 dump badging`: package `nl.cimpro.bugbaas`, versionCode `179`, versionName `2.9.4`, minSdk `26`, targetSdk `36`.
+- `aapt2 dump resources`: beide nieuwe resources aanwezig: `assets_minigames_bugtower_bugtowerbackground` en `assets_minigames_bugtower_bugtowerbeetle`.
+- `apksigner verify --print-certs`: geslaagd; SHA-256 certificaat `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- Fast-build APK SHA-256: `0336D45D136B79D055E040FCB57BADF343BB5E0B709076B4F1513251C6C0AFBC`.
+- Definitieve normale `assembleRelease --no-daemon`: geslaagd in 2m 7s, inclusief lint, R8/minify en resource-optimalisatie.
+- Definitieve APK: `dist/BugBaas-2.9.4.apk`, 64.953.831 bytes.
+- Definitieve APK metadata: package `nl.cimpro.bugbaas`, versionCode `179`, versionName `2.9.4`, minSdk `26`, targetSdk `36`.
+- Definitieve APK signing: v2-verified, 1 signer, certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- Definitieve APK SHA-256: `9163ADF4CAC05E8D1C8BAA0FF4411E355B34E7EBC65BEBC625DBA74E6128A985`.
+- Device-smoke voor kantelhoek, animatie, platformcollision en zichtbare Arena-flow: nog niet uitgevoerd; `adb devices` gaf geen aangesloten apparaat.
+- Firestore rules bevatten lokaal `bug_tower`; deployment naar Firebase is niet uitgevoerd.
+- Ranked recordcontrole: alleen de `bug_tower`-route stuurt `{ ranked: true, duelId }`; bestaande game-aanroepen blijven zonder context.
+- Ranked rules-validatie vereist een bestaand Bug Tower-duel, de ingelogde gebruiker als deelnemer en een exact overeenkomende duelscore.
+- Firestore Emulator rules-compile op een geisoleerde lokale poort: geslaagd; live Firebase is niet gewijzigd.
+- De bestaande geminificeerde `dist/BugBaas-2.9.4.apk` dateert van voor deze ranked-recordwijziging en is in deze stap niet overschreven.
+
+## 2026-07-17 local gameplay/reward changes
+
+- `npm run typecheck`: geslaagd.
+- Android manifest, buddywidget-layout en alle gebruikte buddy-state drawables: XML-parse geslaagd.
+- Unlockhistorie: statberekening, setmedailles en badge-characters gebruiken dezelfde `bugdexUnlocks`-bron; legacy inventorydocs met count 0 worden naar unlockhistorie teruggevuld.
+- Ranked guard: sluitknop verborgen en Android hardware-back geblokkeerd in alle drie ranked minigames tot de result-state.
+- Android `assembleDebug`: niet afgerond; Gradle bleef tijdens bestaande React Native C++-codegen hangen met een padlengtewaarschuwing onder de workspace met spaties.
+- Gerichte Kotlin/resourcebuild: gestart maar binnen de commandotime-out niet voorbij Expo-projectconfiguratie gekomen; native build is daarom nog niet als geslaagd aangemerkt.
+- Device-smoke voor tabletoriëntatie, Nest Defense-taps en widgetafbeeldingen: nog niet uitgevoerd; geen device in deze taak gebruikt.
+
 ## 2.2.28 release
 
 - `npm.cmd run typecheck`: geslaagd.
@@ -456,3 +533,12 @@ Datum: 2026-06-02
   - `pixel8-account-b-buglist.png`.
   - `pixel8-account-b-upvote-comment.png`.
   - `pixel8-upvote-leaderboard.png`.
+
+## BugDex source-sheet import - 2026-07-17
+
+- Bronselectie: 45 duidelijke, unieke insecten uit `assets/bugdex/new17-17-2026`; een onduidelijk exemplaar is afgekeurd.
+- Asset-audit: 45/45 bestanden zijn 512x512 RGBA, niet leeg of dubbel, hebben transparante hoeken en een geldige catalogus- en artwork-koppeling.
+- `npm run typecheck`: geslaagd.
+- `npm run apk:fast`: geslaagd (`BUILD SUCCESSFUL`, 274 taken).
+- Release-APK: `android/app/build/outputs/apk/release/app-release.apk` (83.173.820 bytes).
+- Device-smoke: niet uitgevoerd.

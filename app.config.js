@@ -11,9 +11,18 @@ const requiredExtraEnv = {
 };
 
 function readExtra() {
-  return Object.fromEntries(
+  const extra = Object.fromEntries(
     Object.entries(requiredExtraEnv).map(([key, envName]) => [key, process.env[envName] ?? ""])
   );
+  if (process.env.BUGBAAS_REQUIRE_ENV === "1") {
+    const missing = Object.entries(requiredExtraEnv)
+      .filter(([, envName]) => !process.env[envName])
+      .map(([, envName]) => envName);
+    if (missing.length) {
+      throw new Error(`Missing required BugBaas env vars: ${missing.join(", ")}`);
+    }
+  }
+  return extra;
 }
 
 module.exports = () => ({

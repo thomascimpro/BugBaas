@@ -1,7 +1,7 @@
 import { doc, getDoc, runTransaction } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
-import { BugDexInventoryItem, BugSmashDuel, User } from "../types";
-import { BugDexDropResult, pickBugDexRewardEntry } from "./bugDexService";
+import { ArcadeMode, BugDexInventoryItem, BugSmashDuel, User } from "../types";
+import { BugDexDropResult, BugDexDropSource, clearBugDexInventoryCache, grantBugDexReward, grantBugDexRewardInTransaction, pickBugDexRewardEntry } from "./bugDexService";
 import { localDayId, SoloCampaignBossProgress } from "./missionProgressService";
 import { badgesForUser, titleForPoints } from "./pointsService";
 import { starterBoostedXp } from "./starterBoostService";
@@ -12,6 +12,7 @@ export type DailyMission = {
   target: number;
   progress: number;
   reward: string;
+  rewardSource: BugDexDropSource;
   rewardXp: number;
 };
 
@@ -20,6 +21,7 @@ type DailyMissionTemplate = {
   title: string;
   target: number;
   reward: string;
+  rewardSource: BugDexDropSource;
   rewardXp: number;
   progressFor: (user: User, context: DailyMissionContext, day: string) => number;
 };
@@ -30,6 +32,7 @@ type DailyMissionContext = {
 };
 
 const dailyMissionXp = 10;
+const allArcadeModes: ArcadeMode[] = ["tap_duel", "web_runner", "nest_defense", "bug_glide", "bug_tower"];
 const demoDailyClaims = new Set<string>();
 
 const dailyMissionTemplates: DailyMissionTemplate[] = [
@@ -38,14 +41,38 @@ const dailyMissionTemplates: DailyMissionTemplate[] = [
     title: "mission.dailyDuel",
     target: 1,
     reward: "mission.rewardXp10",
+    rewardSource: "daily_mission_bonus",
     rewardXp: dailyMissionXp,
+    progressFor: (user, { duels }, day) => duels.filter((duel) => isUserDuel(duel, user) && isThisDay(duel.scores?.[user.uid]?.submittedAt ?? "", day)).length
+  },
+  {
+    id: "play-all-game-types",
+    title: "mission.dailyPlayAllGameTypes",
+    target: allArcadeModes.length,
+    reward: "mission.rewardXp20",
+    rewardSource: "daily_mission_bonus",
+    rewardXp: 20,
+    progressFor: (user, { duels }, day) => new Set(duels
+      .filter((duel) => isUserDuel(duel, user) && isThisDay(duel.scores?.[user.uid]?.submittedAt ?? "", day))
+      .map((duel) => duel.arcadeMode ?? "tap_duel")
+      .filter((mode): mode is ArcadeMode => allArcadeModes.includes(mode as ArcadeMode))
+    ).size
+  },
+  {
+    id: "duel-play-5",
+    title: "mission.dailyFiveDuels",
+    target: 5,
+    reward: "mission.rewardXp25",
+    rewardSource: "daily_mission_bonus",
+    rewardXp: 25,
     progressFor: (user, { duels }, day) => duels.filter((duel) => isUserDuel(duel, user) && isThisDay(duel.scores?.[user.uid]?.submittedAt ?? "", day)).length
   },
   {
     id: "walk-1k",
     title: "mission.dailyWalk1",
-    target: 1,
+    target: 3,
     reward: "mission.rewardXp10",
+    rewardSource: "daily_mission_bonus",
     rewardXp: dailyMissionXp,
     progressFor: (user, _context, day) => user.movementRegisteredDay === day ? Math.floor(((user.movementRegisteredDayKm ?? 0) + 0.0001) * 10) / 10 : 0
   },
@@ -54,6 +81,7 @@ const dailyMissionTemplates: DailyMissionTemplate[] = [
     title: "mission.dailySoloBoss",
     target: 1,
     reward: "mission.rewardXp10",
+    rewardSource: "daily_mission_bonus",
     rewardXp: dailyMissionXp,
     progressFor: (_user, { bossProgress }) => bossProgress.dayCount
   }
@@ -73,6 +101,7 @@ export function dailyMissionSet(user: User, options: { bossProgress: SoloCampaig
       target: template.target,
       progress,
       reward: template.reward,
+      rewardSource: template.rewardSource,
       rewardXp: template.rewardXp
     };
   });
@@ -99,7 +128,7 @@ export async function isDailyMissionBonusClaimed(user: User): Promise<boolean> {
   return (await getDoc(doc(db, "users", user.uid, "dailyMissionClaims", bonusId))).exists();
 }
 
-export async function claimDailyMissionReward(user: User, mission: DailyMission): Promise<User | null> {
+export async function claimDailyMissionReward(user: User, mission: DailyMission): Promise<{ drop: BugDexDropResult; user: User } | null> {
   if (mission.progress < mission.target) return null;
   const now = new Date().toISOString();
   const day = localDayId();
@@ -111,16 +140,19 @@ export async function claimDailyMissionReward(user: User, mission: DailyMission)
     const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, mission.rewardXp));
     const updated = { ...user, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
-    return updated;
+    const drop = await grantBugDexReward(updated, mission.rewardSource);
+    return { drop, user: updated };
   }
 
   const userRef = doc(db, "users", user.uid);
   const claimRef = doc(db, "users", user.uid, "dailyMissionClaims", mission.id);
-  return runTransaction(db, async (transaction) => {
+  const rewardEntry = pickBugDexRewardEntry(user, mission.rewardSource);
+  const result = await runTransaction(db, async (transaction) => {
     const userSnapshot = await transaction.get(userRef);
     const claimSnapshot = await transaction.get(claimRef);
     if (!userSnapshot.exists() || claimSnapshot.exists()) return null;
     const current = userSnapshot.data() as User;
+    const drop = await grantBugDexRewardInTransaction(transaction, current, rewardEntry.id, mission.rewardSource, now);
     const totalPoints = Math.max(0, current.totalPoints + starterBoostedXp(current, mission.rewardXp));
     const updated = { ...current, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
@@ -134,11 +166,17 @@ export async function claimDailyMissionReward(user: User, mission: DailyMission)
       claimedAt: now,
       localDay: day,
       missionTitle: mission.title,
-      rewardType: "xp",
+      rewardBugId: rewardEntry.id,
+      rewardGrantedAt: now,
+      rewardRarity: rewardEntry.rarity,
+      rewardSource: mission.rewardSource,
+      rewardType: "bugdex_plus_xp",
       rewardXp: mission.rewardXp
     });
-    return updated;
+    return { drop, user: updated };
   });
+  if (result?.drop) clearBugDexInventoryCache(user.uid);
+  return result;
 }
 
 export async function claimDailyMissionBonusWithReward(user: User, missions: DailyMission[]): Promise<{ drop: BugDexDropResult; user: User } | null> {

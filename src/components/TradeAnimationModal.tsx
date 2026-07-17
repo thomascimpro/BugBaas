@@ -7,11 +7,11 @@ import { TradeRequest, User } from "../types";
 import { BugArtImage } from "./BugArtImage";
 
 const rarityColors: Record<BugDexRarity, string> = {
-  Gewoon: "#6f7f5f",
-  Zeldzaam: "#15724f",
-  Episch: "#356d7c",
-  Legendarisch: "#b83227",
-  Mythisch: "#7c3aed"
+  Gewoon: "#2f9e44",
+  Zeldzaam: "#228be6",
+  Episch: "#9c36b5",
+  Legendarisch: "#f59f00",
+  Mythisch: "#ef4444"
 };
 
 type Props = {

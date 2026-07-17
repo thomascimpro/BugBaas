@@ -1,21 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Alert, Image, Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { Alert, Image, Modal, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
 import { BugJarArt } from "../components/BugJarArt";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { BugDexUnlockModal } from "../components/BugDexUnlockModal";
 import { MythicRarityFrame } from "../components/MythicRarityFrame";
 import { TradeAnimationModal } from "../components/TradeAnimationModal";
-import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineDifferentBugDexUpgrade, differentUpgradeRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory, listBugDexUnlocks } from "../services/bugDexService";
+import { BugDexDropResult, DailyUpgradeUsage, bugDexInventoryMap, combineBugDexDuplicates, combineDifferentBugDexUpgrade, combineRequiredCount, differentUpgradeRequiredCount, entryByBugId, getDailyUpgradeUsage, listBugDexInventory, listBugDexUnlocks } from "../services/bugDexService";
 import { allBugDexSetId, bugDexSetById, bugDexSets } from "../services/bugDexSetService";
-import { activeBugSquadBonusList, bugSquadAttackKindForCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad, BugSquadAttackKind, BugSquadBonusCategory } from "../services/bugSquadService";
+import { bugMasteryLevelCap, bugMasteryNextUnlockLevel, bugMasterySessionSkill, bugMasterySkills, bugMasteryUnlockedSkills, bugMasteryXpForNextLevel, copyBugMasteryForTrade, listBugMastery, normalizeBugMastery } from "../services/bugMasteryService";
+import { activeBugSquadBonusList, maxActiveBugSquadSize, sanitizeActiveBugSquad, BugSquadBonusCategory } from "../services/bugSquadService";
 import { bugDexEntryName, bugDexEntryNote, bugDexEntryTitle, rarityLabel, useI18n } from "../services/i18n";
 import { notifyTradeAccepted, notifyTradeRequest } from "../services/notificationService";
 import { bugDexEntries, BugDexEntry, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { cancelTradeRequest, createTradeRequest, listTradeRequests, markTradeRequesterSeen, respondToTradeRequest } from "../services/tradeService";
-import { listUsers, updateUserBugSquad } from "../services/userService";
-import { BugDexInventoryItem, BugDexUnlock, TradeRequest, User } from "../types";
+import { listUsersLight, updateUserBugSquad } from "../services/userService";
+import { BugDexInventoryItem, BugDexUnlock, BugMastery, BugMasterySkill, TradeRequest, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
@@ -26,13 +27,16 @@ type Props = {
 };
 
 type UpgradeRarity = Exclude<BugDexRarity, "Mythisch">;
+type DexRarityFilter = BugDexRarity | "all";
+type TradeRoleFilter = BugMastery["role"] | "all";
+type TradeCopyOption = { bugId: string; copyNumber: number; item: BugDexInventoryItem; key: string; totalCopies: number };
 
 const rarityColors: Record<BugDexRarity, string> = {
   Gewoon: "#2f9e44",
   Zeldzaam: "#228be6",
   Episch: "#9c36b5",
   Legendarisch: "#f59f00",
-  Mythisch: "#e03131"
+  Mythisch: "#ef4444"
 };
 const rarityStars: Record<BugDexRarity, string> = {
   Gewoon: "★",
@@ -49,6 +53,8 @@ const raritySortOrder: Record<BugDexRarity, number> = {
   Gewoon: 4
 };
 const upgradeRarities: UpgradeRarity[] = ["Gewoon", "Zeldzaam", "Episch", "Legendarisch"];
+const rarityFilters: DexRarityFilter[] = ["all", "Gewoon", "Zeldzaam", "Episch", "Legendarisch", "Mythisch"];
+const tradeRoleFilters: TradeRoleFilter[] = ["all", "attack", "speed", "shield", "chaos", "support"];
 const emptyUpgradeSelections: Record<UpgradeRarity, string[]> = {
   Gewoon: [],
   Zeldzaam: [],
@@ -70,13 +76,7 @@ const emptyDailyUpgradeUsage: DailyUpgradeUsage = {
 const activeBugSquadHeroImage = require("../../assets/generated/active-bug-squad-selection-hd.jpg");
 const bugDexWorkshopImage = require("../../assets/generated/bugdex-workshop-shortcut.png");
 const bugDexUpgradeImage = require("../../assets/generated/bugdex-upgrades-button-hd.png");
-const attackIconImages: Record<BugSquadAttackKind, number> = {
-  burst: require("../../assets/generated/duel_effect_slash_hd.png"),
-  shield: require("../../assets/generated/duel_effect_shield_hd.png"),
-  splash: require("../../assets/generated/duel_effect_fireball_hd.png"),
-  sticky: require("../../assets/generated/duel_effect_goo_hd.png"),
-  zap: require("../../assets/generated/duel_effect_lightning_hd.png")
-};
+const rarityStarImage = require("../../assets/buddy/kenney/extracted/ui-pack/PNG/Yellow/Default/star.png");
 const maxTradeBugSelection = 6;
 
 const completedTradeStorageKey = (uid: string) => `bugbaas:seenCompletedTrades:${uid}`;
@@ -117,14 +117,39 @@ function RarityStars({ compact = false, rarity, style }: { compact?: boolean; ra
   );
 }
 
+function RarityStarImages({ rarity, size = 10 }: { rarity: BugDexRarity; size?: number }) {
+  return (
+    <View style={styles.rarityImageStarsRow}>
+      {Array.from({ length: rarityStars[rarity].length }, (_, index) => (
+        <Image key={index} resizeMode="contain" source={rarityStarImage} style={{ height: size, width: size }} />
+      ))}
+    </View>
+  );
+}
+
+function RarityUpgradeRoute({ rarity, targetRarity, label }: { rarity: BugDexRarity; targetRarity: BugDexRarity; label: string }) {
+  return (
+    <View accessibilityLabel={label} style={styles.rarityUpgradeRoute}>
+      <RarityStars compact rarity={rarity} />
+      <Text style={styles.rarityUpgradeArrow}>→</Text>
+      <RarityStars compact rarity={targetRarity} />
+    </View>
+  );
+}
+
 export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack }: Props) {
   const { t, tr } = useI18n();
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
   const [unlockHistory, setUnlockHistory] = useState<BugDexUnlock[]>([]);
+  const [masteryByBugId, setMasteryByBugId] = useState<Record<string, BugMastery>>({});
+  const [masteryByUserId, setMasteryByUserId] = useState<Record<string, Record<string, BugMastery>>>({});
   const [inventoriesByUserId, setInventoriesByUserId] = useState<Record<string, BugDexInventoryItem[]>>({});
+  const [unlocksByUserId, setUnlocksByUserId] = useState<Record<string, BugDexUnlock[]>>({});
   const [users, setUsers] = useState<User[]>([]);
   const [trades, setTrades] = useState<TradeRequest[]>([]);
   const [recipientInventory, setRecipientInventory] = useState<BugDexInventoryItem[]>([]);
+  const [recipientUnlockHistory, setRecipientUnlockHistory] = useState<BugDexUnlock[]>([]);
+  const [recipientUnlocksLoaded, setRecipientUnlocksLoaded] = useState(false);
   const [drop, setDrop] = useState<BugDexDropResult | null>(null);
   const [completedTrade, setCompletedTrade] = useState<TradeRequest | null>(null);
   const [closedCompletedTradeIds, setClosedCompletedTradeIds] = useState<string[]>([]);
@@ -132,12 +157,19 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   const [activeSquadIds, setActiveSquadIds] = useState<string[]>(sanitizeActiveBugSquad(user.activeBugSquad));
   const [squadBusyId, setSquadBusyId] = useState("");
   const [squadExpanded, setSquadExpanded] = useState(false);
-  const [tradeOfferIds, setTradeOfferIds] = useState<string[]>([]);
+  const [tradeOfferCopyKeys, setTradeOfferCopyKeys] = useState<string[]>([]);
+  const [tradeOfferRarityFilter, setTradeOfferRarityFilter] = useState<DexRarityFilter>("all");
+  const [tradeOfferRoleFilter, setTradeOfferRoleFilter] = useState<TradeRoleFilter>("all");
+  const [tradeOfferSearch, setTradeOfferSearch] = useState("");
   const [tradeRecipientId, setTradeRecipientId] = useState("");
-  const [tradeRequestIds, setTradeRequestIds] = useState<string[]>([]);
+  const [tradeRequestCopyKeys, setTradeRequestCopyKeys] = useState<string[]>([]);
+  const [tradeRequestRarityFilter, setTradeRequestRarityFilter] = useState<DexRarityFilter>("all");
+  const [tradeRequestRoleFilter, setTradeRequestRoleFilter] = useState<TradeRoleFilter>("all");
+  const [tradeRequestSearch, setTradeRequestSearch] = useState("");
   const [tradeBusy, setTradeBusy] = useState("");
   const [tradeError, setTradeError] = useState("");
   const [showLocked, setShowLocked] = useState(false);
+  const [selectedRarityFilter, setSelectedRarityFilter] = useState<DexRarityFilter>("all");
   const [selectedSetId, setSelectedSetId] = useState(allBugDexSetId);
   const [setPickerOpen, setSetPickerOpen] = useState(false);
   const [tradeExpanded, setTradeExpanded] = useState(false);
@@ -146,19 +178,21 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   const [upgradeError, setUpgradeError] = useState("");
   const [dailyUpgradeUsage, setDailyUpgradeUsage] = useState<DailyUpgradeUsage>(emptyDailyUpgradeUsage);
   const [upgradeSelections, setUpgradeSelections] = useState<Record<UpgradeRarity, string[]>>(emptyUpgradeSelections);
+  const [selectedBugId, setSelectedBugId] = useState("");
   const scrollRef = useRef<ScrollView | null>(null);
   const tradeSectionY = useRef(0);
   const inventoryById = bugDexInventoryMap(inventory);
   const unlockById = Object.fromEntries(unlockHistory.map((item) => [item.bugId, item]));
   const tier = getTierForPoints(user.totalPoints);
   const unlockedCount = inventory.length;
-  const everUnlockedCount = new Set([...inventory.map((item) => item.bugId), ...unlockHistory.map((item) => item.bugId)]).size;
+  const unlockedBugIds = new Set([...inventory.map((item) => item.bugId), ...unlockHistory.map((item) => item.bugId)]);
+  const everUnlockedCount = unlockedBugIds.size;
   const totalCount = bugDexEntries.length;
-  const progress = Math.round((unlockedCount / totalCount) * 100);
+  const progress = Math.round((everUnlockedCount / totalCount) * 100);
   const selectedSet = selectedSetId === allBugDexSetId ? null : bugDexSetById(selectedSetId);
   const selectedSetBugIds = selectedSet ? new Set(selectedSet.bugIds) : null;
   const selectedEntries = selectedSetBugIds ? bugDexEntries.filter((entry) => selectedSetBugIds.has(entry.id)) : bugDexEntries;
-  const selectedSetOwnedCount = selectedSetBugIds ? inventory.filter((item) => item.count > 0 && selectedSetBugIds.has(item.bugId)).length : unlockedCount;
+  const selectedSetOwnedCount = selectedSetBugIds ? [...unlockedBugIds].filter((bugId) => selectedSetBugIds.has(bugId)).length : everUnlockedCount;
   const selectedSetTotalCount = selectedEntries.length;
   const selectedSetProgress = selectedSetTotalCount ? Math.round((selectedSetOwnedCount / selectedSetTotalCount) * 100) : 0;
   const selectedSetLabel = selectedSet ? t(selectedSet.labelKey) : t("bugdex.set.all");
@@ -171,9 +205,15 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   }, {});
   const headerEntry = unlockedEntries[unlockedEntries.length - 1];
   const dexCards = selectedEntries
+    .filter((entry) => selectedRarityFilter === "all" || entry.rarity === selectedRarityFilter)
     .map((entry) => ({ entry, index: bugDexEntries.findIndex((item) => item.id === entry.id), inventoryItem: inventoryById[entry.id], unlockItem: unlockById[entry.id] }))
     .filter(({ inventoryItem }) => showLocked || Boolean(inventoryItem));
   const tradeInventory = sortTradeInventory(inventory.filter((item) => item.count > 0));
+  const tradeCopyOptions = tradeInventory
+    .map((item) => tradeCopyOptionsForItem(item, spendableCountForItem(item))[0])
+    .filter((option): option is TradeCopyOption => Boolean(option));
+  const filteredTradeCopyOptions = filterTradeOptions(tradeCopyOptions, tradeOfferRarityFilter, tradeOfferRoleFilter, tradeOfferSearch, masteryByBugId);
+  const tradeOfferIds = tradeOfferCopyKeys.map(tradeCopyBugId);
   const squadChoiceInventory = [...tradeInventory].sort((a, b) => {
     const firstEntry = entryByBugId(a.bugId);
     const secondEntry = entryByBugId(b.bugId);
@@ -181,15 +221,25 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
     if (rarityDiff !== 0) return rarityDiff;
     return bugName(a.bugId).localeCompare(bugName(b.bugId));
   });
-  const activeSquadBonuses = activeBugSquadBonusList(activeSquadIds);
   const recipientTradeInventory = sortTradeInventory(recipientInventory.filter((item) => item.count > 0));
-  const ownedTradeBugIds = new Set(tradeInventory.map((item) => item.bugId));
-  const recipientOwnedTradeBugIds = new Set(recipientTradeInventory.map((item) => item.bugId));
+  const recipientMasteryMap = tradeRecipientId ? masteryMapForUser(tradeRecipientId) : {};
+  const recipientTradeCopyOptions = recipientTradeInventory
+    .map((item) => tradeCopyOptionsForItem(item, item.count)[0])
+    .filter((option): option is TradeCopyOption => Boolean(option));
+  const filteredRecipientTradeCopyOptions = filterTradeOptions(recipientTradeCopyOptions, tradeRequestRarityFilter, tradeRequestRoleFilter, tradeRequestSearch, recipientMasteryMap);
+  const tradeRequestIds = tradeRequestCopyKeys.map(tradeCopyBugId);
+  const recipientUnlockedTradeBugIds = new Set([...recipientInventory.map((item) => item.bugId), ...recipientUnlockHistory.map((item) => item.bugId)]);
   const upgradeOptions = upgradeRarities.map((rarity) => {
     const items = inventory
       .filter((item) => item.count > 0 && entryByBugId(item.bugId)?.rarity === rarity)
       .sort((a, b) => b.count - a.count || bugName(a.bugId).localeCompare(bugName(b.bugId)));
     return { items, rarity, targetRarity: nextRarityLabel[rarity] };
+  });
+  const duplicateUpgradeOptions = upgradeOptions.flatMap(({ items, rarity, targetRarity }) => {
+    const requiredSameCount = combineRequiredCount(rarity);
+    return items
+      .filter((item) => spendableCountForItem(item) >= requiredSameCount)
+      .map((item) => ({ item, rarity, requiredSameCount, targetRarity }));
   });
   const selectedRecipient = users.find((item) => item.uid === tradeRecipientId);
   const incomingTrades = trades.filter((trade) => trade.toUserId === user.uid && trade.status === "Open");
@@ -206,6 +256,28 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
 
   function canSpendBugCopy(item: BugDexInventoryItem | null | undefined) {
     return spendableCountForItem(item) > 0;
+  }
+
+  function tradeCopyKey(bugId: string, copyNumber: number) {
+    return `${bugId}#${copyNumber}`;
+  }
+
+  function tradeCopyBugId(copyKey: string) {
+    return copyKey.split("#")[0] || copyKey;
+  }
+
+  function tradeCopyOptionsForItem(item: BugDexInventoryItem, count: number): TradeCopyOption[] {
+    return Array.from({ length: Math.max(0, Math.floor(count)) }, (_, index) => ({
+      bugId: item.bugId,
+      copyNumber: index + 1,
+      item,
+      key: tradeCopyKey(item.bugId, index + 1),
+      totalCopies: Math.max(0, Math.floor(count))
+    }));
+  }
+
+  function copyLabel(option: Pick<TradeCopyOption, "copyNumber" | "totalCopies">) {
+    return option.totalCopies > 1 ? t("bugdex.copyLabel", { copy: option.copyNumber }) : "";
   }
 
   useEffect(() => {
@@ -269,25 +341,27 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   }, [activeSquadIds, inventory]);
 
   useEffect(() => {
-    const nextOfferIds = tradeOfferIds.filter((bugId) => canSpendBugCopy(inventoryById[bugId]));
-    if (nextOfferIds.length === tradeOfferIds.length) return;
-    setTradeOfferIds(nextOfferIds);
+    const validKeys = new Set(tradeCopyOptions.map((item) => item.key));
+    const nextOfferKeys = tradeOfferCopyKeys.filter((key) => validKeys.has(key));
+    if (nextOfferKeys.length === tradeOfferCopyKeys.length) return;
+    setTradeOfferCopyKeys(nextOfferKeys);
     setTradeRecipientId("");
-    setTradeRequestIds([]);
+    setTradeRequestCopyKeys([]);
     setRecipientInventory([]);
-  }, [activeSquadIds, inventory, tradeOfferIds]);
+  }, [activeSquadIds, inventory, tradeCopyOptions, tradeOfferCopyKeys]);
 
   async function refreshAll() {
-    await Promise.all([refreshInventory(), refreshTrades(), refreshDailyUpgradeUsage(), refreshTradeUsers()]);
+    await Promise.all([refreshInventory(), refreshMastery(), refreshTrades(), refreshDailyUpgradeUsage(), refreshTradeUsers()]);
+  }
+
+  async function refreshMastery() {
+    const items = await listBugMastery(user).catch(() => []);
+    setMasteryByBugId(Object.fromEntries(items.map((item) => [item.bugId, item])));
   }
 
   async function refreshTradeUsers() {
-    const tradeUsers = (await listUsers()).filter((item) => item.uid !== user.uid);
+    const tradeUsers = (await listUsersLight()).filter((item) => item.uid !== user.uid);
     setUsers(tradeUsers);
-    const inventories = await Promise.all(
-      tradeUsers.map(async (item) => [item.uid, await listBugDexInventory(item)] as const)
-    );
-    setInventoriesByUserId(Object.fromEntries(inventories));
   }
 
   async function refreshInventory() {
@@ -331,12 +405,35 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
     }
   }
 
+  async function upgradeSame(rarity: UpgradeRarity, bugId: string) {
+    const item = inventoryById[bugId];
+    const requiredCount = combineRequiredCount(rarity);
+    if (spendableCountForItem(item) < requiredCount) {
+      setUpgradeError(t("bugdex.needCount", { count: requiredCount }));
+      return;
+    }
+    const busyKey = `${rarity}:${bugId}`;
+    setUpgradeBusy(busyKey);
+    setUpgradeError("");
+    try {
+      const result = await combineBugDexDuplicates(user, bugId);
+      setDrop(result);
+      setUpgradeSelections((current) => ({ ...current, [rarity]: [] }));
+      await Promise.all([refreshInventory(), refreshDailyUpgradeUsage()]);
+    } catch (error) {
+      setUpgradeError(error instanceof Error ? error.message : t("bugdex.upgradeFailed"));
+    } finally {
+      setUpgradeBusy("");
+    }
+  }
+
   function toggleUpgradeSelection(rarity: UpgradeRarity, bugId: string) {
     if (!canSpendBugCopy(inventoryById[bugId])) return;
     setUpgradeSelections((current) => {
       const selected = current[rarity];
+      const requiredCount = differentUpgradeRequiredCount(rarity);
       if (selected.includes(bugId)) return { ...current, [rarity]: selected.filter((item) => item !== bugId) };
-      if (selected.length >= 3) return current;
+      if (selected.length >= requiredCount) return current;
       return { ...current, [rarity]: [...selected, bugId] };
     });
   }
@@ -351,7 +448,18 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   }
 
   function bugTradeLabel(bugId: string) {
-    return `${bugName(bugId)} (${rarityLabel(bugRarity(bugId), t)})`;
+    return `${bugName(bugId)} (${rarityStars(bugRarity(bugId))})`;
+  }
+
+  function rarityStars(rarity: BugDexRarity) {
+    const counts: Record<BugDexRarity, number> = {
+      Gewoon: 1,
+      Zeldzaam: 2,
+      Episch: 3,
+      Legendarisch: 4,
+      Mythisch: 5
+    };
+    return "★".repeat(counts[rarity]);
   }
 
   function tradeBugIds(trade: TradeRequest, side: "offer" | "request") {
@@ -373,6 +481,80 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
     });
   }
 
+  function filterTradeOptions(options: TradeCopyOption[], rarityFilter: DexRarityFilter, roleFilter: TradeRoleFilter, search: string, masteryMap: Record<string, BugMastery>) {
+    const normalizedSearch = search.trim().toLowerCase();
+    return options.filter((option) => {
+      const entry = entryByBugId(option.bugId);
+      const mastery = masteryForBugId(option.bugId, masteryMap);
+      const matchesRarity = rarityFilter === "all" || entry?.rarity === rarityFilter;
+      const matchesRole = roleFilter === "all" || mastery.role === roleFilter;
+      const matchesSearch = !normalizedSearch || bugName(option.bugId).toLowerCase().includes(normalizedSearch) || (entry ? bugDexEntryTitle(entry, t).toLowerCase().includes(normalizedSearch) : false);
+      return matchesRarity && matchesRole && matchesSearch;
+    });
+  }
+
+  function toggleTradeOfferRarityFilter(rarity: BugDexRarity) {
+    setTradeOfferRarityFilter((current) => current === rarity ? "all" : rarity);
+  }
+
+  function toggleTradeRequestRarityFilter(rarity: BugDexRarity) {
+    setTradeRequestRarityFilter((current) => current === rarity ? "all" : rarity);
+  }
+
+  function toggleTradeOfferRoleFilter(role: BugMastery["role"]) {
+    setTradeOfferRoleFilter((current) => current === role ? "all" : role);
+  }
+
+  function toggleTradeRequestRoleFilter(role: BugMastery["role"]) {
+    setTradeRequestRoleFilter((current) => current === role ? "all" : role);
+  }
+
+  function renderTradeFilters(selectedRarity: DexRarityFilter, onSelectRarity: (rarity: BugDexRarity) => void, selectedRole: TradeRoleFilter, onSelectRole: (role: BugMastery["role"]) => void, search: string, onSearch: (value: string) => void) {
+    return (
+      <View style={styles.tradeFilterBlock}>
+        <TextInput
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder={t("bugdex.tradeSearchPlaceholder")}
+          placeholderTextColor="#7b9086"
+          style={styles.tradeSearchInput}
+          value={search}
+          onChangeText={onSearch}
+        />
+        <View style={styles.tradeRarityFilterRow}>
+          {rarityFilters.filter((rarity): rarity is BugDexRarity => rarity !== "all").map((rarity) => {
+            const active = selectedRarity === rarity;
+            return (
+              <Pressable
+                key={rarity}
+                accessibilityLabel={rarityLabel(rarity, t)}
+                style={[styles.tradeRarityFilterButton, active && styles.tradeRarityFilterButtonActive, { borderColor: active ? rarityColors[rarity] : "#c6d3cc" }]}
+                onPress={() => onSelectRarity(rarity)}
+              >
+                <RarityStarImages rarity={rarity} size={8} />
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.tradeRarityFilterRow}>
+          {tradeRoleFilters.filter((role): role is BugMastery["role"] => role !== "all").map((role) => {
+            const active = selectedRole === role;
+            return (
+              <Pressable
+                key={role}
+                accessibilityLabel={masteryRoleLabel(role)}
+                style={[styles.tradeRoleFilterButton, active && styles.tradeChipActive]}
+                onPress={() => onSelectRole(role)}
+              >
+                <Text style={[styles.tradeRoleFilterText, active && styles.tradeChipTextActive]}>{masteryRoleLabel(role)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
+
   function tradePartnerName(trade: TradeRequest) {
     return trade.fromUserId === user.uid ? trade.toUserName : trade.fromUserName;
   }
@@ -389,8 +571,105 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
     return bonus ? `${squadBonusLabel(bonus.category)} ${squadBonusValue(bonus.category, bonus.value)}` : "";
   }
 
-  function bugAttackText(category: BugSquadBonusCategory) {
-    return t("duel.helperAttack", { attack: t(`duel.helper.${bugSquadAttackKindForCategory(category)}`) });
+  function masteryForEntry(entry: BugDexEntry) {
+    return masteryByBugId[entry.id] ?? normalizeBugMastery(entry.id);
+  }
+
+  function masteryMapForUser(uid: string) {
+    return uid === user.uid ? masteryByBugId : masteryByUserId[uid] ?? {};
+  }
+
+  function masteryForBugId(bugId: string, masteryMap: Record<string, BugMastery> = masteryByBugId) {
+    return masteryMap[bugId] ?? normalizeBugMastery(bugId);
+  }
+
+  function tradeMasteryText(bugId: string, masteryMap: Record<string, BugMastery> = masteryByBugId) {
+    const mastery = masteryForBugId(bugId, masteryMap);
+    return `${t("bugdex.mastery.levelShort", { level: mastery.level })} - ${masteryRankLabel(mastery.rank)} - ${masteryRoleLabel(mastery.role)}`;
+  }
+
+  function masteryRoleLabel(role: BugMastery["role"]) {
+    return t(`bugdex.mastery.role.${role}`);
+  }
+
+  function masteryRankLabel(rank: BugMastery["rank"]) {
+    return t(`bugdex.mastery.rank.${rank}`);
+  }
+
+  function masterySkillLabel(skillId: string) {
+    return t(`bugdex.mastery.skill.${skillId}`);
+  }
+
+  function masterySkillDescription(skillId: string) {
+    return t(`bugdex.mastery.skillDesc.${skillId}`);
+  }
+
+  function masteryRoleSummary(role: BugMastery["role"]) {
+    return t(`bugdex.mastery.roleSummary.${role}`);
+  }
+
+  function masterySkillMode(skill: BugMasterySkill) {
+    return skill.kind === "passive" ? t("bugdex.mastery.alwaysOn") : skill.kind === "master" ? t("bugdex.mastery.oncePerRun") : t("bugdex.mastery.canTrigger");
+  }
+
+  function renderMasterySkillCard(skill: BugMasterySkill, state: "current" | "next") {
+    return (
+      <View key={`${state}-${skill.id}`} style={[styles.masteryFocusCard, state === "next" && styles.masteryFocusCardNext]}>
+        <Text style={styles.masteryFocusLabel}>{state === "current" ? t("bugdex.mastery.now") : t("bugdex.mastery.next")}</Text>
+        <View style={styles.skillTitleRow}>
+          <Text style={styles.skillName}>{masterySkillLabel(skill.id)}</Text>
+          <Text style={styles.skillLevel}>Lv. {skill.unlockedAtLevel}</Text>
+        </View>
+        <Text style={styles.skillMeta}>{masterySkillMode(skill)}</Text>
+        <Text style={styles.skillDescription}>{masterySkillDescription(skill.id)}</Text>
+      </View>
+    );
+  }
+
+  function masteryNextText(mastery: BugMastery) {
+    const nextLevel = bugMasteryNextUnlockLevel(mastery.level);
+    return nextLevel ? t("bugdex.mastery.nextLevel", { level: nextLevel }) : t("bugdex.mastery.maxed");
+  }
+
+  function masteryCardMeta(entry: BugDexEntry) {
+    const mastery = masteryForEntry(entry);
+    const firstSkill = bugMasteryUnlockedSkills(mastery.role, mastery.level).find((skill) => skill.kind !== "passive");
+    return firstSkill
+      ? t("bugdex.mastery.cardSkill", { skill: masterySkillLabel(firstSkill.id) })
+      : masteryNextText(mastery);
+  }
+
+  function masteryProgress(entry: BugDexEntry, mastery = masteryForEntry(entry)) {
+    const xpNeeded = mastery.level >= bugMasteryLevelCap ? 0 : bugMasteryXpForNextLevel(mastery.level, entry.rarity);
+    return xpNeeded > 0 ? Math.min(100, Math.round((mastery.xp / xpNeeded) * 100)) : 100;
+  }
+
+  function renderTradeBugSummary(bugIds: string[], masteryMap: Record<string, BugMastery>) {
+    const copyCounts: Record<string, number> = {};
+    return (
+      <View style={styles.tradeSummaryList}>
+        {bugIds.map((bugId, index) => {
+          copyCounts[bugId] = (copyCounts[bugId] ?? 0) + 1;
+          const duplicateCount = bugIds.filter((item) => item === bugId).length;
+          const option = { copyNumber: copyCounts[bugId], totalCopies: duplicateCount };
+          return (
+            <View key={`${bugId}-${index}`} style={styles.tradeSummaryItem}>
+              <Text style={styles.tradeRequestText}>{bugTradeLabel(bugId)} {copyLabel(option)}</Text>
+              <Text style={styles.tradeMasteryText}>{tradeMasteryText(bugId, masteryMap)}</Text>
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
+
+  async function copyAcceptedTradeMastery(trade: TradeRequest) {
+    const offerIds = tradeBugIds(trade, "offer");
+    const requestIds = tradeBugIds(trade, "request");
+    await Promise.all([
+      ...offerIds.map((bugId) => copyBugMasteryForTrade({ uid: trade.fromUserId }, { uid: trade.toUserId }, bugId, trade.id)),
+      ...requestIds.map((bugId) => copyBugMasteryForTrade({ uid: trade.toUserId }, { uid: trade.fromUserId }, bugId, trade.id))
+    ]);
   }
 
   function openTradeWorkshop() {
@@ -429,10 +708,6 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
     return t(`bugdex.squadBonus.${category}`);
   }
 
-  function squadBonusDescription(category: BugSquadBonusCategory): string {
-    return t(`bugdex.squadBonusDescription.${category}`);
-  }
-
   function squadBonusValue(category: BugSquadBonusCategory, value: number): string {
     return `+${Math.round(value * 100)}%`;
   }
@@ -450,13 +725,24 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
   async function chooseRecipient(uid: string) {
     const recipient = users.find((item) => item.uid === uid);
     setTradeRecipientId(uid);
-    setTradeRequestIds([]);
+    setTradeRequestCopyKeys([]);
     const cachedInventory = inventoriesByUserId[uid];
+    const cachedUnlocks = unlocksByUserId[uid];
     setRecipientInventory(cachedInventory ?? []);
+    setRecipientUnlockHistory(cachedUnlocks ?? []);
+    setRecipientUnlocksLoaded(Boolean(cachedUnlocks));
     if (!recipient) return;
-    const freshInventory = await listBugDexInventory(recipient);
+    const [freshInventory, freshMastery, freshUnlocks] = await Promise.all([
+      listBugDexInventory(recipient),
+      listBugMastery(recipient).catch(() => []),
+      listBugDexUnlocks(recipient).catch(() => [])
+    ]);
     setRecipientInventory(freshInventory);
+    setRecipientUnlockHistory(freshUnlocks);
+    setRecipientUnlocksLoaded(true);
     setInventoriesByUserId((current) => ({ ...current, [uid]: freshInventory }));
+    setUnlocksByUserId((current) => ({ ...current, [uid]: freshUnlocks }));
+    setMasteryByUserId((current) => ({ ...current, [uid]: Object.fromEntries(freshMastery.map((item) => [item.bugId, item])) }));
   }
 
   async function sendTradeRequest() {
@@ -470,10 +756,12 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
     try {
       await createTradeRequest(user, selectedRecipient, tradeOfferIds, tradeRequestIds);
       await notifyTradeRequest(selectedRecipient.uid, user, bugTradeListLabel(tradeOfferIds));
-      setTradeOfferIds([]);
+      setTradeOfferCopyKeys([]);
       setTradeRecipientId("");
-      setTradeRequestIds([]);
+      setTradeRequestCopyKeys([]);
       setRecipientInventory([]);
+      setRecipientUnlockHistory([]);
+      setRecipientUnlocksLoaded(false);
       setTradeExpanded(false);
       await Promise.all([refreshTrades(), refreshTradeUsers()]);
     } catch (error) {
@@ -489,6 +777,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
     try {
       const result = await respondToTradeRequest(user, trade, accept);
       if (accept) {
+        await copyAcceptedTradeMastery(trade).catch(() => undefined);
         setCompletedTrade(result);
         setTradeExpanded(false);
         await notifyTradeAccepted(trade.fromUserId, user, bugTradeListLabel(tradeBugIds(trade, "request")));
@@ -583,6 +872,34 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         </Pressable>
       </View>
 
+      <View style={styles.rarityFilterCard}>
+        <Text style={styles.rarityFilterTitle}>{t("bugdex.filterRarity")}</Text>
+        <View style={styles.rarityFilterRow}>
+          {rarityFilters.map((rarity) => {
+            const active = selectedRarityFilter === rarity;
+            const label = rarity === "all" ? t("bugdex.filterAll") : rarityLabel(rarity, t);
+            const rarityChipStyle = rarity === "all"
+              ? active && styles.rarityFilterChipActive
+              : active && { backgroundColor: "#fffdf2", borderColor: rarityColors[rarity] };
+            return (
+              <Pressable
+                key={rarity}
+                accessibilityLabel={label}
+                accessibilityRole="button"
+                style={[styles.rarityFilterChip, rarity !== "all" && styles.rarityFilterStarChip, rarityChipStyle]}
+                onPress={() => setSelectedRarityFilter(rarity)}
+              >
+                {rarity === "all" ? (
+                  <Text style={[styles.rarityFilterChipText, active && styles.rarityFilterChipTextActive]}>{label}</Text>
+                ) : (
+                  <RarityStarImages rarity={rarity} size={11} />
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
       {dexCards.length ? (
         <View style={styles.grid}>
           {dexCards.map(({ entry, index, inventoryItem, unlockItem }) => {
@@ -591,13 +908,14 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             const everHad = !owned && Boolean(unlockItem);
             const revealed = owned || everHad;
             const isMythic = owned && entry.rarity === "Mythisch";
+            const mastery = masteryForEntry(entry);
             return (
-              <View key={entry.id} style={[styles.card, !revealed && styles.lockedCard, everHad && styles.everHadCard, isMythic && styles.mythicCard, { borderColor: revealed ? color : "#cbd8d1" }]}>
+              <Pressable key={entry.id} disabled={!revealed} style={[styles.card, !revealed && styles.lockedCard, everHad && styles.everHadCard, isMythic && styles.mythicCard, { borderColor: revealed ? color : "#cbd8d1" }]} onPress={() => setSelectedBugId(entry.id)}>
                 <View style={styles.cardTop}>
                   <View style={[styles.numberPill, { backgroundColor: revealed ? color : "#87958e" }]}>
                     <Text style={styles.numberText}>{String(index + 1).padStart(2, "0")}</Text>
                   </View>
-                  <Text style={[styles.rarity, { color: revealed ? color : "#87958e" }]}>{revealed ? rarityLabel(entry.rarity, t) : "???"}</Text>
+                  {revealed ? <RarityStars rarity={entry.rarity} compact /> : <Text style={[styles.rarity, { color: "#87958e" }]}>???</Text>}
                 </View>
                 <View style={[styles.bugWrap, !revealed && styles.lockedBugWrap, everHad && styles.everHadBugWrap, isMythic && styles.mythicBugWrap]}>
                   {revealed ? <BugArtImage bugId={entry.id} size={92} /> : <Text style={styles.lockedMark}>?</Text>}
@@ -607,10 +925,21 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                   {owned && inventoryItem.count > 1 && <Text style={styles.countPill}>x{inventoryItem.count}</Text>}
                 </View>
                 <Text style={[styles.title, !revealed && styles.lockedText, everHad && styles.everHadText]}>{owned ? bugDexEntryTitle(entry, t) : everHad ? t("bugdex.everHadNotOwned") : t("bugdex.notDiscovered")}</Text>
-                <Text style={[styles.note, !revealed && styles.lockedText, everHad && styles.everHadText]}>
-                  {revealed ? bugDexEntryNote(entry, t) : t("bugdex.findHint")}
-                </Text>
-              </View>
+                {revealed ? (
+                  <View style={styles.masteryCardBlock}>
+                    <View style={styles.masteryMiniRow}>
+                      <Text style={styles.masteryMiniPill}>{t("bugdex.mastery.levelShort", { level: mastery.level })}</Text>
+                      <Text style={[styles.masteryMiniPill, styles.masteryRolePill]}>{masteryRoleLabel(mastery.role)}</Text>
+                    </View>
+                    <Text style={styles.masteryCardMeta} numberOfLines={1}>{masteryCardMeta(entry)}</Text>
+                    <View style={styles.masteryCardTrack}>
+                      <View style={[styles.masteryCardFill, { backgroundColor: color, width: `${masteryProgress(entry, mastery)}%` }]} />
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={[styles.note, styles.lockedText]}>{t("bugdex.findHint")}</Text>
+                )}
+              </Pressable>
             );
           })}
         </View>
@@ -628,7 +957,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={[sharedStyles.title, styles.headerTitle]}>BugDex</Text>
-          <Text style={styles.headerMeta}>{unlockedCount}/{totalCount} {t("bugdex.discoveredCount", { count: "", progress }).trim()}</Text>
+          <Text style={styles.headerMeta}>{everUnlockedCount}/{totalCount} {t("bugdex.discoveredCount", { count: "", progress }).trim()}</Text>
         </View>
         {headerEntry ? (
           <View style={styles.headerBugWrap}>
@@ -673,7 +1002,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             {Array.from({ length: maxActiveBugSquadSize }).map((_, index) => {
               const bugId = activeSquadIds[index];
               const entry = bugId ? entryByBugId(bugId) : null;
-              const bonus = activeSquadBonuses.find((item) => item.bugId === bugId);
+              const mastery = entry ? masteryForEntry(entry) : null;
               return (
                 <View key={index} style={styles.squadBugJarWrap}>
                   <View style={styles.squadJarSlot}>
@@ -681,14 +1010,17 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                       <>
                         <BugArtImage bugId={entry.id} size={78} />
                         <Text style={styles.squadSlotName} numberOfLines={1}>{bugDexEntryName(entry, t)}</Text>
-                        {bonus && (
-                          <>
-                            <View style={styles.squadRoleBadge}>
-                              <Text style={styles.squadRoleLabel}>{squadBonusLabel(bonus.category)}</Text>
-                              <Text style={styles.squadRoleValue}>{squadBonusValue(bonus.category, bonus.value)}</Text>
+                        {mastery && (
+                          <View style={styles.squadMasteryBadge}>
+                            <View style={styles.squadMasteryRow}>
+                              <Text style={styles.squadMasteryPill}>{t("bugdex.mastery.levelShort", { level: mastery.level })}</Text>
+                              <Text style={[styles.squadMasteryPill, styles.squadMasteryRolePill]} numberOfLines={1}>{masteryRoleLabel(mastery.role)}</Text>
                             </View>
-                            <Text style={styles.squadRoleDescription} numberOfLines={2}>{squadBonusDescription(bonus.category)}</Text>
-                          </>
+                            <Text style={styles.squadMasteryMeta} numberOfLines={1}>{masteryCardMeta(entry)}</Text>
+                            <View style={styles.squadMasteryTrack}>
+                              <View style={[styles.squadMasteryFill, { backgroundColor: rarityColors[entry.rarity], width: `${masteryProgress(entry, mastery)}%` }]} />
+                            </View>
+                          </View>
                         )}
                       </>
                     ) : (
@@ -703,24 +1035,13 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             })}
           </View>
           <Text style={styles.tradeHint}>{t("bugdex.activeSquadHint")}</Text>
-          {activeSquadBonuses.length > 0 && (
-            <View style={styles.squadBonusList}>
-              {activeSquadBonuses.map((bonus) => (
-                <View key={bonus.bugId} style={styles.squadBonusItem}>
-                  <Text style={styles.squadBonusText}>{`${bugName(bonus.bugId)}: ${squadBonusLabel(bonus.category)} ${squadBonusValue(bonus.category, bonus.value)}`}</Text>
-                  <Text style={styles.squadBonusDescription}>{squadBonusDescription(bonus.category)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
           <View style={styles.chipRow}>
             {squadChoiceInventory.map((item) => {
               const entry = entryByBugId(item.bugId);
               if (!entry) return null;
               const selected = activeSquadIds.includes(item.bugId);
               const disabled = !selected && activeSquadIds.length >= maxActiveBugSquadSize;
-              const bonus = activeBugSquadBonusList([item.bugId])[0];
-              const attackKind = bonus ? bugSquadAttackKindForCategory(bonus.category) : null;
+              const mastery = masteryForEntry(entry);
               return (
                 <Pressable
                   key={item.bugId}
@@ -731,13 +1052,13 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                   <BugArtImage bugId={item.bugId} size={34} />
                   <Text style={[styles.squadBugChipText, selected && styles.squadBugChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
                   <RarityStars rarity={entry.rarity} compact />
-                  {bonus && attackKind && (
-                    <View style={[styles.squadAttackBadge, selected && styles.squadAttackBadgeActive]}>
-                      <Image accessibilityIgnoresInvertColors resizeMode="contain" source={attackIconImages[attackKind]} style={styles.squadAttackIcon} />
-                      <Text style={[styles.squadBugChipAttack, selected && styles.squadBugChipTextActive]}>{bugAttackText(bonus.category)}</Text>
+                  <View style={[styles.squadChipMastery, selected && styles.squadChipMasteryActive]}>
+                    <Text style={[styles.squadChipMasteryLevel, selected && styles.squadBugChipTextActive]}>{t("bugdex.mastery.levelShort", { level: mastery.level })}</Text>
+                    <Text style={[styles.squadBugChipMeta, selected && styles.squadBugChipTextActive]} numberOfLines={1}>{masteryRoleLabel(mastery.role)}</Text>
+                    <View style={styles.squadChipTrack}>
+                      <View style={[styles.squadChipFill, { backgroundColor: rarityColors[entry.rarity], width: `${masteryProgress(entry, mastery)}%` }]} />
                     </View>
-                  )}
-                  {bonus && <Text style={[styles.squadBugChipMeta, selected && styles.squadBugChipTextActive]}>{`${squadBonusLabel(bonus.category)} ${squadBonusValue(bonus.category, bonus.value)}`}</Text>}
+                  </View>
                 </Pressable>
               );
             })}
@@ -769,38 +1090,33 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
           <Text style={styles.tradeMeta}>{t("bugdex.tradeOpenMeta", { incoming: incomingTrades.length, open: outgoingTrades.length })}</Text>
         </View>
         <Text style={styles.tradeHint}>{t("bugdex.tradeHint")}</Text>
-        {tradeInventory.length ? (
+        {tradeCopyOptions.length ? (
           <View style={styles.tradeSection}>
             <Text style={styles.tradeLabel}>{t("bugdex.offerBug")}</Text>
+            {renderTradeFilters(tradeOfferRarityFilter, toggleTradeOfferRarityFilter, tradeOfferRoleFilter, toggleTradeOfferRoleFilter, tradeOfferSearch, setTradeOfferSearch)}
             <View style={styles.chipRow}>
-              {tradeInventory.map((item) => {
-                const rarity = bugRarity(item.bugId);
-                const activeLocked = !canSpendBugCopy(item);
-                const selected = tradeOfferIds.includes(item.bugId);
-                const maxSelected = !selected && tradeOfferIds.length >= maxTradeBugSelection;
+              {filteredTradeCopyOptions.map((option) => {
+                const item = option.item;
+                const rarity = bugRarity(option.bugId);
+                const selected = tradeOfferCopyKeys.includes(option.key);
+                const maxSelected = !selected && tradeOfferCopyKeys.length >= maxTradeBugSelection;
                 return (
                   <Pressable
-                    key={item.bugId}
-                    disabled={activeLocked || maxSelected}
-                    style={[styles.tradeBugChip, selected && styles.tradeChipActive, (activeLocked || maxSelected) && styles.activeSquadLockedChip]}
-                    onPress={() => setTradeOfferIds((current) => current.includes(item.bugId) ? current.filter((bugId) => bugId !== item.bugId) : [...current, item.bugId])}
+                    key={option.key}
+                    disabled={maxSelected}
+                    style={[styles.tradeBugChip, selected && styles.tradeChipActive, maxSelected && styles.activeSquadLockedChip]}
+                    onPress={() => setTradeOfferCopyKeys((current) => current.includes(option.key) ? current.filter((key) => key !== option.key) : [...current, option.key])}
                   >
                     <View style={styles.tradeJarWrap}>
-                      {activeLocked ? <BugJarArt bugId={item.bugId} rarity={rarity} size={48} unlocked /> : <BugArtImage bugId={item.bugId} size={34} />}
-                      {activeLocked && (
-                        <View style={styles.activeSquadLockBadge}>
-                          <Text style={styles.activeSquadLockText}>LOCK</Text>
-                        </View>
-                      )}
+                      <BugJarArt bugId={option.bugId} rarity={rarity} size={48} unlocked />
                     </View>
-                    <Text style={[styles.tradeChipText, selected && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
+                    <Text style={[styles.tradeChipText, selected && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(option.bugId)}</Text>
                     <RarityStars rarity={rarity} compact />
-                    {activeLocked && <Text style={styles.activeSquadLockedText}>{t("bugdex.activeSquadLockedShort")}</Text>}
-                    {!!selectedRecipient && !recipientOwnedTradeBugIds.has(item.bugId) && (
+                    {option.totalCopies > 1 && <Text style={[styles.tradeCopyMeta, selected && styles.tradeChipTextActive]}>x{option.totalCopies}</Text>}
+                    {!!selectedRecipient && recipientUnlocksLoaded && !recipientUnlockedTradeBugIds.has(option.bugId) && (
                       <Text style={[styles.tradeNeedPill, selected && styles.tradeNeedPillActive]}>{t("bugdex.colleagueNeedsThis")}</Text>
                     )}
-                    <Text style={[styles.bugBuffMeta, selected && styles.tradeChipTextActive]} numberOfLines={2}>{bugBuffText(item.bugId)}</Text>
-                    {item.count > 1 && <Text style={[styles.tradeChipMeta, selected && styles.tradeChipTextActive]}>x{item.count}</Text>}
+                    <Text style={[styles.bugBuffMeta, selected && styles.tradeChipTextActive]} numberOfLines={2}>{tradeMasteryText(option.bugId)}</Text>
                   </Pressable>
                 );
               })}
@@ -825,21 +1141,23 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
         {!!selectedRecipient && (
           <View style={styles.tradeSection}>
             <Text style={styles.tradeLabel}>{t("bugdex.requestBug")}</Text>
-            {recipientTradeInventory.length ? (
+            {renderTradeFilters(tradeRequestRarityFilter, toggleTradeRequestRarityFilter, tradeRequestRoleFilter, toggleTradeRequestRoleFilter, tradeRequestSearch, setTradeRequestSearch)}
+            {recipientTradeCopyOptions.length ? (
               <View style={styles.chipRow}>
-                {recipientTradeInventory.map((item) => {
-                  const selected = tradeRequestIds.includes(item.bugId);
-                  const maxSelected = !selected && tradeRequestIds.length >= maxTradeBugSelection;
+                {filteredRecipientTradeCopyOptions.map((option) => {
+                  const recipientMastery = tradeRecipientId ? masteryMapForUser(tradeRecipientId) : {};
+                  const selected = tradeRequestCopyKeys.includes(option.key);
+                  const maxSelected = !selected && tradeRequestCopyKeys.length >= maxTradeBugSelection;
                   return (
-                    <Pressable key={item.bugId} disabled={maxSelected} style={[styles.tradeBugChip, selected && styles.tradeChipActive, maxSelected && styles.activeSquadLockedChip]} onPress={() => setTradeRequestIds((current) => current.includes(item.bugId) ? current.filter((bugId) => bugId !== item.bugId) : [...current, item.bugId])}>
-                      <BugArtImage bugId={item.bugId} size={34} />
-                      <Text style={[styles.tradeChipText, selected && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(item.bugId)}</Text>
-                      <RarityStars rarity={bugRarity(item.bugId)} compact />
-                      {!ownedTradeBugIds.has(item.bugId) && (
+                    <Pressable key={option.key} disabled={maxSelected} style={[styles.tradeBugChip, selected && styles.tradeChipActive, maxSelected && styles.activeSquadLockedChip]} onPress={() => setTradeRequestCopyKeys((current) => current.includes(option.key) ? current.filter((key) => key !== option.key) : [...current, option.key])}>
+                      <BugJarArt bugId={option.bugId} rarity={bugRarity(option.bugId)} size={48} unlocked />
+                      <Text style={[styles.tradeChipText, selected && styles.tradeChipTextActive]} numberOfLines={1}>{bugName(option.bugId)}</Text>
+                      <RarityStars rarity={bugRarity(option.bugId)} compact />
+                      {option.totalCopies > 1 && <Text style={[styles.tradeCopyMeta, selected && styles.tradeChipTextActive]}>x{option.totalCopies}</Text>}
+                      {!unlockedBugIds.has(option.bugId) && (
                         <Text style={[styles.tradeNeedPill, selected && styles.tradeNeedPillActive]}>{t("bugdex.youNeedThis")}</Text>
                       )}
-                      <Text style={[styles.bugBuffMeta, selected && styles.tradeChipTextActive]} numberOfLines={2}>{bugBuffText(item.bugId)}</Text>
-                      {item.count > 1 && <Text style={[styles.tradeChipMeta, selected && styles.tradeChipTextActive]}>x{item.count}</Text>}
+                      <Text style={[styles.bugBuffMeta, selected && styles.tradeChipTextActive]} numberOfLines={2}>{tradeMasteryText(option.bugId, recipientMastery)}</Text>
                     </Pressable>
                   );
                 })}
@@ -860,9 +1178,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             {tradeBusy === trade.id && <Text style={styles.tradeRequestText}>...</Text>}
             <View style={styles.tradeSwapBox}>
               <Text style={styles.tradeSwapLabel}>{t("bugdex.theyOffer")}</Text>
-              <Text style={styles.tradeRequestText}>{bugTradeListLabel(tradeBugIds(trade, "offer"))}</Text>
+              {renderTradeBugSummary(tradeBugIds(trade, "offer"), masteryMapForUser(trade.fromUserId))}
               <Text style={styles.tradeSwapLabel}>{t("bugdex.theyWantFromYou")}</Text>
-              <Text style={styles.tradeRequestText}>{bugTradeListLabel(tradeBugIds(trade, "request"))}</Text>
+              {renderTradeBugSummary(tradeBugIds(trade, "request"), masteryMapForUser(trade.toUserId))}
             </View>
             <View style={styles.tradeActions}>
               <Pressable style={styles.acceptButton} disabled={tradeBusy === trade.id} onPress={() => respondTrade(trade, true)}>
@@ -879,9 +1197,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             <Text style={styles.tradeRequestTitle}>{t("bugdex.tradeOutgoingTo", { name: trade.toUserName })}</Text>
             <View style={styles.tradeSwapBox}>
               <Text style={styles.tradeSwapLabel}>{t("bugdex.youOffer")}</Text>
-              <Text style={styles.tradeRequestText}>{bugTradeListLabel(tradeBugIds(trade, "offer"))}</Text>
+              {renderTradeBugSummary(tradeBugIds(trade, "offer"), masteryMapForUser(trade.fromUserId))}
               <Text style={styles.tradeSwapLabel}>{t("bugdex.youAskFromThem")}</Text>
-              <Text style={styles.tradeRequestText}>{bugTradeListLabel(tradeBugIds(trade, "request"))}</Text>
+              {renderTradeBugSummary(tradeBugIds(trade, "request"), masteryMapForUser(trade.toUserId))}
             </View>
             <Pressable style={styles.cancelButton} disabled={tradeBusy === trade.id} onPress={() => cancelTrade(trade)}>
               <Text style={styles.cancelButtonText}>{tradeBusy === trade.id ? "..." : t("bugdex.cancelTrade")}</Text>
@@ -941,9 +1259,9 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
           return (
             <View key={rarity} style={[styles.upgradeRow, ready && { borderColor: routeUsedToday ? "#c6d3cc" : rarityColors[targetRarity] }, routeUsedToday && styles.upgradeRowUsed]}>
               <View style={styles.upgradeTextBlock}>
-                <Text style={styles.upgradeTitle}>{`${rarityLabel(rarity, t)} x${requiredDifferentCount} -> ${rarityLabel(targetRarity, t)}`}</Text>
-                <Text style={styles.upgradeMeta}>{routeUsedToday ? t("bugdex.routeUsed") : ready ? t("bugdex.chosen", { count: selectedBugIds.length, required: requiredDifferentCount }) : t("bugdex.availableDifferent", { count: items.length, required: requiredDifferentCount })}</Text>
-                {ready && !routeUsedToday && (
+                <RarityUpgradeRoute label={`${rarityLabel(rarity, t)} -> ${rarityLabel(targetRarity, t)}`} rarity={rarity} targetRarity={targetRarity} />
+                <Text style={styles.upgradeMeta}>{routeUsedToday ? t("bugdex.routeUsed") : t("bugdex.availableDifferent", { count: items.length, required: requiredDifferentCount })}</Text>
+                {items.length >= requiredDifferentCount && !routeUsedToday && (
                   <View style={styles.upgradeChoiceGrid}>
                     {items.map((item) => {
                       const selected = selectedBugIds.includes(item.bugId);
@@ -991,6 +1309,31 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
             </View>
           );
         })}
+        <View style={styles.sameUpgradeSection}>
+          <View style={styles.sameUpgradeSectionHeader}>
+            <Text style={styles.sameUpgradeSectionTitle}>{t("bugdex.duplicateUpgrades")}</Text>
+            <Text style={styles.sameUpgradeSectionMeta}>{t("bugdex.duplicateUpgradesMeta")}</Text>
+          </View>
+          {duplicateUpgradeOptions.length > 0 ? (
+            <View style={styles.sameUpgradeList}>
+              {duplicateUpgradeOptions.map(({ item, rarity, requiredSameCount, targetRarity }) => {
+                const busyKey = `${rarity}:${item.bugId}`;
+                return (
+                  <Pressable key={`${rarity}:${item.bugId}`} style={[styles.sameUpgradeButton, { borderColor: rarityColors[targetRarity] }]} disabled={upgradeBusy === busyKey} onPress={() => upgradeSame(rarity, item.bugId)}>
+                    <BugArtImage bugId={item.bugId} size={36} />
+                    <View style={styles.sameUpgradeTextBlock}>
+                      <Text style={styles.sameUpgradeBugName} numberOfLines={1}>{bugName(item.bugId)}</Text>
+                      <Text style={styles.sameUpgradeMeta}>{t("bugdex.combineCount", { count: requiredSameCount })} - x{spendableCountForItem(item)}</Text>
+                    </View>
+                    <Text style={[styles.sameUpgradeCta, { color: rarityColors[targetRarity] }]}>{upgradeBusy === busyKey ? "..." : t("bugdex.upgradeAction")}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={styles.sameUpgradeEmpty}>{t("bugdex.noDuplicateUpgrades")}</Text>
+          )}
+        </View>
         {!!upgradeError && <Text style={sharedStyles.error}>{serviceErrorText(upgradeError)}</Text>}
       </View>
       )}
@@ -1052,10 +1395,135 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
       <Pressable style={sharedStyles.secondaryButton} onPress={onBack}>
         <Text style={sharedStyles.secondaryButtonText}>{t("common.back")}</Text>
       </Pressable>
+      {renderBugMasteryModal()}
       <BugDexUnlockModal drop={drop} onClose={() => setDrop(null)} />
       <TradeAnimationModal currentUser={user} trade={completedTrade} onClose={closeTradeResult} />
     </ScrollView>
   );
+
+  function renderBugMasteryModal() {
+    const entry = selectedBugId ? entryByBugId(selectedBugId) : null;
+    if (!entry) return null;
+    const inventoryItem = inventoryById[entry.id];
+    const unlockItem = unlockById[entry.id];
+    const mastery = masteryForEntry(entry);
+    const color = rarityColors[entry.rarity];
+    const xpNeeded = mastery.level >= bugMasteryLevelCap ? 0 : bugMasteryXpForNextLevel(mastery.level, entry.rarity);
+    const xpProgress = xpNeeded > 0 ? Math.min(100, Math.round((mastery.xp / xpNeeded) * 100)) : 100;
+    const unlockedSkills = bugMasteryUnlockedSkills(mastery.role, mastery.level);
+    const currentSkill = bugMasterySessionSkill(mastery) ?? unlockedSkills.find((skill) => skill.kind === "passive") ?? null;
+    const nextLevel = bugMasteryNextUnlockLevel(mastery.level);
+    const nextSkills = nextLevel ? bugMasterySkills.filter((skill) => skill.role === mastery.role && skill.unlockedAtLevel === nextLevel) : [];
+    const nextSkill = nextSkills[0] ?? null;
+    const active = activeSquadIds.includes(entry.id);
+    const sources = inventoryItem?.sources ?? unlockItem?.sources ?? [];
+    return (
+      <Modal animationType="slide" transparent visible={Boolean(selectedBugId)} onRequestClose={() => setSelectedBugId("")}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.masteryModal}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeaderRow}>
+                <View style={[styles.modalBugArt, { borderColor: color }]}>
+                  {entry.rarity === "Mythisch" ? (
+                    <>
+                      <MythicRarityFrame size={136} style={styles.modalMythicFrame} />
+                      <BugArtImage bugId={entry.id} size={116} />
+                    </>
+                  ) : (
+                    <BugArtImage bugId={entry.id} size={124} />
+                  )}
+                </View>
+                <View style={styles.modalTitleBlock}>
+                  <Text style={styles.modalName}>{bugDexEntryName(entry, t)}</Text>
+                  <Text style={styles.modalSubtitle}>{bugDexEntryTitle(entry, t)}</Text>
+                  <View style={styles.modalChipRow}>
+                    <Text style={[styles.modalChip, { backgroundColor: color }]}>{rarityLabel(entry.rarity, t)}</Text>
+                    <Text style={styles.modalChip}>{masteryRoleLabel(mastery.role)}</Text>
+                    <Text style={styles.modalChip}>{masteryRankLabel(mastery.rank)}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.masteryProgressPanel}>
+                <View style={styles.masteryProgressHeader}>
+                  <Text style={styles.masteryLevel}>{t("bugdex.mastery.level", { level: mastery.level })}</Text>
+                  <Text style={styles.masteryXp}>{xpNeeded > 0 ? t("bugdex.mastery.xp", { current: mastery.xp, total: xpNeeded }) : t("bugdex.mastery.maxed")}</Text>
+                </View>
+                <View style={styles.masteryTrack}>
+                  <View style={[styles.masteryFill, { backgroundColor: color, width: `${xpProgress}%` }]} />
+                </View>
+                <Text style={styles.masteryNext}>{nextSkills.length ? t("bugdex.mastery.nextSkill", { level: nextLevel ?? 20, skill: nextSkills.map((skill) => masterySkillLabel(skill.id)).join(" + ") }) : masteryNextText(mastery)}</Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>{t("bugdex.mastery.whatDoesItDo")}</Text>
+                <View style={styles.masteryExplainPanel}>
+                  <Text style={styles.masteryExplainRole}>{masteryRoleLabel(mastery.role)}</Text>
+                  <Text style={styles.masteryExplainText}>{masteryRoleSummary(mastery.role)}</Text>
+                  <View style={styles.masteryFocusGrid}>
+                    {currentSkill ? renderMasterySkillCard(currentSkill, "current") : <Text style={styles.modalMuted}>{t("bugdex.mastery.noSkills")}</Text>}
+                    {nextSkill ? renderMasterySkillCard(nextSkill, "next") : <Text style={styles.masteryMaxPill}>{t("bugdex.mastery.maxed")}</Text>}
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>{t("bugdex.mastery.allUnlocks")}</Text>
+                <View style={styles.skillGrid}>
+                  {unlockedSkills.length ? unlockedSkills.map((skill) => (
+                    <View key={skill.id} style={styles.skillPill}>
+                      <View style={styles.skillTitleRow}>
+                        <Text style={styles.skillName}>{masterySkillLabel(skill.id)}</Text>
+                        <Text style={styles.skillLevel}>Lv. {skill.unlockedAtLevel}</Text>
+                      </View>
+                      <Text style={styles.skillMeta}>{t(`bugdex.mastery.skillKind.${skill.kind}`)}</Text>
+                      <Text style={styles.skillDescription}>{masterySkillDescription(skill.id)}</Text>
+                    </View>
+                  )) : (
+                    <Text style={styles.modalMuted}>{t("bugdex.mastery.noSkills")}</Text>
+                  )}
+                  {nextSkills.map((skill) => (
+                    <View key={`next-${skill.id}`} style={[styles.skillPill, styles.skillPillLocked]}>
+                      <View style={styles.skillTitleRow}>
+                        <Text style={styles.skillName}>{masterySkillLabel(skill.id)}</Text>
+                        <Text style={styles.skillLevel}>Lv. {skill.unlockedAtLevel}</Text>
+                      </View>
+                      <Text style={styles.skillMeta}>{t(`bugdex.mastery.skillKind.${skill.kind}`)}</Text>
+                      <Text style={styles.skillDescription}>{masterySkillDescription(skill.id)}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.modalStatsGrid}>
+                <View style={styles.modalStat}>
+                  <Text style={styles.modalStatValue}>{inventoryItem?.count ?? 0}</Text>
+                  <Text style={styles.modalStatLabel}>{t("bugdex.mastery.owned")}</Text>
+                </View>
+                <View style={styles.modalStat}>
+                  <Text style={styles.modalStatValue}>{active ? t("bugdex.mastery.active") : t("bugdex.mastery.inactive")}</Text>
+                  <Text style={styles.modalStatLabel}>{t("bugdex.activeSquad")}</Text>
+                </View>
+                <View style={styles.modalStat}>
+                  <Text style={styles.modalStatValue}>{mastery.duelUses + mastery.soloUses}</Text>
+                  <Text style={styles.modalStatLabel}>{t("bugdex.mastery.uses")}</Text>
+                </View>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>{t("bugdex.mastery.sources")}</Text>
+                <Text style={styles.modalMuted}>{sources.length ? sources.join(" + ") : t("bugdex.mastery.noSources")}</Text>
+              </View>
+
+              <Pressable style={styles.modalCloseButton} onPress={() => setSelectedBugId("")}>
+                <Text style={styles.modalCloseText}>{t("common.close")}</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
@@ -1541,6 +2009,54 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: "center"
   },
+  squadMasteryBadge: {
+    alignSelf: "stretch",
+    backgroundColor: "#f7faf6",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    marginTop: 6,
+    padding: 6
+  },
+  squadMasteryRow: {
+    flexDirection: "row",
+    gap: 4,
+    justifyContent: "center",
+    minWidth: 0
+  },
+  squadMasteryPill: {
+    backgroundColor: "#102018",
+    borderRadius: 999,
+    color: "#ffffff",
+    flexShrink: 0,
+    fontSize: 9,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  squadMasteryRolePill: {
+    backgroundColor: "#e7f2eb",
+    color: "#15724f",
+    flexShrink: 1,
+    maxWidth: 58
+  },
+  squadMasteryMeta: {
+    color: "#52665d",
+    fontSize: 9,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  squadMasteryTrack: {
+    backgroundColor: "#dbe8de",
+    borderRadius: 999,
+    height: 4,
+    overflow: "hidden"
+  },
+  squadMasteryFill: {
+    height: "100%"
+  },
   squadRoleBadge: {
     alignItems: "center",
     alignSelf: "stretch",
@@ -1665,6 +2181,62 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 6
   },
+  tradeFilterBlock: {
+    gap: 7,
+    marginBottom: 8
+  },
+  tradeSearchInput: {
+    backgroundColor: "#ffffff",
+    borderColor: "#c6d3cc",
+    borderRadius: 10,
+    borderWidth: 1,
+    color: "#102018",
+    fontSize: 12,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  tradeRarityFilterRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6
+  },
+  tradeRarityFilterButton: {
+    alignItems: "center",
+    backgroundColor: "#eef4ed",
+    borderRadius: 999,
+    borderWidth: 2,
+    justifyContent: "center",
+    minHeight: 32,
+    minWidth: 44,
+    paddingHorizontal: 7,
+    paddingVertical: 6
+  },
+  tradeRarityFilterButtonActive: {
+    backgroundColor: "#102018"
+  },
+  tradeRoleFilterButton: {
+    alignItems: "center",
+    backgroundColor: "#eef4ed",
+    borderColor: "#c6d3cc",
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 30,
+    paddingHorizontal: 9,
+    paddingVertical: 6
+  },
+  tradeRoleFilterText: {
+    color: "#102018",
+    fontSize: 10,
+    fontWeight: "900"
+  },
+  rarityImageStarsRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 1,
+    justifyContent: "center"
+  },
   chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1771,6 +2343,36 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: "center"
   },
+  squadChipMastery: {
+    backgroundColor: "#ffffff",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    width: "100%"
+  },
+  squadChipMasteryActive: {
+    backgroundColor: "#234435",
+    borderColor: "#69c88d"
+  },
+  squadChipMasteryLevel: {
+    color: "#102018",
+    fontSize: 10,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  squadChipTrack: {
+    backgroundColor: "#dbe8de",
+    borderRadius: 999,
+    height: 4,
+    marginTop: 4,
+    overflow: "hidden"
+  },
+  squadChipFill: {
+    height: "100%"
+  },
   squadBugChipAttack: {
     color: "#102018",
     fontSize: 10,
@@ -1812,6 +2414,12 @@ const styles = StyleSheet.create({
   tradeChipMeta: {
     color: "#52665d",
     fontSize: 10,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  tradeCopyMeta: {
+    color: "#52665d",
+    fontSize: 9,
     fontWeight: "900",
     marginTop: 2
   },
@@ -1910,6 +2518,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     marginTop: 2
+  },
+  tradeMasteryText: {
+    color: "#15724f",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 1
+  },
+  tradeSummaryItem: {
+    backgroundColor: "#f7faf6",
+    borderColor: "#e0ebe4",
+    borderRadius: 7,
+    borderWidth: 1,
+    marginTop: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 5
+  },
+  tradeSummaryList: {
+    gap: 2
   },
   tradeSwapBox: {
     backgroundColor: "#ffffff",
@@ -2080,9 +2706,14 @@ const styles = StyleSheet.create({
   upgradeTextBlock: {
     flex: 1
   },
-  upgradeTitle: {
-    color: "#102018",
-    fontSize: 14,
+  rarityUpgradeRoute: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8
+  },
+  rarityUpgradeArrow: {
+    color: "#52665d",
+    fontSize: 16,
     fontWeight: "900"
   },
   upgradeMeta: {
@@ -2091,6 +2722,72 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 15,
     marginTop: 3
+  },
+  sameUpgradeSection: {
+    backgroundColor: "#fdfefb",
+    borderColor: "#d7bd57",
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 12,
+    padding: 10
+  },
+  sameUpgradeSectionHeader: {
+    gap: 3,
+    marginBottom: 2
+  },
+  sameUpgradeSectionTitle: {
+    color: "#102018",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  sameUpgradeSectionMeta: {
+    color: "#52665d",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 15
+  },
+  sameUpgradeEmpty: {
+    color: "#52665d",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 8
+  },
+  sameUpgradeList: {
+    gap: 8,
+    marginTop: 10
+  },
+  sameUpgradeTitle: {
+    color: "#102018",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  sameUpgradeButton: {
+    alignItems: "center",
+    backgroundColor: "#eef4ed",
+    borderColor: "#c6d3cc",
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    padding: 10
+  },
+  sameUpgradeTextBlock: {
+    flex: 1
+  },
+  sameUpgradeBugName: {
+    color: "#102018",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  sameUpgradeMeta: {
+    color: "#52665d",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 2
+  },
+  sameUpgradeCta: {
+    fontSize: 12,
+    fontWeight: "900"
   },
   upgradeChoiceGrid: {
     flexDirection: "row",
@@ -2167,6 +2864,52 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     marginTop: 2
+  },
+  rarityFilterCard: {
+    backgroundColor: "#fdfefb",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+    padding: 12
+  },
+  rarityFilterTitle: {
+    color: "#102018",
+    fontSize: 13,
+    fontWeight: "900",
+    marginBottom: 8
+  },
+  rarityFilterRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  rarityFilterChip: {
+    alignItems: "center",
+    backgroundColor: "#eef4ed",
+    borderColor: "#c6d3cc",
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 34,
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  rarityFilterStarChip: {
+    minWidth: 48,
+    paddingHorizontal: 9
+  },
+  rarityFilterChipActive: {
+    backgroundColor: "#102018",
+    borderColor: "#102018"
+  },
+  rarityFilterChipText: {
+    color: "#52665d",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  rarityFilterChipTextActive: {
+    color: "#ffffff"
   },
   setCard: {
     backgroundColor: "#fdfefb",
@@ -2402,6 +3145,307 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     marginTop: 7
+  },
+  masteryCardBlock: {
+    gap: 5,
+    marginTop: 8
+  },
+  masteryMiniRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5
+  },
+  masteryMiniPill: {
+    backgroundColor: "#102018",
+    borderRadius: 999,
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 7,
+    paddingVertical: 3
+  },
+  masteryRolePill: {
+    backgroundColor: "#e7f2eb",
+    color: "#15724f"
+  },
+  masteryCardMeta: {
+    color: "#52665d",
+    fontSize: 10,
+    fontWeight: "900"
+  },
+  masteryCardTrack: {
+    backgroundColor: "#dbe8de",
+    borderRadius: 999,
+    height: 5,
+    overflow: "hidden"
+  },
+  masteryCardFill: {
+    height: "100%"
+  },
+  modalBackdrop: {
+    backgroundColor: "rgba(16,32,24,0.58)",
+    flex: 1,
+    justifyContent: "flex-end"
+  },
+  masteryModal: {
+    backgroundColor: "#fdfefb",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    maxHeight: "92%",
+    padding: 18
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    gap: 14,
+    marginBottom: 16
+  },
+  modalBugArt: {
+    alignItems: "center",
+    backgroundColor: "#eef4ed",
+    borderRadius: 8,
+    borderWidth: 2,
+    height: 148,
+    justifyContent: "center",
+    width: 148
+  },
+  modalMythicFrame: {
+    top: 0
+  },
+  modalTitleBlock: {
+    flex: 1,
+    justifyContent: "center"
+  },
+  modalName: {
+    color: "#102018",
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 28
+  },
+  modalSubtitle: {
+    color: "#52665d",
+    fontSize: 13,
+    fontWeight: "900",
+    marginTop: 4
+  },
+  modalChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 10
+  },
+  modalChip: {
+    backgroundColor: "#102018",
+    borderRadius: 999,
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  masteryProgressPanel: {
+    backgroundColor: "#eef4ed",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+    padding: 12
+  },
+  masteryProgressHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  masteryLevel: {
+    color: "#102018",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  masteryXp: {
+    color: "#52665d",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  masteryTrack: {
+    backgroundColor: "#d7e1d9",
+    borderRadius: 999,
+    height: 10,
+    marginTop: 10,
+    overflow: "hidden"
+  },
+  masteryFill: {
+    borderRadius: 999,
+    height: "100%"
+  },
+  masteryNext: {
+    color: "#52665d",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 8
+  },
+  modalSection: {
+    marginBottom: 12
+  },
+  modalSectionTitle: {
+    color: "#102018",
+    fontSize: 15,
+    fontWeight: "900",
+    marginBottom: 8
+  },
+  masteryExplainPanel: {
+    backgroundColor: "#f7faf6",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 10
+  },
+  masteryExplainRole: {
+    color: "#102018",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  masteryExplainText: {
+    color: "#52665d",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17,
+    marginTop: 3
+  },
+  masteryFocusGrid: {
+    gap: 7,
+    marginTop: 10
+  },
+  masteryFocusCard: {
+    backgroundColor: "#eef4ed",
+    borderColor: "#d7bd57",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  masteryFocusCardNext: {
+    backgroundColor: "#ffffff",
+    borderColor: "#d7e1d9",
+    opacity: 0.78
+  },
+  masteryFocusLabel: {
+    color: "#15724f",
+    fontSize: 10,
+    fontWeight: "900",
+    marginBottom: 4,
+    textTransform: "uppercase"
+  },
+  masteryMaxPill: {
+    alignSelf: "flex-start",
+    backgroundColor: "#102018",
+    borderRadius: 999,
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  skillGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7
+  },
+  skillPill: {
+    backgroundColor: "#f7faf6",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 132,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    width: "48%"
+  },
+  skillPillLocked: {
+    opacity: 0.64
+  },
+  skillTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "space-between"
+  },
+  skillName: {
+    color: "#102018",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  skillLevel: {
+    backgroundColor: "#d7bd57",
+    borderRadius: 999,
+    color: "#102018",
+    fontSize: 9,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  skillMeta: {
+    color: "#52665d",
+    fontSize: 10,
+    fontWeight: "800",
+    marginTop: 2
+  },
+  skillDescription: {
+    color: "#52665d",
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 15,
+    marginTop: 5
+  },
+  modalStatsGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12
+  },
+  modalStat: {
+    alignItems: "center",
+    backgroundColor: "#f7faf6",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    padding: 10
+  },
+  modalStatValue: {
+    color: "#102018",
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  modalStatLabel: {
+    color: "#52665d",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 2,
+    textAlign: "center"
+  },
+  modalMuted: {
+    color: "#52665d",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16
+  },
+  modalCloseButton: {
+    alignItems: "center",
+    backgroundColor: "#102018",
+    borderRadius: 8,
+    marginTop: 4,
+    paddingVertical: 12
+  },
+  modalCloseText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "900"
   },
   lockedText: {
     color: "#87958e"

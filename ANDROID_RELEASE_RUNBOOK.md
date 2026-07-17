@@ -25,6 +25,7 @@ Pas daarna `app.json` en `android/app/build.gradle` aan, inclusief een hogere `v
 
 ```powershell
 npm.cmd run typecheck
+$env:BUGBAAS_REQUIRE_ENV='1'
 .\android\gradlew.bat -p android :app:assembleRelease --no-daemon --console=plain
 ```
 
@@ -172,6 +173,7 @@ cd android
 $env:JAVA_HOME='C:\Program Files\Java\jdk-21'
 $env:ANDROID_HOME='C:\Users\thoma.THOMAS\AppData\Local\Android\Sdk'
 $env:ANDROID_SDK_ROOT=$env:ANDROID_HOME
+$env:BUGBAAS_REQUIRE_ENV='1'
 $env:Path="$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:Path"
 .\gradlew.bat assembleRelease
 cd ..

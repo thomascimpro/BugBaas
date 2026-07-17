@@ -1,5 +1,20 @@
 # Status
 
+- Release 2.10.0 is lokaal geminificeerd en gesigneerd gebouwd; metadata, v2-signing en SHA-256 zijn geverifieerd, publicatie op GitHub volgt.
+- BugDex bevat 45 nieuwe, transparant gecropte bugs uit `new17-17-2026`; catalogus-, asset- en Android-releasecontrole zijn geslaagd.
+- De scoreladder loopt nu door tot 40.000 punten met vier nieuwe stretch-tiers boven Goliath BugBaas.
+- Nest Defense zet taps en hitdetectie nu in dezelfde gemeten speelveldcoördinaten; taps op bugs springen niet meer naar linksboven.
+- De linker Bug Glide-stuurstrook is klikbaar en duwt de bug naar rechts, zodat hij niet aan de linkerrand blijft hangen.
+- Ranked Duel rating krijgt bij het openen van Arena eenmalig 5 punten decay per volledig gemiste dag, met een bodem van 1000.
+- Bug Tower is lokaal als vijfde Arcade-game geimplementeerd met animated beetle, tilt/tap-besturing, fallbackknoppen, combo's, highscores, training en ranked; release-APK build is geslaagd, device-smoke staat nog open.
+- Ranked Bug Tower-resultaten krijgen lokaal een afzonderlijk herkenbare Firebase-context met `ranked: true` en de bijbehorende `duelId`.
+- De 2.10.0-release bevat de ranked Bug Tower-context en de uitgebreide BugDex.
+- Bug Tower-moeilijkheid schaalt door smallere/grotere platformgaten, bewegende platforms vanaf floor 40 en steeds snellere neerwaartse scroll.
+- Release-APK `dist/BugBaas-2.10.0.apk` is normaal geminificeerd en op metadata en signing gecontroleerd; device-smoke staat nog open.
+- Lokale gameplay/reward-verbeteringen zijn opgenomen in 2.10.0; device-smoke op tablet en telefoon staat nog open.
+- BugDex-medailles en set-characters gebruiken nu de blijvende unlockhistorie in plaats van alleen huidig bezit.
+- Ranked Web Runner, Nest Defense en Bug Glide blokkeren annuleren/teruggaan tot het resultaat.
+- Buddywidget toont status met hunt-, reward-, beschikbaar- en rustafbeeldingen.
 - Projectbasis: klaar.
 - Auth-flow: klaar met Firebase integratie en demo-fallback.
 - Google-login werkt via native Google Sign-In in standalone APK.

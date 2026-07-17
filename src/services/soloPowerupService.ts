@@ -10,7 +10,7 @@ export type SoloPowerupInventory = {
 };
 
 const storageKey = (uid: string) => `bugbaas:soloPowerups:${uid}`;
-const lampFocusDurationMs = 20 * 60 * 1000;
+const lampFocusDurationMs = 15 * 1000;
 
 export function emptySoloPowerupInventory(): SoloPowerupInventory {
   return {
@@ -79,6 +79,11 @@ export function soloLampFocusActive(inventory: SoloPowerupInventory, now = Date.
 export function soloLampFocusRemainingMinutes(inventory: SoloPowerupInventory, now = Date.now()): number {
   if (!inventory.lampFocusActiveUntil) return 0;
   return Math.max(0, Math.ceil((Date.parse(inventory.lampFocusActiveUntil) - now) / 60000));
+}
+
+export function soloLampFocusRemainingSeconds(inventory: SoloPowerupInventory, now = Date.now()): number {
+  if (!inventory.lampFocusActiveUntil) return 0;
+  return Math.max(0, Math.ceil((Date.parse(inventory.lampFocusActiveUntil) - now) / 1000));
 }
 
 async function saveSoloPowerupInventory(uid: string, inventory: SoloPowerupInventory): Promise<void> {

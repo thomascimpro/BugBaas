@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   User as FirebaseUser,
   createUserWithEmailAndPassword,
@@ -8,13 +9,13 @@ import {
   signOut,
   updateProfile
 } from "firebase/auth";
-import { arrayUnion, collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, updateDoc, where } from "firebase/firestore";
+import { arrayUnion, collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, setDoc, updateDoc, where } from "firebase/firestore";
 import { auth, db, isFirebaseConfigured } from "../firebase";
 import { BugComment, BugReport, Organization, OrganizationMember, User } from "../types";
-import { entryByBugId, listBugDexInventory, syncPointUnlockedBugDex } from "./bugDexService";
+import { entryByBugId, listBugDexInventory, listBugDexUnlocks, syncPointUnlockedBugDex } from "./bugDexService";
 import { normalizeBugLampActiveUntil, normalizeBugLampCount, withActivatedBugLamp } from "./bugLampService";
 import { sanitizeActiveBugSquad } from "./bugSquadService";
-import { bestUnlockedCharacterId, CharacterId, defaultCharacterId, isCharacterUnlocked, safeCharacterId } from "./characterService";
+import { bestUnlockedCharacterId, CharacterId, CharacterUnlockContext, defaultCharacterId, isCharacterUnlocked, safeCharacterId } from "./characterService";
 import { cleanOrganizationName, defaultOrganizationId, defaultOrganizationName, organizationIdsForUser, organizationNamesForUser, organizationSlug } from "./organizationService";
 import { badgesForUser, titleForPoints } from "./pointsService";
 import { starterBoostedXp, withStarterBoostIfEligible } from "./starterBoostService";
@@ -24,15 +25,43 @@ export const upvoteGivenPointValue = 1;
 export const commentPointValue = 2;
 export const splatRewardEvery = 100;
 export const splatRewardPoints = 10;
-const presenceWriteMinIntervalMs = 60 * 1000;
+const presenceWriteMinIntervalMs = 5 * 60 * 1000;
+const userListCacheTtlMs = 5 * 60 * 1000;
+const leaderboardCacheTtlMs = 10 * 60 * 1000;
+const userListLimit = 75;
+const leaderboardLimit = 25;
 
 let demoUser: User | null = null;
 const demoUsers = new Map<string, User>();
+const cachedUserLists = new Map<string, { at: number; items: User[] }>();
 const lastPresenceWriteAtByUid = new Map<string, number>();
+
+async function readStoredUserList(cacheKey: string, ttlMs = userListCacheTtlMs): Promise<User[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`bugbaas:${cacheKey}`);
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as { at: number; items: User[] };
+    if (!cached || Date.now() - cached.at >= ttlMs || !Array.isArray(cached.items)) return null;
+    return cached.items;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredUserList(cacheKey: string, items: User[]): void {
+  void AsyncStorage.setItem(`bugbaas:${cacheKey}`, JSON.stringify({ at: Date.now(), items })).catch(() => undefined);
+}
+
+function clearStoredUserListCache(uid?: string): void {
+  cachedUserLists.clear();
+  const userKey = uid ?? auth.currentUser?.uid ?? "anonymous";
+  void AsyncStorage.multiRemove([`bugbaas:users:${userKey}`, `bugbaas:usersLight:${userKey}`, `bugbaas:leaderboard:${userKey}`]).catch(() => undefined);
+}
 
 function normalizeUser(user: User): User {
   const safeId = safeCharacterId(user.characterId);
-  const unlockedCharacterId = isCharacterUnlocked(safeId, user.totalPoints) ? safeId : bestUnlockedCharacterId(user.totalPoints);
+  const characterContext = { allowUnknownSetBadges: true, user };
+  const unlockedCharacterId = isCharacterUnlocked(safeId, user.totalPoints, characterContext) ? safeId : bestUnlockedCharacterId(user.totalPoints, characterContext);
   const bugLampActiveUntil = normalizeBugLampActiveUntil(user.bugLampActiveUntil);
   const organizationIds = organizationIdsForUser(user);
   const organizationNames = organizationNamesForUser(user);
@@ -109,14 +138,17 @@ async function bugDexAchievementStats(user: Pick<User, "uid" | "activeBugSquad" 
   if (!isFirebaseConfigured || auth.currentUser?.uid === user.uid) {
     await syncPointUnlockedBugDex(user);
   }
-  const inventory = await listBugDexInventory(user as User);
+  const [inventory, unlocks] = await Promise.all([
+    listBugDexInventory(user as User),
+    listBugDexUnlocks(user as User)
+  ]);
   return {
     activeBugSquad: sanitizeActiveBugSquad(user.activeBugSquad, inventory),
-    bugDexCount: inventory.length,
-    legendaryBugDexCount: inventory.filter((item) => entryByBugId(item.bugId)?.rarity === "Legendarisch").length,
-    mythicBugDexCount: inventory.filter((item) => entryByBugId(item.bugId)?.rarity === "Mythisch").length,
-    tradedBugDexCount: inventory.filter((item) => item.sources.includes("trade")).length,
-    upgradedBugDexCount: inventory.filter((item) => item.sources.includes("combine")).length
+    bugDexCount: unlocks.length,
+    legendaryBugDexCount: unlocks.filter((item) => entryByBugId(item.bugId)?.rarity === "Legendarisch").length,
+    mythicBugDexCount: unlocks.filter((item) => entryByBugId(item.bugId)?.rarity === "Mythisch").length,
+    tradedBugDexCount: unlocks.filter((item) => item.sources.includes("trade")).length,
+    upgradedBugDexCount: unlocks.filter((item) => item.sources.includes("combine")).length
   };
 }
 
@@ -313,25 +345,28 @@ export async function syncEngagementPoints(user: User): Promise<User> {
   });
 }
 
-export async function syncMovementKilometers(user: User, todayKm: number): Promise<User> {
+export async function syncMovementKilometers(user: User, todayKm: number, weekKm = todayKm): Promise<User> {
   if (!Number.isFinite(todayKm) || todayKm <= 0) return normalizeUser(user);
   const day = new Date().toISOString().slice(0, 10);
   const week = isoWeekId();
   const roundedTodayKm = Math.round(todayKm * 100) / 100;
+  const roundedWeekKm = Math.max(roundedTodayKm, Math.round((Number.isFinite(weekKm) ? weekKm : todayKm) * 100) / 100);
 
   if (!isFirebaseConfigured) {
     const current = Array.from(demoUsers.values()).find((item) => item.uid === user.uid) ?? user;
     const previousDayKm = current.movementRegisteredDay === day ? current.movementRegisteredDayKm ?? 0 : 0;
     const previousWeekKm = current.movementRegisteredWeek === week ? current.movementRegisteredWeekKm ?? 0 : 0;
     const nextDayKm = Math.max(previousDayKm, roundedTodayKm);
-    const deltaKm = Math.max(0, nextDayKm - previousDayKm);
+    const dayDeltaKm = Math.max(0, nextDayKm - previousDayKm);
+    const nextWeekKm = Math.max(previousWeekKm + dayDeltaKm, roundedWeekKm);
+    const weekDeltaKm = Math.max(0, nextWeekKm - previousWeekKm);
     const updated = normalizeUser({
       ...current,
-      movementKmTotal: Math.round(((current.movementKmTotal ?? 0) + deltaKm) * 100) / 100,
+      movementKmTotal: Math.round(((current.movementKmTotal ?? 0) + weekDeltaKm) * 100) / 100,
       movementRegisteredDay: day,
       movementRegisteredDayKm: nextDayKm,
       movementRegisteredWeek: week,
-      movementRegisteredWeekKm: Math.round((previousWeekKm + deltaKm) * 100) / 100
+      movementRegisteredWeekKm: Math.round(nextWeekKm * 100) / 100
     });
     demoUsers.set(updated.email, updated);
     if (demoUser?.uid === user.uid) demoUser = updated;
@@ -346,9 +381,11 @@ export async function syncMovementKilometers(user: User, todayKm: number): Promi
     const previousDayKm = current.movementRegisteredDay === day ? current.movementRegisteredDayKm ?? 0 : 0;
     const previousWeekKm = current.movementRegisteredWeek === week ? current.movementRegisteredWeekKm ?? 0 : 0;
     const nextDayKm = Math.max(previousDayKm, roundedTodayKm);
-    const deltaKm = Math.max(0, nextDayKm - previousDayKm);
-    const movementKmTotal = Math.round(((current.movementKmTotal ?? 0) + deltaKm) * 100) / 100;
-    const movementRegisteredWeekKm = Math.round((previousWeekKm + deltaKm) * 100) / 100;
+    const dayDeltaKm = Math.max(0, nextDayKm - previousDayKm);
+    const nextWeekKm = Math.max(previousWeekKm + dayDeltaKm, roundedWeekKm);
+    const weekDeltaKm = Math.max(0, nextWeekKm - previousWeekKm);
+    const movementKmTotal = Math.round(((current.movementKmTotal ?? 0) + weekDeltaKm) * 100) / 100;
+    const movementRegisteredWeekKm = Math.round(nextWeekKm * 100) / 100;
     const updated = normalizeUser({
       ...current,
       movementKmTotal,
@@ -449,9 +486,9 @@ export async function createOrganizationForUser(user: User, organizationName: st
   return updated;
 }
 
-export async function updateUserCharacter(user: User, characterId: CharacterId): Promise<User> {
+export async function updateUserCharacter(user: User, characterId: CharacterId, context: CharacterUnlockContext = {}): Promise<User> {
   const safeId = safeCharacterId(characterId);
-  if (!isCharacterUnlocked(safeId, user.totalPoints)) {
+  if (!isCharacterUnlocked(safeId, user.totalPoints, { ...context, user })) {
     const updated = normalizeUser(user);
     if (isFirebaseConfigured) {
       await updateDoc(doc(db, "users", user.uid), { characterId: updated.characterId });
@@ -539,6 +576,40 @@ export async function logout(): Promise<void> {
   await signOut(auth);
 }
 
+export async function listUsersLight(): Promise<User[]> {
+  if (!isFirebaseConfigured) {
+    const currentIsTest = Boolean(demoUser?.testAccount);
+    return Array.from(demoUsers.values())
+      .filter((user) => user.active !== false)
+      .filter((user) => currentIsTest ? user.testAccount === true : user.testAccount !== true)
+      .map((user) => normalizeUser(publicUser(user)))
+      .sort((a, b) => b.totalPoints - a.totalPoints);
+  }
+
+  const currentUid = auth.currentUser?.uid;
+  const cacheKey = `usersLight:${currentUid ?? "anonymous"}`;
+  const cached = cachedUserLists.get(cacheKey);
+  if (cached && Date.now() - cached.at < userListCacheTtlMs) return cached.items;
+  const stored = await readStoredUserList(cacheKey);
+  if (stored) {
+    cachedUserLists.set(cacheKey, { at: Date.now(), items: stored });
+    return stored;
+  }
+
+  const currentSnapshot = currentUid ? await getDoc(doc(db, "users", currentUid)) : null;
+  const currentIsTest = Boolean(currentSnapshot?.exists() && (currentSnapshot.data() as User).testAccount);
+  const snapshot = await getDocs(query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(userListLimit)));
+  const users = snapshot.docs
+    .map((item) => item.data() as User)
+    .filter((user) => user.active !== false)
+    .filter((user) => currentIsTest ? user.testAccount === true : user.testAccount !== true)
+    .map((user) => normalizeUser(user.uid === currentUid ? user : publicUser(user)))
+    .sort((a, b) => b.totalPoints - a.totalPoints);
+  cachedUserLists.set(cacheKey, { at: Date.now(), items: users });
+  writeStoredUserList(cacheKey, users);
+  return users;
+}
+
 export async function listUsers(): Promise<User[]> {
   if (!isFirebaseConfigured) {
     const currentIsTest = Boolean(demoUser?.testAccount);
@@ -548,15 +619,28 @@ export async function listUsers(): Promise<User[]> {
       .map(async (user) => normalizeUser({ ...user, ...await bugDexAchievementStats(user) })));
     return users.sort((a, b) => b.totalPoints - a.totalPoints);
   }
-  const snapshot = await getDocs(query(collection(db, "users"), orderBy("totalPoints", "desc")));
   const currentUid = auth.currentUser?.uid;
-  const currentIsTest = Boolean(snapshot.docs.find((item) => item.id === currentUid)?.data().testAccount);
+  const cacheKey = `users:${currentUid ?? "anonymous"}`;
+  const cached = cachedUserLists.get(cacheKey);
+  if (cached && Date.now() - cached.at < userListCacheTtlMs) return cached.items;
+  const stored = await readStoredUserList(cacheKey);
+  if (stored) {
+    cachedUserLists.set(cacheKey, { at: Date.now(), items: stored });
+    return stored;
+  }
+
+  const currentSnapshot = currentUid ? await getDoc(doc(db, "users", currentUid)) : null;
+  const currentIsTest = Boolean(currentSnapshot?.exists() && (currentSnapshot.data() as User).testAccount);
+  const snapshot = await getDocs(query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(userListLimit)));
   const users = await Promise.all(snapshot.docs
     .map((item) => item.data() as User)
     .filter((user) => user.active !== false)
     .filter((user) => currentIsTest ? user.testAccount === true : user.testAccount !== true)
     .map((user) => withPublicStats(user.uid === currentUid ? user : publicUser(user))));
-  return users.sort((a, b) => b.totalPoints - a.totalPoints);
+  const sorted = users.sort((a, b) => b.totalPoints - a.totalPoints);
+  cachedUserLists.set(cacheKey, { at: Date.now(), items: sorted });
+  writeStoredUserList(cacheKey, sorted);
+  return sorted;
 }
 
 export async function listLeaderboardUsers(): Promise<User[]> {
@@ -569,15 +653,28 @@ export async function listLeaderboardUsers(): Promise<User[]> {
       .sort((a, b) => b.totalPoints - a.totalPoints);
   }
 
-  const snapshot = await getDocs(query(collection(db, "users"), orderBy("totalPoints", "desc")));
   const currentUid = auth.currentUser?.uid;
-  const currentIsTest = Boolean(snapshot.docs.find((item) => item.id === currentUid)?.data().testAccount);
-  return snapshot.docs
+  const cacheKey = `leaderboard:${currentUid ?? "anonymous"}`;
+  const cached = cachedUserLists.get(cacheKey);
+  if (cached && Date.now() - cached.at < leaderboardCacheTtlMs) return cached.items;
+  const stored = await readStoredUserList(cacheKey, leaderboardCacheTtlMs);
+  if (stored) {
+    cachedUserLists.set(cacheKey, { at: Date.now(), items: stored });
+    return stored;
+  }
+
+  const currentSnapshot = currentUid ? await getDoc(doc(db, "users", currentUid)) : null;
+  const currentIsTest = Boolean(currentSnapshot?.exists() && (currentSnapshot.data() as User).testAccount);
+  const snapshot = await getDocs(query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(leaderboardLimit)));
+  const users = snapshot.docs
     .map((item) => item.data() as User)
     .filter((user) => user.active !== false)
     .filter((user) => currentIsTest ? user.testAccount === true : user.testAccount !== true)
     .map((user) => normalizeUser(user.uid === currentUid ? user : publicUser(user)))
     .sort((a, b) => b.totalPoints - a.totalPoints);
+  cachedUserLists.set(cacheKey, { at: Date.now(), items: users });
+  writeStoredUserList(cacheKey, users);
+  return users;
 }
 
 export async function getUserById(uid: string): Promise<User | null> {
@@ -593,6 +690,7 @@ export async function getUserById(uid: string): Promise<User | null> {
 }
 
 export async function applyUserPoints(uid: string, pointsDelta: number, bugCountDelta: number): Promise<User | null> {
+  clearStoredUserListCache(uid);
   if (isFirebaseConfigured && auth.currentUser?.uid !== uid) {
     throw new Error("Alleen je eigen app mag je eigen punten aanpassen.");
   }

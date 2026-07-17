@@ -1,4 +1,5 @@
-import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, isFirebaseConfigured } from "../firebase";
 import { BugComment, BugReport, BugStatus, NewBugInput, ReportType, User } from "../types";
 import { defaultOrganizationId, defaultOrganizationName, isPublicOrganization, organizationIdsForUser, organizationNamesForUser } from "./organizationService";
@@ -8,6 +9,33 @@ import { applyUserPoints, commentPointValue, syncEngagementPoints, upvoteGivenPo
 
 const demoBugs: BugReport[] = [];
 const demoComments: BugComment[] = [];
+const bugListCacheTtlMs = 60000;
+const bugListLimit = 80;
+const bugListCache = new Map<string, { at: number; bugs: BugReport[] }>();
+const bugListStatuses: Array<BugStatus | "all"> = ["all", "Nieuw", "Bevestigd", "In behandeling", "Gefixt", "Afgekeurd", "Dubbel"];
+
+async function readStoredBugList(cacheKey: string): Promise<BugReport[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`bugbaas:${cacheKey}`);
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as { at: number; bugs: BugReport[] };
+    if (!cached || Date.now() - cached.at >= bugListCacheTtlMs || !Array.isArray(cached.bugs)) return null;
+    return cached.bugs;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredBugList(cacheKey: string, bugs: BugReport[]): void {
+  void AsyncStorage.setItem(`bugbaas:${cacheKey}`, JSON.stringify({ at: Date.now(), bugs })).catch(() => undefined);
+}
+
+function clearStoredBugListCache(uid?: string): void {
+  bugListCache.clear();
+  const userKey = uid ?? auth.currentUser?.uid ?? "anonymous";
+  const keys = bugListStatuses.map((status) => `bugbaas:${userKey}:${status}`);
+  void AsyncStorage.multiRemove(keys).catch(() => undefined);
+}
 
 function normalizeBug(bug: BugReport, fallbackId = bug.id): BugReport {
   const upvoteUserIds = Array.isArray(bug.upvoteUserIds) ? bug.upvoteUserIds : [];
@@ -59,7 +87,16 @@ async function currentUserOrganizationIds(): Promise<string[]> {
   return snapshot.exists() ? organizationIdsForUser(snapshot.data() as User) : [];
 }
 
-async function filterBugsForCurrentUser(bugs: BugReport[]): Promise<BugReport[]> {
+async function currentUserBugVisibility(): Promise<{ currentIsTest: boolean; currentOrgIds: string[] }> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return { currentIsTest: false, currentOrgIds: [] };
+  const snapshot = await getDoc(doc(db, "users", uid));
+  if (!snapshot.exists()) return { currentIsTest: false, currentOrgIds: [] };
+  const user = snapshot.data() as User;
+  return { currentIsTest: user.testAccount === true, currentOrgIds: organizationIdsForUser(user) };
+}
+
+async function filterBugsForCurrentUser(bugs: BugReport[], context?: { currentIsTest: boolean; currentOrgIds: string[] }): Promise<BugReport[]> {
   if (!isFirebaseConfigured) {
     const currentOrgIds = new Set<string>();
     return bugs
@@ -68,24 +105,16 @@ async function filterBugsForCurrentUser(bugs: BugReport[]): Promise<BugReport[]>
       .filter((bug) => bug.reporterTestAccount !== true);
   }
 
-  const [currentIsTest, currentOrgIds] = await Promise.all([
-    currentUserIsTestAccount(),
-    currentUserOrganizationIds()
-  ]);
-  const currentOrgIdSet = new Set(currentOrgIds);
-  const userSnapshot = await getDocs(collection(db, "users"));
-  const usersById = new Map(userSnapshot.docs.map((item) => [item.id, item.data() as User]));
+  const resolvedContext = context ?? {
+    currentIsTest: await currentUserIsTestAccount(),
+    currentOrgIds: await currentUserOrganizationIds()
+  };
+  const currentOrgIdSet = new Set(resolvedContext.currentOrgIds);
 
   return bugs.filter((bug) => {
     const current = normalizeBug(bug);
     if (current.organizationId !== defaultOrganizationId && !currentOrgIdSet.has(current.organizationId ?? "")) return false;
-    if (current.organizationId === defaultOrganizationId) {
-      return currentIsTest ? current.reporterTestAccount === true : current.reporterTestAccount !== true;
-    }
-    const reporter = usersById.get(current.reporterId);
-    const reporterIsTest = bug.reporterTestAccount === true || reporter?.testAccount === true;
-    const reporterIsActiveRealUser = Boolean(reporter) && reporter?.active !== false && reporter?.testAccount !== true && bug.reporterTestAccount !== true;
-    return currentIsTest ? reporterIsTest || !reporter : reporterIsActiveRealUser;
+    return resolvedContext.currentIsTest ? current.reporterTestAccount === true : current.reporterTestAccount !== true;
   });
 }
 
@@ -96,6 +125,7 @@ export async function createBug(input: NewBugInput, user: User): Promise<BugRepo
   if (input.screenshotDataUrl && input.screenshotDataUrl.length > 900_000) {
     throw new Error("Screenshot is te groot. Kies een kleinere afbeelding.");
   }
+  clearStoredBugListCache(user.uid);
 
   const now = new Date().toISOString();
   const reportType = input.reportType ?? "bug";
@@ -181,21 +211,34 @@ export async function listBugs(status?: BugStatus): Promise<BugReport[]> {
     const visibleBugs = await filterBugsForCurrentUser(demoBugs);
     return visibleBugs.filter((bug) => !status || bug.status === status);
   }
-  const orgIds = await currentUserOrganizationIds();
-  const publicSnapshot = await getDocs(query(collection(db, "bugs"), orderBy("createdAt", "desc")));
-  const orgSnapshots = await Promise.all(orgIds.map((orgId) => getDocs(query(collection(db, "organizationBugs"), where("organizationId", "==", orgId), orderBy("createdAt", "desc")))));
+  const currentUid = auth.currentUser?.uid ?? "anonymous";
+  const cacheKey = `${currentUid}:${status ?? "all"}`;
+  const cached = bugListCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < bugListCacheTtlMs) return cached.bugs;
+  const stored = await readStoredBugList(cacheKey);
+  if (stored) {
+    bugListCache.set(cacheKey, { at: Date.now(), bugs: stored });
+    return stored;
+  }
+
+  const { currentIsTest, currentOrgIds } = await currentUserBugVisibility();
+  const publicSnapshot = await getDocs(query(collection(db, "bugs"), orderBy("createdAt", "desc"), limit(bugListLimit)));
+  const orgSnapshots = await Promise.all(currentOrgIds.map((orgId) => getDocs(query(collection(db, "organizationBugs"), where("organizationId", "==", orgId), orderBy("createdAt", "desc"), limit(bugListLimit)))));
   const bugs = [
     ...publicSnapshot.docs.map((item) => normalizeBug({ ...(item.data() as BugReport), collectionName: "bugs" }, item.id)),
     ...orgSnapshots.flatMap((snapshot) => snapshot.docs.map((item) => normalizeBug({ ...(item.data() as BugReport), collectionName: "organizationBugs" }, item.id)))
   ];
-  const visibleBugs = await filterBugsForCurrentUser(bugs);
-  return visibleBugs
+  const visibleBugs = (await filterBugsForCurrentUser(bugs, { currentIsTest, currentOrgIds }))
     .filter((bug) => !status || bug.status === status)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  bugListCache.set(cacheKey, { at: Date.now(), bugs: visibleBugs });
+  writeStoredBugList(cacheKey, visibleBugs);
+  return visibleBugs;
 }
 
 export async function updateBugStatus(bug: BugReport, status: BugStatus): Promise<BugReport> {
   const current = normalizeBug(bug);
+  clearStoredBugListCache();
   if (current.status === "Gefixt" && status !== "Gefixt") {
     throw new Error("Deze melding is al gefixt.");
   }
@@ -226,6 +269,7 @@ export async function updateOwnBug(
   changes: Pick<BugReport, "description" | "project" | "severity" | "steps" | "title">
 ): Promise<BugReport> {
   const current = normalizeBug(bug);
+  clearStoredBugListCache(user.uid);
   if (current.reporterId !== user.uid) throw new Error("Je kunt alleen je eigen melding wijzigen.");
 
   const nextSeverity = (current.reportType ?? "bug") === "bug" ? changes.severity : "Laag";
@@ -293,6 +337,7 @@ export async function updateOwnBug(
 
 export async function toggleBugUpvote(bug: BugReport, user: User): Promise<BugReport> {
   const current = normalizeBug(bug);
+  clearStoredBugListCache(user.uid);
   if (current.reporterId === user.uid) throw new Error("Je kunt je eigen bug niet upvoten.");
   const hasVoted = current.upvoteUserIds.includes(user.uid);
   const upvoteUserIds = hasVoted
@@ -341,6 +386,7 @@ export async function toggleBugUpvote(bug: BugReport, user: User): Promise<BugRe
 
 export async function deleteOwnBug(bug: BugReport, user: User): Promise<void> {
   const current = normalizeBug(bug);
+  clearStoredBugListCache(user.uid);
   if (current.reporterId !== user.uid) throw new Error("Je kunt alleen je eigen bugs verwijderen.");
 
   if (!isFirebaseConfigured) {
@@ -401,6 +447,7 @@ export async function listBugComments(bugId: string): Promise<BugComment[]> {
 
 export async function addBugComment(bug: BugReport, user: User, text: string, reaction: string): Promise<BugComment> {
   const current = normalizeBug(bug);
+  clearStoredBugListCache(user.uid);
   const trimmed = text.trim();
   if (!trimmed && !reaction) throw new Error("Kies een reactie of typ commentaar.");
   if (trimmed.length > 500) throw new Error("Commentaar mag maximaal 500 tekens zijn.");

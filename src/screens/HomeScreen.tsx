@@ -1,32 +1,34 @@
-import React, { useEffect, useState } from "react";
-import { DimensionValue, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, DimensionValue, Easing, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { RouteName } from "../../App";
 import { BugArtImage } from "../components/BugArtImage";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
 import { TierBadge } from "../components/TierBadge";
 import { listBugs } from "../services/bugService";
 import { BugArtId } from "../services/bugArt";
-import { BugDexDropResult, entryByBugId, listBugDexInventory } from "../services/bugDexService";
+import { BugDexDropResult, BugDexDropSource, entryByBugId, listBugDexInventory, listBugDexUnlocks } from "../services/bugDexService";
 import { bugLampStatus } from "../services/bugLampService";
+import { BuddyCareAction, BuddyCareState, applyBuddyCareAction, buddyActionRewardCount, buddyCareActions, buddyXpMultiplier, claimBuddyTaskReward, emptyBuddyCareState, loadBuddyState, saveBuddyState } from "../services/bugBuddyService";
+import { awardBugMasteryXp, bugMasteryNextUnlockLevel, bugMasteryUnlockedSkills, bugMasteryXpForNextLevel, listBugMastery, normalizeBugMastery } from "../services/bugMasteryService";
 import { maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
+import { dismissPhoneNotification, scheduleBuddyTaskNotification } from "../services/notificationService";
 import { listBugSmashDuels } from "../services/bugSmashDuelService";
 import { claimMovementRadarBonusesForApp, claimQueuedRadarBugs, getMovementRadarProgress, getQueuedRadarBugIds, MovementRadarProgress } from "../services/movementRadarService";
 import { bugDexEntries, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { languages, useI18n } from "../services/i18n";
 import { listLeaderboardUsers } from "../services/userService";
 import { loadSoloCampaignProgress } from "../services/soloCampaignProgressService";
-import { starterBoostRemainingDays } from "../services/starterBoostService";
 import { claimedDailyMissionIds as fetchClaimedDailyMissionIds, claimDailyMissionBonusWithReward, claimDailyMissionReward, dailyMissionSet, dailyMissionSetComplete, isDailyMissionBonusClaimed } from "../services/dailyMissionService";
 import { loadSoloCampaignBossProgress, SoloCampaignBossProgress } from "../services/missionProgressService";
 import { claimedWeeklyMissionIds, claimWeeklyMissionBonusWithReward, claimWeeklyMissionReward, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
-import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
+import { BugDexInventoryItem, BugDexUnlock, BugMastery, BugReport, BugSmashDuel, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
   movementBoost?: number;
   onActivateBugLamp?: () => Promise<void>;
   onMovementRadarClaimed?: (bugIds: BugArtId[]) => void;
-  onMovementRegistered?: (estimatedKm: number) => Promise<void>;
+  onMovementRegistered?: (estimatedKm: number, estimatedWeekKm?: number) => Promise<void>;
   onOpenBugDexWorkshop?: () => void;
   onRewardDrop?: (drop: BugDexDropResult) => void;
   onUserUpdated?: (user: User) => void;
@@ -34,14 +36,40 @@ type Props = {
   onNavigate: (route: RouteName) => void;
 };
 
+type BuddyPopup =
+  | { kind: "cancel" }
+  | { actionId: BuddyCareAction; duration: string; kind: "confirm"; xp: number }
+  | { kind: "info" }
+  | { actionId: BuddyCareAction; body: string; drop?: BugDexDropResult | null; kind: "claimed" }
+  | { actionId: BuddyCareAction; kind: "ready"; xp: number }
+  | null;
+
+function duelRating(user: User): number {
+  const rating = Math.round(user.duelRating ?? 1000);
+  return Number.isFinite(rating) ? Math.max(100, rating) : 1000;
+}
+
 const rarityColors: Record<BugDexRarity, string> = {
-  Gewoon: "#6f7f5f",
-  Zeldzaam: "#15724f",
-  Episch: "#356d7c",
-  Legendarisch: "#b83227",
-  Mythisch: "#7c3aed"
+  Gewoon: "#2f9e44",
+  Zeldzaam: "#228be6",
+  Episch: "#9c36b5",
+  Legendarisch: "#f59f00",
+  Mythisch: "#ef4444"
 };
 
+const buddyFeatureVisible = true;
+const buddyHappyImage = require("../../assets/buddy/kenney/stats/stat_happy.png");
+const buddyEnergyImage = require("../../assets/buddy/kenney/stats/stat_energy.png");
+const buddyLoveImage = require("../../assets/buddy/kenney/emotes/buddy_love.png");
+const buddyBondImage = require("../../assets/buddy/kenney/stats/stat_bond.png");
+const buddySleepyImage = require("../../assets/buddy/kenney/emotes/buddy_sleepy.png");
+const buddyPetImage = require("../../assets/buddy/kenney/pets/buddy_bee.png");
+const buddyStateCleanImage = require("../../assets/buddy/kenney/state/buddy_state_clean.png");
+const buddyStateDigImage = require("../../assets/buddy/kenney/state/buddy_state_dig.png");
+const buddyStateLeafImage = require("../../assets/buddy/kenney/state/buddy_state_leaf.png");
+const buddyStateNectarImage = require("../../assets/buddy/kenney/state/buddy_state_nectar.png");
+const buddyStateSleepImage = require("../../assets/buddy/kenney/state/buddy_state_sleep.png");
+const buddyStateSwarmImage = require("../../assets/buddy/kenney/state/buddy_state_swarm.png");
 const settingsGearImage = require("../../assets/generated/settings-gear-hd.png");
 const wikiButtonImage = require("../../assets/generated/bugbaas-wiki-button-hd.png");
 const bugBaasWikiUrl = "https://bugbaas-wiki.netlify.app";
@@ -53,6 +81,8 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [bugs, setBugs] = useState<BugReport[]>([]);
   const [duels, setDuels] = useState<BugSmashDuel[]>([]);
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
+  const [unlockHistory, setUnlockHistory] = useState<BugDexUnlock[]>([]);
+  const [masteryByBugId, setMasteryByBugId] = useState<Record<string, BugMastery>>({});
   const [movementProgress, setMovementProgress] = useState<MovementRadarProgress | null>(null);
   const [queuedRadarBugIds, setQueuedRadarBugIds] = useState<BugArtId[]>([]);
   const [bugLampActivating, setBugLampActivating] = useState(false);
@@ -71,12 +101,52 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [weeklyBonusError, setWeeklyBonusError] = useState("");
   const [showAllTiers, setShowAllTiers] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
-  const leaders = users.slice(0, 3);
-  const userRank = Math.max(1, users.findIndex((item) => item.uid === user.uid) + 1);
-  const dexCount = inventory.length;
-  const activeSquadEntries = sanitizeActiveBugSquad(user.activeBugSquad, inventory)
+  const [buddyBugId, setBuddyBugId] = useState("");
+  const [buddyCareState, setBuddyCareState] = useState<BuddyCareState>(() => emptyBuddyCareState(localDayId()));
+  const [buddyBusyAction, setBuddyBusyAction] = useState("");
+  const [buddyCardOpen, setBuddyCardOpen] = useState(false);
+  const [buddyActionsOpen, setBuddyActionsOpen] = useState(false);
+  const [buddyMessage, setBuddyMessage] = useState("");
+  const [buddyPopup, setBuddyPopup] = useState<BuddyPopup>(null);
+  const [buddySelectOpen, setBuddySelectOpen] = useState(false);
+  const [buddyNow, setBuddyNow] = useState(() => Date.now());
+  const buddyAnim = useRef(new Animated.Value(0)).current;
+  const buddyReadyPopupKeyRef = useRef("");
+  const scoreLeaders = users.slice(0, 3);
+  const duelRankedUsers = [...users].sort((a, b) => duelRating(b) - duelRating(a));
+  const duelLeaders = duelRankedUsers.slice(0, 3);
+  const scoreRank = Math.max(1, users.findIndex((item) => item.uid === user.uid) + 1);
+  const duelRank = Math.max(1, duelRankedUsers.findIndex((item) => item.uid === user.uid) + 1);
+  const unlockedDexCount = Math.max(user.bugDexCount ?? 0, inventory.length, unlockHistory.length);
+  const activeSquadIds = sanitizeActiveBugSquad(user.activeBugSquad, inventory);
+  const activeSquadEntries = activeSquadIds
     .map((bugId) => entryByBugId(bugId))
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  const buddyBugIds = Array.from(new Set([...activeSquadIds, ...inventory.map((item) => item.bugId)]));
+  const buddyEntry = entryByBugId(buddyBugId) ?? buddyBugIds.map((bugId) => entryByBugId(bugId)).find((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  const buddyMastery = buddyEntry ? masteryByBugId[buddyEntry.id] ?? normalizeBugMastery(buddyEntry.id) : null;
+  const buddyCanStartHunt = !buddyCareState.activeTask;
+  const buddyPendingTask = buddyCareState.activeTask;
+  const buddyActiveTask = buddyPendingTask && buddyPendingTask.endsAt > buddyNow ? buddyPendingTask : undefined;
+  const buddyFinishedTask = buddyPendingTask && buddyPendingTask.endsAt <= buddyNow ? buddyPendingTask : undefined;
+  const buddyActiveAction = buddyActiveTask ? buddyCareActions.find((action) => action.id === buddyActiveTask.action) : undefined;
+  const buddyTaskDuration = buddyActiveTask ? Math.max(1, buddyActiveTask.endsAt - buddyActiveTask.startedAt) : 1;
+  const buddyTaskRemaining = buddyActiveTask ? Math.max(0, buddyActiveTask.endsAt - buddyNow) : 0;
+  const buddyTaskProgress = buddyActiveTask ? Math.min(100, Math.max(0, Math.round(((buddyNow - buddyActiveTask.startedAt) / buddyTaskDuration) * 100))) : 0;
+  const buddyReadyActions = buddyPendingTask ? [] : buddyCareActions.filter((action) => buddyNow - (buddyCareState.actions[action.id] ?? 0) >= action.cooldownMs && buddyHasEnergyForAction(buddyCareState.stats.energy, action.id));
+  const buddyReadyCount = buddyReadyActions.length;
+  const buddyPrimaryAction = buddyReadyActions[0] ?? null;
+  const buddyMood = buddyCareState.stats.happy;
+  const buddyEnergy = buddyCareState.stats.energy;
+  const buddyBond = buddyCareState.stats.care;
+  const buddyMultiplier = buddyXpMultiplier(buddyCareState.stats);
+  const buddyStatus = buddyActiveAction ? t("buddy.status.active") : buddyFinishedTask ? t("buddy.status.rewardReady") : buddyReadyCount > 0 ? t("buddy.status.chooseHunt") : t("buddy.status.resting");
+  const buddyMasteryNextXp = buddyEntry ? bugMasteryXpForNextLevel(buddyMastery?.level ?? 1, buddyEntry.rarity) : 1;
+  const buddyMasteryQueuedXp = buddyActiveTask || buddyFinishedTask ? buddyCareState.activeTask?.xp ?? 0 : 0;
+  const buddyMasteryProgressXp = Math.min(buddyMasteryNextXp, (buddyMastery?.xp ?? 0) + buddyMasteryQueuedXp);
+  const buddyMotionStyle = buddyBeeMotionStyle(buddyActiveTask?.action, buddyAnim);
+  const buddyProgress = Math.min(100, Math.round((buddyMasteryProgressXp / buddyMasteryNextXp) * 100));
+  const buddyLastAction = buddyCareState.lastAction ? buddyActionLabel(buddyCareState.lastAction, t) : t("buddy.noAction");
   const dailyMissions = dailyMissionSet(user, { bossProgress, duels });
   const dailyMissionIdsKey = dailyMissions.map((mission) => mission.id).join("|");
   const missions = weeklyMissionSet(user, bugs, { bossProgress, duels, inventory, soloCampaignWave });
@@ -85,17 +155,43 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const selectedLanguage = languages.find((item) => item.value === language) ?? languages[0];
   const lampStatus = bugLampStatus(user);
   const showBugLamp = lampStatus.active || lampStatus.count > 0;
-  const starterBoostDays = starterBoostRemainingDays(user);
 
   useEffect(() => {
     listLeaderboardUsers().then(setUsers);
     listBugs().then(setBugs);
     listBugSmashDuels(user).then(setDuels).catch(() => setDuels([]));
     listBugDexInventory(user).then(setInventory);
+    listBugDexUnlocks(user).then(setUnlockHistory).catch(() => setUnlockHistory([]));
+    listBugMastery(user).then((items) => setMasteryByBugId(Object.fromEntries(items.map((item) => [item.bugId, item])))).catch(() => setMasteryByBugId({}));
     loadSoloCampaignProgress(user.uid).then((progress) => setSoloCampaignWave(progress.wave)).catch(() => setSoloCampaignWave(1));
     loadSoloCampaignBossProgress(user.uid).then(setBossProgress).catch(() => undefined);
+  }, [user.uid]);
+
+  useEffect(() => {
     refreshMovementProgress();
-  }, [movementBoost, user.uid, user.totalPoints]);
+  }, [movementBoost, user.uid]);
+
+  useEffect(() => {
+    buddyAnim.setValue(0);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(buddyAnim, {
+          duration: buddyActiveTask ? 760 : 1700,
+          easing: buddyActiveTask ? Easing.inOut(Easing.quad) : Easing.inOut(Easing.sin),
+          toValue: 1,
+          useNativeDriver: true
+        }),
+        Animated.timing(buddyAnim, {
+          duration: buddyActiveTask ? 760 : 1700,
+          easing: buddyActiveTask ? Easing.inOut(Easing.quad) : Easing.inOut(Easing.sin),
+          toValue: 0,
+          useNativeDriver: true
+        })
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [buddyActiveTask?.action, buddyAnim]);
 
   useEffect(() => {
     fetchClaimedDailyMissionIds(user, dailyMissions.map((mission) => mission.id)).then(setClaimedDailyIds).catch(() => setClaimedDailyIds(new Set()));
@@ -106,6 +202,37 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     claimedWeeklyMissionIds(user, missions.map((mission) => mission.id)).then(setClaimedMissionIds).catch(() => setClaimedMissionIds(new Set()));
     isWeeklyMissionBonusClaimed(user, missions).then(setWeeklyBonusClaimed).catch(() => setWeeklyBonusClaimed(false));
   }, [missionIdsKey, user.uid]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setBuddyNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!buddyFinishedTask || buddyBusyAction) return;
+    const key = `${buddyFinishedTask.action}:${buddyFinishedTask.startedAt}:${buddyFinishedTask.endsAt}`;
+    if (buddyReadyPopupKeyRef.current === key) return;
+    buddyReadyPopupKeyRef.current = key;
+    setBuddyCardOpen(true);
+    setBuddyPopup({ actionId: buddyFinishedTask.action, kind: "ready", xp: buddyFinishedTask.xp });
+  }, [buddyBusyAction, buddyFinishedTask?.action, buddyFinishedTask?.endsAt, buddyFinishedTask?.startedAt, buddyFinishedTask?.xp]);
+
+
+  useEffect(() => {
+    if (!buddyBugIds.length) return;
+    let active = true;
+    const day = localDayId();
+    async function loadHomeBuddyState() {
+      const state = await loadBuddyState(user.uid, buddyBugIds[0], day, { preferCache: true });
+      const nextBuddyId = buddyBugIds.includes(state.bugId) ? state.bugId : buddyBugIds[0];
+      if (!active) return;
+      setBuddyBugId(nextBuddyId);
+      setBuddyCareState(state.care);
+      if (state.bugId !== nextBuddyId) await saveBuddyState(user.uid, { bugId: nextBuddyId, care: state.care, updatedAt: new Date().toISOString() }).catch(() => undefined);
+    }
+    void loadHomeBuddyState();
+    return () => { active = false; };
+  }, [buddyBugIds.join("|"), user.uid]);
 
   async function refreshMovementProgress() {
     try {
@@ -133,7 +260,8 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
       }
 
       const result = await claimMovementRadarBonusesForApp(user.uid, movementBoost);
-      if (result.estimatedKm > 0) await onMovementRegistered?.(result.estimatedKm);
+      if (result.estimatedKm > 0) await onMovementRegistered?.(result.estimatedKm, result.estimatedWeekKm);
+      if (result.estimatedKm > 0) await awardWalkingBugMasteryXp(result.estimatedKm);
       if (result.bugIds.length > 0) {
         onMovementRadarClaimed?.(result.bugIds);
         await claimQueuedRadarBugs().catch(() => []);
@@ -144,6 +272,198 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     } finally {
       setMovementClaiming(false);
     }
+  }
+
+  async function awardWalkingBugMasteryXp(estimatedKm: number) {
+    const fullKmBuckets = Math.floor(Math.max(0, estimatedKm));
+    const targetBuddyId = buddyEntry?.id;
+    if (!fullKmBuckets || !targetBuddyId) return;
+    const day = localDayId();
+    const startBucket = Math.floor((movementProgress?.awardedToday ?? 0) * 1.5);
+    await Promise.all(Array.from({ length: fullKmBuckets }, (_, index) =>
+      awardBugMasteryXp(user, targetBuddyId, 12, "walking", `walking:${day}:${targetBuddyId}:${startBucket + index + 1}`).catch(() => null)
+    ));
+    const items = await listBugMastery(user).catch(() => []);
+    setMasteryByBugId(Object.fromEntries(items.map((item) => [item.bugId, item])));
+  }
+
+  function confirmBuddyCare(actionId: BuddyCareAction) {
+    const action = buddyCareActions.find((item) => item.id === actionId);
+    if (!action) return;
+    const previewStats = applyBuddyCareAction(buddyCareState.stats, actionId);
+    const previewXp = Math.round(action.xp * buddyXpMultiplier(previewStats));
+    setBuddyPopup({ actionId, duration: formatBuddyCooldown(action.cooldownMs), kind: "confirm", xp: previewXp });
+  }
+
+  function showBuddySelectPopup() {
+    if (buddyPendingTask) {
+      setBuddyMessage(t("buddy.message.waitCurrent"));
+      return;
+    }
+    if (!activeSquadEntries.length) {
+      setBuddyMessage(t("buddy.message.needSquad"));
+      return;
+    }
+    setBuddySelectOpen(true);
+  }
+
+  async function selectBuddy(nextId: string) {
+    const day = localDayId();
+    const currentState = buddyCareState.day === day ? buddyCareState : emptyBuddyCareState(day);
+    setBuddyBugId(nextId);
+    setBuddyCareState(currentState);
+    setBuddyActionsOpen(false);
+    setBuddySelectOpen(false);
+    setBuddyMessage(t("buddy.message.selected"));
+    await saveBuddyState(user.uid, { bugId: nextId, care: currentState, updatedAt: new Date().toISOString() }).catch(() => undefined);
+  }
+
+  function showBuddyInfo() {
+    setBuddyPopup({ kind: "info" });
+  }
+
+  function confirmCancelBuddyTask() {
+    const task = buddyCareState.activeTask;
+    if (!task || buddyBusyAction) return;
+    setBuddyPopup({ kind: "cancel" });
+  }
+
+  async function cancelBuddyTask() {
+    const task = buddyCareState.activeTask;
+    const target = buddyEntry;
+    if (!task || !target || buddyBusyAction) return;
+    setBuddyBusyAction("cancel");
+    const nextState: BuddyCareState = {
+      ...buddyCareState,
+      lastXp: 0
+    };
+    delete nextState.activeTask;
+    setBuddyCareState(nextState);
+    setBuddyActionsOpen(false);
+    try {
+      if (task.notificationId) await dismissPhoneNotification(task.notificationId).catch(() => undefined);
+      await saveBuddyState(user.uid, { bugId: target.id, care: nextState, updatedAt: new Date().toISOString() });
+      setBuddyMessage(t("buddy.message.stoppedNoReward", { action: buddyActionLabel(task.action, t) }));
+    } catch {
+      setBuddyMessage(t("buddy.message.stopSaveFailed"));
+    } finally {
+      setBuddyBusyAction("");
+    }
+  }
+
+  async function finishBuddyTask(openOptionsAfterClaim = false) {
+    const task = buddyCareState.activeTask;
+    const target = buddyEntry;
+    if (!task || !target || task.endsAt > Date.now() || buddyBusyAction) return;
+    setBuddyBusyAction("finish");
+    const xp = task.xp;
+    try {
+      if (task.notificationId) await dismissPhoneNotification(task.notificationId).catch(() => undefined);
+      const claim = await claimBuddyTaskReward(user, { bugId: target.id, care: buddyCareState, updatedAt: new Date().toISOString() });
+      const { awardedXp, drop, masteryResult: result } = claim;
+      setBuddyCareState(claim.state.care);
+      if (drop?.updatedUser) onUserUpdated?.(drop.updatedUser);
+      if (drop) {
+        listBugDexInventory(user).then(setInventory).catch(() => undefined);
+        listBugDexUnlocks(user).then(setUnlockHistory).catch(() => undefined);
+      }
+      const items = await listBugMastery(user).catch(() => []);
+      setMasteryByBugId({
+        ...Object.fromEntries(items.map((item) => [item.bugId, item])),
+        [target.id]: result.mastery
+      });
+      setBuddyMessage(result.awarded ? t("buddy.message.doneXp", { action: buddyActionLabel(task.action, t), xp: awardedXp }) : t("buddy.message.capReached"));
+      if (openOptionsAfterClaim) {
+        setBuddyCardOpen(true);
+        setBuddyActionsOpen(true);
+      }
+      setBuddyPopup({
+        actionId: task.action,
+        body: result.awarded ? buddyTaskClaimSummary(task.action, awardedXp, t, drop) : t("buddy.claim.capBody"),
+        drop,
+        kind: "claimed"
+      });
+    } catch (error) {
+      console.error("Buddy claim failed", error);
+      setBuddyCareState(buddyCareState);
+      setBuddyMessage(t("buddy.message.xpSaveFailed", { action: buddyActionLabel(task.action, t) }));
+    } finally {
+      setBuddyBusyAction("");
+    }
+  }
+
+  function closeBuddyPopup() {
+    const popup = buddyPopup;
+    setBuddyPopup(null);
+    if (popup?.kind === "claimed" && popup.drop) onRewardDrop?.(popup.drop);
+  }
+
+  function openBuddyOptionsFromClaim() {
+    closeBuddyPopup();
+    setBuddyCardOpen(true);
+    setBuddyActionsOpen(true);
+  }
+
+  async function handleBuddyCare(actionId: BuddyCareAction) {
+    const action = buddyCareActions.find((item) => item.id === actionId);
+    const target = buddyEntry;
+    if (!action || !target || buddyBusyAction || buddyActiveTask) return;
+    const now = Date.now();
+    const day = localDayId();
+    const currentState = buddyCareState.day === day ? buddyCareState : emptyBuddyCareState(day);
+    const lastAt = currentState.actions[actionId] ?? 0;
+    if (now - lastAt < action.cooldownMs) {
+      setBuddyMessage(t("buddy.message.cooldown", { action: buddyActionLabel(actionId, t), time: formatBuddyCooldown(action.cooldownMs - (now - lastAt)) }));
+      return;
+    }
+    const nextStats = applyBuddyCareAction(currentState.stats, actionId);
+    const xp = Math.round(action.xp * buddyXpMultiplier(nextStats));
+    const activeTask = { action: actionId, endsAt: now + action.cooldownMs, startedAt: now, xp };
+    const nextState: BuddyCareState = {
+      ...currentState,
+      activeTask,
+      actions: { ...currentState.actions, [actionId]: now },
+      day,
+      lastAction: actionId,
+      lastAt: now,
+      lastXp: 0,
+      stats: nextStats
+    };
+    setBuddyBusyAction(actionId);
+    setBuddyCareState(nextState);
+    setBuddyMessage(t("buddy.message.starting", { action: buddyActionLabel(actionId, t) }));
+
+    try {
+      const taskId = `buddy:${day}:${target.id}:${actionId}:${now}`;
+      const notificationId = await scheduleBuddyTaskNotification({
+        actionLabel: buddyActionLabel(actionId, t),
+        body: buddyNotificationBody(actionId, xp, t),
+        endsAt: activeTask.endsAt,
+        taskId,
+        xp
+      }).catch(() => "");
+      const savedState: BuddyCareState = { ...nextState, activeTask: { ...activeTask, notificationId } };
+      setBuddyCareState(savedState);
+      await saveBuddyState(user.uid, { bugId: target.id, care: savedState, updatedAt: new Date().toISOString() });
+      setBuddyActionsOpen(false);
+      setBuddyMessage(t("buddy.message.huntStarted"));
+    } catch {
+      setBuddyMessage(t("buddy.message.syncPending"));
+    } finally {
+      setBuddyBusyAction("");
+    }
+  }
+
+  async function rotateBuddy() {
+    if (!buddyBugIds.length) return;
+    const day = localDayId();
+    const currentState = buddyCareState.day === day ? buddyCareState : emptyBuddyCareState(day);
+    const currentIndex = Math.max(0, buddyBugIds.indexOf(buddyEntry?.id ?? buddyBugId));
+    const nextId = buddyBugIds[(currentIndex + 1) % buddyBugIds.length];
+    setBuddyBugId(nextId);
+    setBuddyCareState(currentState);
+    setBuddyMessage(t("buddy.message.switched"));
+    await saveBuddyState(user.uid, { bugId: nextId, care: currentState, updatedAt: new Date().toISOString() }).catch(() => undefined);
   }
 
   async function handleActivateBugLamp() {
@@ -185,8 +505,12 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     setClaimingDailyMissionId(mission.id);
     setDailyBonusError("");
     try {
-      const updated = await claimDailyMissionReward(user, mission);
-      if (updated) onUserUpdated?.(updated);
+      const result = await claimDailyMissionReward(user, mission);
+      if (result?.user) onUserUpdated?.(result.user);
+      if (result?.drop) {
+        onRewardDrop?.(result.drop);
+        listBugDexInventory(user).then(setInventory).catch(() => undefined);
+      }
       const refreshed = await fetchClaimedDailyMissionIds(user, dailyMissions.map((item) => item.id));
       setClaimedDailyIds(refreshed);
       if (!refreshed.has(mission.id)) setDailyBonusError(t("home.dailyBonusFailed"));
@@ -286,24 +610,24 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
       </View>
       <View style={styles.statsGrid}>
         <View style={styles.statTile}>
-          <Text adjustsFontSizeToFit minimumFontScale={0.72} numberOfLines={1} style={styles.statValue}>{dexCount}/{bugDexEntries.length}</Text>
-          <Text style={styles.statLabel}>BugDex</Text>
+          <Text adjustsFontSizeToFit minimumFontScale={0.72} numberOfLines={1} style={styles.statValue}>{unlockedDexCount}/{bugDexEntries.length}</Text>
+          <Text style={styles.statLabel}>BugDex unlocked</Text>
         </View>
         <View style={styles.statTile}>
-          <Text style={styles.statValue}>#{userRank}</Text>
-          <Text style={styles.statLabel}>{t("home.rank")}</Text>
+          <View style={styles.rankStatLine}>
+            <Text style={styles.rankStatLabel}>Score</Text>
+            <Text style={styles.rankStatValue}>#{scoreRank}</Text>
+          </View>
+          <View style={styles.rankStatLine}>
+            <Text style={styles.rankStatLabel}>Duel</Text>
+            <Text style={styles.rankStatValue}>#{duelRank}</Text>
+          </View>
         </View>
         <View style={styles.statTile}>
           <BugArtImage bugId={tier.bugArtId} fallbackLevel={tier.evolutionLevel} fallbackVariant={tier.insect} size={Math.max(34, tier.bugSize * 0.5)} />
           <Text style={styles.statLabel}>{tr(tier.title)}</Text>
         </View>
       </View>
-      {starterBoostDays > 0 && (
-        <View style={styles.starterBoostCard}>
-          <Text style={styles.starterBoostTitle}>{t("home.starterBoostTitle")}</Text>
-          <Text style={styles.starterBoostText}>{t("home.starterBoostText", { days: starterBoostDays })}</Text>
-        </View>
-      )}
       {movementProgress && (
         <View style={styles.movementCard}>
           <View style={styles.movementHeader}>
@@ -410,23 +734,36 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
       )}
       <Pressable style={styles.rankingCard} onPress={() => onNavigate("leaderboard")}>
         <View style={styles.rankingHeader}>
-          <Text style={styles.sectionTitle}>Top</Text>
+          <Text style={styles.sectionTitle}>Top rankings</Text>
           <BugArtImage bugId="goliathkever" size={38} />
         </View>
-        <View style={styles.rankingList}>
-          {leaders.map((leader, index) => (
-            <View key={leader.uid} style={styles.rankingLine}>
-              <Text style={styles.rank}>{index + 1}</Text>
-              <Text ellipsizeMode="tail" numberOfLines={1} style={styles.rankingName}>{leader.displayName}</Text>
-              <Text style={styles.rankingPoints}>{leader.totalPoints}</Text>
-            </View>
-          ))}
+        <View style={styles.rankingBoards}>
+          <View style={styles.rankingColumn}>
+            <Text style={styles.rankingColumnLabel}>Score rank</Text>
+            {scoreLeaders.map((leader, index) => (
+              <View key={leader.uid} style={styles.rankingLine}>
+                <Text style={styles.rank}>#{index + 1}</Text>
+                <Text ellipsizeMode="tail" numberOfLines={1} style={styles.rankingName}>{leader.displayName}</Text>
+                <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={1} style={styles.rankingPoints}>{leader.totalPoints}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.rankingColumn}>
+            <Text style={styles.rankingColumnLabel}>Duel rank</Text>
+            {duelLeaders.map((leader, index) => (
+              <View key={leader.uid} style={styles.rankingLine}>
+                <Text style={styles.rank}>#{index + 1}</Text>
+                <Text ellipsizeMode="tail" numberOfLines={1} style={styles.rankingName}>{leader.displayName}</Text>
+                <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={1} style={styles.rankingPoints}>{duelRating(leader)}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </Pressable>
       <Pressable style={styles.dexCard} onPress={() => onNavigate("bugdex")}>
         <View style={styles.dexText}>
           <Text style={styles.dexTitle}>BugDex</Text>
-          <Text style={styles.dexMeta}>{dexCount}/{bugDexEntries.length} {t("home.caught")}</Text>
+          <Text style={styles.dexMeta}>{unlockedDexCount}/{bugDexEntries.length} unlocked</Text>
         </View>
         <View style={styles.dexBugs}>
           {Array.from({ length: maxActiveBugSquadSize }).map((_, index) => {
@@ -542,6 +879,257 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
           {weeklyBonusError ? <Text style={styles.missionError}>{weeklyBonusError}</Text> : null}
         </View>
       </View>
+      {buddyFeatureVisible && buddyEntry && buddyMastery && (
+        <View style={styles.buddyCard}>
+          <Pressable style={styles.buddyCollapsedHeader} onPress={() => setBuddyCardOpen((open) => !open)}>
+            <Image accessibilityIgnoresInvertColors resizeMode="contain" source={buddyPetImage} style={styles.buddyCollapsedBee} />
+            <Text style={styles.buddyCollapsedTitle}>{t("buddy.title")}</Text>
+            <Text style={styles.buddyCollapsedChevron}>{buddyCardOpen ? "⌃" : "⌄"}</Text>
+          </Pressable>
+          {buddyCardOpen && (
+            <>
+          <View style={styles.buddyHeader}>
+            <View style={styles.buddyIdleScene}>
+              <View style={[styles.buddyBeePod, buddyActiveTask && styles.buddyBeePodActive]}>
+                <Animated.Image accessibilityIgnoresInvertColors resizeMode="contain" source={buddyPetImage} style={[styles.buddyPetImage, buddyMotionStyle]} />
+                {(buddyActiveTask || buddyFinishedTask) && (
+                  <View style={styles.buddyTimerRing}>
+                    <Text style={styles.buddyTimerText}>{buddyFinishedTask ? "✓" : `${buddyTaskProgress}%`}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.buddyBugPod}>
+                <BugArtImage bugId={buddyEntry.id} size={54} />
+              </View>
+            </View>
+            <View style={styles.buddyText}>
+              <View style={styles.buddyTitleRow}>
+                <Text style={styles.buddyTitle}>{t("buddy.title")}</Text>
+                <View style={styles.buddyTitleActions}>
+                  {activeSquadEntries.length > 1 && (
+                    <Pressable style={styles.buddyHeaderSwitchButton} onPress={showBuddySelectPopup}>
+                      <Text style={styles.buddyHeaderSwitchText}>{t("buddy.switch")}</Text>
+                    </Pressable>
+                  )}
+                  <Pressable style={styles.buddyInfoButton} onPress={showBuddyInfo}>
+                    <Text style={styles.buddyInfoText}>i</Text>
+                  </Pressable>
+                </View>
+              </View>
+              <Text style={styles.buddyName} numberOfLines={1}>{buddyEntry.name}</Text>
+              <Text style={styles.buddyStatus}>{buddyStatus}</Text>
+              <View style={styles.buddyTrack}>
+                <View style={[styles.buddyFill, { width: `${buddyProgress}%` as DimensionValue }]} />
+              </View>
+              <Text style={styles.buddyProgressText}>{t("buddy.progress", { level: buddyMastery.level, current: buddyMasteryProgressXp, next: buddyMasteryNextXp })}{buddyMasteryQueuedXp > 0 ? t("buddy.progressQueued", { xp: buddyMasteryQueuedXp }) : ""}</Text>
+            </View>
+          </View>
+
+          <View style={styles.buddyCompactMeters}>
+            <BuddyMeter kind="happy" label={t("buddy.stat.happy")} value={buddyMood} />
+            <BuddyMeter kind="energy" label={t("buddy.stat.energy")} value={buddyEnergy} />
+            <BuddyMeter kind="care" label={t("buddy.stat.bond")} value={buddyBond} />
+          </View>
+
+          {buddyActiveTask && buddyActiveAction ? (
+            <View style={styles.buddyTaskBox}>
+              <Text style={styles.buddyTaskTitle}>{buddyHuntTitle(buddyActiveTask.action, t)}</Text>
+              <Text style={styles.buddyTaskMeta}>{t("buddy.taskMeta", { time: formatBuddyCooldown(buddyTaskRemaining), xp: buddyActiveTask.xp })} · <Text style={[styles.buddyRewardStars, { color: buddyRewardStarColor(buddyActiveTask.action) }]}>{buddyRewardStarsText(buddyActiveTask.action)}</Text></Text>
+              <View style={styles.buddyTaskTrack}>
+                <View style={[styles.buddyTaskFill, { width: `${buddyTaskProgress}%` as DimensionValue }]} />
+              </View>
+              <Pressable disabled={Boolean(buddyBusyAction)} style={styles.buddyCancelButton} onPress={confirmCancelBuddyTask}>
+                <Text style={styles.buddyCancelText}>{buddyBusyAction === "cancel" ? t("buddy.stopping") : t("buddy.stop")}</Text>
+              </Pressable>
+            </View>
+          ) : buddyFinishedTask ? (
+            <Pressable disabled={Boolean(buddyBusyAction)} style={styles.buddyDropdownButton} onPress={() => void finishBuddyTask()}>
+              <Text style={styles.buddyDropdownText}>{t("buddy.claimReward")}</Text>
+              <Text style={styles.buddyDropdownMeta}>{t("buddy.masteryReady", { xp: buddyFinishedTask.xp })}</Text>
+            </Pressable>
+          ) : (
+            <Pressable disabled={!buddyCanStartHunt} style={[styles.buddyDropdownButton, !buddyCanStartHunt && styles.buddyDropdownButtonDisabled]} onPress={() => setBuddyActionsOpen((open) => !open)}>
+              <Text style={styles.buddyDropdownText}>{buddyActionsOpen ? t("buddy.closeHunts") : t("buddy.startHunt")}</Text>
+              <Text style={styles.buddyDropdownMeta}>{t("buddy.chooseHunt")}</Text>
+            </Pressable>
+          )}
+
+          {buddyActionsOpen && !buddyPendingTask && (
+            <View style={styles.buddyDropdownPanel}>
+              {buddyCareActions.map((action) => {
+                const lastAt = buddyCareState.actions[action.id] ?? 0;
+                const cooldownReady = buddyNow - lastAt >= action.cooldownMs;
+                const enoughEnergy = buddyHasEnergyForAction(buddyCareState.stats.energy, action.id);
+                const ready = cooldownReady && enoughEnergy;
+                const disabledReason = buddyActionDisabledReason(action.id, buddyCareState.stats.energy, cooldownReady, t);
+                const xpReward = Math.round(action.xp * buddyXpMultiplier(applyBuddyCareAction(buddyCareState.stats, action.id)));
+                return (
+                  <Pressable key={action.id} disabled={Boolean(buddyBusyAction) || !ready} style={[styles.buddyDropdownAction, !ready && styles.buddyActionDisabled]} onPress={() => confirmBuddyCare(action.id)}>
+                    <Image source={buddyStateImageForAction(action.id)} style={styles.buddyHuntIcon} />
+                    <View style={styles.buddyChoiceText}>
+                      <Text style={styles.buddyChoiceTitle}>{buddyBusyAction === action.id ? t("buddy.busy") : buddyActionLabel(action.id, t)}</Text>
+                      <Text style={styles.buddyChoiceMeta}>{ready ? t("buddy.choiceMeta", { time: formatBuddyCooldown(action.cooldownMs), xp: xpReward }) : disabledReason}</Text>
+                      <BuddyActionStatChips action={action.id} />
+                    </View>
+                    <Text style={[styles.buddyRewardStars, { color: buddyRewardStarColor(action.id) }]}>{buddyRewardStarsText(action.id)}</Text>
+                  </Pressable>
+                );
+              })}
+              <View style={styles.buddyMasteryMini}>
+                <BugArtImage bugId={buddyEntry.id} size={34} />
+                <View style={styles.buddyMasteryMiniText}>
+                  <Text style={styles.buddyMasteryMiniTitle}>{t("buddy.miniTitle", { level: buddyMastery.level, multiplier: buddyMultiplier })}</Text>
+                  <Text style={styles.buddyMasteryMiniMeta} numberOfLines={1}>{buddyLastAction}{buddyCareState.lastXp ? t("buddy.lastXp", { xp: buddyCareState.lastXp }) : ""}</Text>
+                </View>
+              </View>
+              {buddyBugIds.length > 1 && (
+                <Pressable style={styles.buddySwitchButton} onPress={showBuddySelectPopup}>
+                  <Text style={styles.buddySwitchText}>{t("buddy.switch")}</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+          {!!buddyMessage && <Text style={styles.buddyMessage}>{buddyMessage}</Text>}
+          <Modal animationType="fade" transparent visible={Boolean(buddyPopup)} onRequestClose={closeBuddyPopup}>
+            <View style={styles.buddySelectOverlay}>
+              <View style={styles.buddyPopupModal}>
+                {buddyPopup?.kind === "info" && (
+                  <>
+                    <View style={styles.buddyPopupHero}>
+                      <Image accessibilityIgnoresInvertColors resizeMode="contain" source={buddyPetImage} style={styles.buddyPopupIcon} />
+                      <View style={styles.buddyPopupHeroText}>
+                        <Text style={styles.buddyPopupKicker}>{t("buddy.title")}</Text>
+                        <Text style={styles.buddyPopupTitle}>{t("buddy.info.title")}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.buddyPopupBody}>{t("buddy.info.body")}</Text>
+                    <Pressable style={styles.buddyPopupPrimary} onPress={closeBuddyPopup}>
+                      <Text style={styles.buddyPopupPrimaryText}>{t("common.ok")}</Text>
+                    </Pressable>
+                  </>
+                )}
+                {buddyPopup?.kind === "confirm" && (
+                  <>
+                    <View style={styles.buddyPopupHero}>
+                      <Image accessibilityIgnoresInvertColors resizeMode="contain" source={buddyStateImageForAction(buddyPopup.actionId)} style={styles.buddyPopupIcon} />
+                      <View style={styles.buddyPopupHeroText}>
+                        <Text style={styles.buddyPopupKicker}>{buddyHuntTitle(buddyPopup.actionId, t)}</Text>
+                        <Text style={styles.buddyPopupTitle}>{buddyActionLabel(buddyPopup.actionId, t)}</Text>
+                      </View>
+                      <Text style={[styles.buddyPopupStars, { color: buddyRewardStarColor(buddyPopup.actionId) }]}>{buddyRewardStarsText(buddyPopup.actionId)}</Text>
+                    </View>
+                    <View style={styles.buddyPopupDetails}>
+                      <Text style={styles.buddyPopupBody}>{buddyActionShortText(buddyPopup.actionId, t)}</Text>
+                      <Text style={styles.buddyPopupLine}>{t("buddy.confirm.time", { duration: buddyPopup.duration })}</Text>
+                      <Text style={styles.buddyPopupLine}>{t("buddy.confirm.reward", { xp: buddyPopup.xp })}</Text>
+                      <Text style={styles.buddyPopupLine}>{t("buddy.confirm.stats", { stats: buddyActionImpact(buddyPopup.actionId, t) })}</Text>
+                      <Text style={styles.buddyPopupLine}>{t("buddy.confirm.bugdex", { reward: buddyActionRewardText(buddyPopup.actionId, t) })}</Text>
+                    </View>
+                    <View style={styles.buddyPopupActions}>
+                      <Pressable style={styles.buddyPopupSecondary} onPress={closeBuddyPopup}>
+                        <Text style={styles.buddyPopupSecondaryText}>{t("common.cancel")}</Text>
+                      </Pressable>
+                      <Pressable style={styles.buddyPopupPrimary} onPress={() => { const actionId = buddyPopup.actionId; closeBuddyPopup(); void handleBuddyCare(actionId); }}>
+                        <Text style={styles.buddyPopupPrimaryText}>{t("buddy.start")}</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+                {buddyPopup?.kind === "cancel" && (
+                  <>
+                    <Text style={styles.buddyPopupTitle}>{t("buddy.cancel.title")}</Text>
+                    <Text style={styles.buddyPopupBody}>{t("buddy.cancel.body", { action: buddyCareState.activeTask ? buddyActionLabel(buddyCareState.activeTask.action, t) : "" })}</Text>
+                    <View style={styles.buddyPopupActions}>
+                      <Pressable style={styles.buddyPopupSecondary} onPress={closeBuddyPopup}>
+                        <Text style={styles.buddyPopupSecondaryText}>{t("buddy.cancel.keep")}</Text>
+                      </Pressable>
+                      <Pressable style={styles.buddyPopupDanger} onPress={() => { closeBuddyPopup(); void cancelBuddyTask(); }}>
+                        <Text style={styles.buddyPopupDangerText}>{t("buddy.cancel.stop")}</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+                {buddyPopup?.kind === "ready" && (
+                  <>
+                    <View style={styles.buddyPopupHero}>
+                      <Image accessibilityIgnoresInvertColors resizeMode="contain" source={buddyStateImageForAction(buddyPopup.actionId)} style={styles.buddyPopupIcon} />
+                      <View style={styles.buddyPopupHeroText}>
+                        <Text style={styles.buddyPopupKicker}>{t("buddy.status.rewardReady")}</Text>
+                        <Text style={styles.buddyPopupTitle}>{t("buddy.ready.title", { action: buddyActionLabel(buddyPopup.actionId, t) })}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.buddyPopupBody}>{t("buddy.ready.body", { xp: buddyPopup.xp, reward: buddyActionRewardText(buddyPopup.actionId, t) })}</Text>
+                    <View style={styles.buddyPopupActionsStack}>
+                      <Pressable disabled={Boolean(buddyBusyAction)} style={styles.buddyPopupPrimary} onPress={() => { closeBuddyPopup(); void finishBuddyTask(); }}>
+                        <Text style={styles.buddyPopupPrimaryText}>{buddyBusyAction === "finish" ? "..." : t("buddy.claimReward")}</Text>
+                      </Pressable>
+                      <Pressable disabled={Boolean(buddyBusyAction)} style={styles.buddyPopupSecondary} onPress={() => { closeBuddyPopup(); void finishBuddyTask(true); }}>
+                        <Text style={styles.buddyPopupSecondaryText}>{t("buddy.claimAndChoose")}</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+                {buddyPopup?.kind === "claimed" && (
+                  <>
+                    <Text style={styles.buddyPopupKicker}>{t("buddy.claim.title", { action: buddyActionLabel(buddyPopup.actionId, t) })}</Text>
+                    <Text style={styles.buddyPopupTitle}>{buddyActionAnimationLabel(buddyPopup.actionId, t)}</Text>
+                    <Text style={styles.buddyPopupBody}>{buddyPopup.body}</Text>
+                    <View style={styles.buddyPopupActionsStack}>
+                      <Pressable style={styles.buddyPopupPrimary} onPress={closeBuddyPopup}>
+                        <Text style={styles.buddyPopupPrimaryText}>{t("common.ok")}</Text>
+                      </Pressable>
+                      <Pressable style={styles.buddyPopupSecondary} onPress={openBuddyOptionsFromClaim}>
+                        <Text style={styles.buddyPopupSecondaryText}>{t("buddy.chooseNextHunt")}</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+              </View>
+            </View>
+          </Modal>
+          <Modal animationType="fade" transparent visible={buddySelectOpen} onRequestClose={() => setBuddySelectOpen(false)}>
+            <View style={styles.buddySelectOverlay}>
+              <View style={styles.buddySelectModal}>
+                <View style={styles.buddySelectHeader}>
+                  <View>
+                    <Text style={styles.buddySelectTitle}>{t("buddy.select.title")}</Text>
+                    <Text style={styles.buddySelectMeta}>{t("buddy.select.meta")}</Text>
+                  </View>
+                  <Pressable style={styles.buddySelectClose} onPress={() => setBuddySelectOpen(false)}>
+                    <Text style={styles.buddySelectCloseText}>x</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.buddySelectGrid}>
+                  {activeSquadEntries.slice(0, maxActiveBugSquadSize).map((entry) => {
+                    const selected = buddyEntry.id === entry.id;
+                    const mastery = masteryByBugId[entry.id] ?? normalizeBugMastery(entry.id);
+                    const skills = bugMasteryUnlockedSkills(mastery.role, mastery.level).filter((skill) => skill.kind !== "passive");
+                    const nextLevel = bugMasteryNextUnlockLevel(mastery.level);
+                    const bonus = skills.length ? skills.map((skill) => t(`bugdex.mastery.skill.${skill.id}`)).slice(-2).join(", ") : t("buddy.noBonus");
+                    const next = nextLevel ? t("home.nextLevel", { level: nextLevel }) : t("buddy.maxMastery");
+                    return (
+                      <Pressable key={entry.id} style={[styles.buddySelectCard, selected && styles.buddySelectCardActive]} onPress={() => void selectBuddy(entry.id)}>
+                        <View style={[styles.buddySelectBugWrap, { borderColor: rarityColors[entry.rarity] }]}>
+                          <BugArtImage bugId={entry.id} size={72} />
+                        </View>
+                        <View style={styles.buddySelectTextBlock}>
+                          <Text style={styles.buddySelectName} numberOfLines={1}>{entry.name}</Text>
+                          <Text style={styles.buddySelectLevel}>{t("buddy.select.level", { level: mastery.level, rarity: entry.rarity })}</Text>
+                          <Text style={styles.buddySelectBonus} numberOfLines={2}>{bonus}</Text>
+                          <Text style={styles.buddySelectNext}>{next}</Text>
+                        </View>
+                        {selected && <Text style={styles.buddySelectActivePill}>{t("buddy.select.active")}</Text>}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          </Modal>
+            </>
+          )}
+        </View>
+      )}
       <Pressable accessibilityRole="button" accessibilityLabel={t("home.wikiCta")} style={styles.wikiCard} onPress={openBugBaasWiki}>
         <Image resizeMode="cover" source={wikiButtonImage} style={styles.wikiImage} />
         <View style={styles.wikiText}>
@@ -570,6 +1158,170 @@ function formatKm(km: number): string {
 
 function movementGoalLabel(goal: MovementRadarProgress["goals"][number], t: (key: string) => string): string {
   return t(`movement.goal.${goal.id}`);
+}
+
+function localDayId(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+function formatBuddyCooldown(ms: number) {
+  const minutes = Math.max(1, Math.ceil(ms / 60000));
+  if (minutes >= 60) return `${Math.ceil(minutes / 60)}h`;
+  return `${minutes}m`;
+}
+
+function buddyActionLabel(action: BuddyCareAction, t: Translate) {
+  return t(`buddy.action.${action}.label`);
+}
+
+function buddyActionAnimationLabel(action: BuddyCareAction, t: Translate) {
+  return t(`buddy.action.${action}.animation`);
+}
+
+function buddyHuntTitle(action: BuddyCareAction, t: Translate) {
+  return t(`buddy.action.${action}.huntTitle`);
+}
+
+function buddyStateImageForAction(action: BuddyCareAction) {
+  if (action === "feed") return buddyStateNectarImage;
+  if (action === "play") return buddyStateLeafImage;
+  if (action === "train") return buddyStateDigImage;
+  if (action === "clean") return buddyStateCleanImage;
+  return buddyStateSwarmImage;
+}
+
+function buddyBeeMotionStyle(action: BuddyCareAction | undefined, anim: Animated.Value) {
+  const floatY = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
+  const shakeX = anim.interpolate({ inputRange: [0, 1], outputRange: [-3, 3] });
+  const digY = anim.interpolate({ inputRange: [0, 1], outputRange: [2, -5] });
+  const rotate = anim.interpolate({ inputRange: [0, 1], outputRange: ["-6deg", "6deg"] });
+  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.06] });
+  if (action === "play") return { transform: [{ translateX: shakeX }, { rotate }] };
+  if (action === "train") return { transform: [{ translateY: digY }, { scale }] };
+  if (action === "clean") return { transform: [{ rotate }, { scale }] };
+  if (action === "adventure") return { transform: [{ translateY: floatY }, { translateX: shakeX }, { rotate }] };
+  return { transform: [{ translateY: floatY }, { scale }] };
+}
+
+function buddyStateBubbleMotionStyle(action: BuddyCareAction | undefined, anim: Animated.Value) {
+  const bubbleY = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+  const bubbleScale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] });
+  const bubbleRotate = anim.interpolate({ inputRange: [0, 1], outputRange: ["-4deg", "4deg"] });
+  return { transform: [{ translateY: bubbleY }, { scale: bubbleScale }, { rotate: action ? bubbleRotate : "0deg" }] };
+}
+
+function buddyActionConfirmText(action: BuddyCareAction, xp: number, duration: string, t: Translate) {
+  return [
+    buddyActionShortText(action, t),
+    t("buddy.confirm.time", { duration }),
+    t("buddy.confirm.reward", { xp }),
+    t("buddy.confirm.stats", { stats: buddyActionImpact(action, t) }),
+    t("buddy.confirm.bugdex", { reward: buddyActionRewardText(action, t) }),
+    t("buddy.confirm.busy")
+  ].join("\n");
+}
+
+function buddyActionShortText(action: BuddyCareAction, t: Translate) {
+  return t(`buddy.action.${action}.short`);
+}
+
+function buddyActionImpact(action: BuddyCareAction, t: Translate) {
+  return t(`buddy.action.${action}.impact`);
+}
+
+function buddyActionRewardText(action: BuddyCareAction, t: Translate) {
+  if (action === "adventure") return t("buddy.reward.epic");
+  if (action === "train" && buddyActionRewardCount(action) > 1) return t("buddy.reward.rareDouble");
+  if (action === "play" || action === "train") return t("buddy.reward.rare");
+  return t("buddy.reward.common");
+}
+
+function buddyEnergyCost(action: BuddyCareAction) {
+  const config = buddyCareActions.find((item) => item.id === action);
+  return Math.max(0, -(config?.stats.energy ?? 0));
+}
+
+function buddyHasEnergyForAction(energy: number, action: BuddyCareAction) {
+  return energy >= buddyEnergyCost(action);
+}
+
+function buddyActionDisabledReason(action: BuddyCareAction, energy: number, cooldownReady: boolean, t: Translate) {
+  const energyCost = buddyEnergyCost(action);
+  if (!cooldownReady) return t("buddy.disabled.cooldown");
+  if (energy < energyCost) return t("buddy.disabled.energy", { energy: Math.round(energy), cost: energyCost });
+  return t("buddy.disabled.locked");
+}
+
+function buddyRewardStarsText(action: BuddyCareAction) {
+  if (action === "adventure") return "★★★";
+  if (action === "play" || action === "train") return "★★";
+  return "★";
+}
+
+function buddyRewardStarColor(action: BuddyCareAction) {
+  if (action === "adventure") return rarityColors.Episch;
+  if (action === "play" || action === "train") return rarityColors.Zeldzaam;
+  return rarityColors.Gewoon;
+}
+
+function buddyNotificationBody(action: BuddyCareAction, xp: number, t: Translate) {
+  return t("buddy.notification.body", { action: buddyActionLabel(action, t), xp });
+}
+
+function buddyTaskFinishedSummary(action: BuddyCareAction, xp: number, t: Translate) {
+  return t("buddy.finished.summary", { animation: buddyActionAnimationLabel(action, t), xp, reward: buddyActionRewardText(action, t) });
+}
+
+function buddyTaskClaimSummary(action: BuddyCareAction, xp: number, t: Translate, drop?: BugDexDropResult | null) {
+  const bugDexReward = drop?.rewardType === "bug" ? `${drop.entry.rarity}: ${drop.entry.name}` : buddyActionRewardText(action, t);
+  return t("buddy.claim.summary", { animation: buddyActionAnimationLabel(action, t), xp, reward: bugDexReward, stats: buddyActionImpact(action, t) });
+}
+
+
+type BuddyStatKind = "care" | "energy" | "happy";
+
+function buddyStatIconSource(kind: BuddyStatKind) {
+  if (kind === "energy") return buddyEnergyImage;
+  if (kind === "care") return buddyBondImage;
+  return buddyHappyImage;
+}
+
+function BuddyStatIcon({ kind, size = 24 }: { kind: BuddyStatKind; size?: number }) {
+  return <Image source={buddyStatIconSource(kind)} style={[styles.buddyStatIconImage, { height: size, width: size }]} />;
+}
+
+function BuddyMeter({ kind, value }: { kind: BuddyStatKind; label: string; value: number }) {
+  const safeValue = Math.max(0, Math.min(100, Math.round(value)));
+  return (
+    <View style={styles.buddyMeterRow}>
+      <BuddyStatIcon kind={kind} />
+      <View style={styles.buddyMeterTrack}>
+        <View style={[styles.buddyMeterFill, { width: `${safeValue}%` as DimensionValue }]} />
+      </View>
+      <Text style={styles.buddyMeterValue}>{safeValue}</Text>
+    </View>
+  );
+}
+
+function BuddyActionStatChips({ action }: { action: BuddyCareAction }) {
+  const config = buddyCareActions.find((item) => item.id === action);
+  const stats = ([
+    { kind: "happy", value: config?.stats.happy ?? 0 },
+    { kind: "energy", value: config?.stats.energy ?? 0 },
+    { kind: "care", value: config?.stats.care ?? 0 }
+  ] as Array<{ kind: BuddyStatKind; value: number }>).filter((item) => item.value !== 0);
+  return (
+    <View style={styles.buddyStatChips}>
+      {stats.map((item) => (
+        <View key={item.kind} style={[styles.buddyStatChip, item.value < 0 ? styles.buddyStatChipCost : styles.buddyStatChipGain]}>
+          <BuddyStatIcon kind={item.kind} size={17} />
+          <Text style={[styles.buddyStatChipText, item.value < 0 && styles.buddyStatChipTextCost]}>{item.value > 0 ? "+" : "-"}</Text>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 function ProfileIcon() {
@@ -744,6 +1496,23 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: "center"
   },
+  rankStatLabel: {
+    color: "#52665d",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  rankStatLine: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "space-between",
+    width: "100%"
+  },
+  rankStatValue: {
+    color: "#102018",
+    fontSize: 16,
+    fontWeight: "900"
+  },
   starterBoostCard: {
     backgroundColor: "#fff7d6",
     borderColor: "#d7bd57",
@@ -853,6 +1622,1023 @@ const styles = StyleSheet.create({
   movementClaimText: {
     color: "#ffffff",
     fontSize: 12,
+    fontWeight: "900"
+  },
+  buddyAction: {
+    alignItems: "center",
+    backgroundColor: "#fdfefb",
+    borderColor: "rgba(215,189,87,0.7)",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 58,
+    padding: 6
+  },
+  buddyActionDisabled: {
+    backgroundColor: "#dfe4de",
+    borderColor: "rgba(82,102,93,0.26)",
+    opacity: 0.58
+  },
+  buddyActionIcon: {
+    color: "#d7bd57",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  buddyActionMeta: {
+    color: "#52665d",
+    fontSize: 9,
+    fontWeight: "900",
+    marginTop: 1
+  },
+  buddyActionText: {
+    color: "#102018",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  buddyActions: {
+    flexDirection: "row",
+    gap: 6
+  },
+  buddyChoiceCard: {
+    alignItems: "center",
+    backgroundColor: "#fdfefb",
+    borderColor: "rgba(215,189,87,0.42)",
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    minHeight: 62,
+    padding: 8,
+    width: "48%"
+  },
+  buddyChoiceCardReady: {
+    borderColor: "#69c88d",
+    borderWidth: 2
+  },
+  buddyChoiceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  buddyChoiceMeta: {
+    color: "#52665d",
+    fontSize: 9,
+    fontWeight: "900"
+  },
+  buddyChoiceText: {
+    flex: 1,
+    minWidth: 0
+  },
+  buddyChoiceTitle: {
+    color: "#102018",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  buddyRewardStars: {
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+    minWidth: 32,
+    textAlign: "right"
+  },
+  buddyStatIconImage: {
+    resizeMode: "contain"
+  },
+  buddyStatChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 4
+  },
+  buddyStatChip: {
+    alignItems: "center",
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 2,
+    minWidth: 36,
+    paddingHorizontal: 5,
+    paddingVertical: 2
+  },
+  buddyStatChipGain: {
+    backgroundColor: "rgba(21,114,79,0.14)",
+    borderColor: "rgba(21,114,79,0.32)",
+    borderWidth: 1
+  },
+  buddyStatChipCost: {
+    backgroundColor: "rgba(156,47,47,0.13)",
+    borderColor: "rgba(156,47,47,0.32)",
+    borderWidth: 1
+  },
+  buddyStatChipIcon: {
+    height: 15,
+    width: 15
+  },
+  buddyStatChipText: {
+    color: "#15724f",
+    fontSize: 10,
+    fontWeight: "900"
+  },
+  buddyStatChipTextCost: {
+    color: "#9c2f2f"
+  },
+  buddyArtWrap: {
+    alignItems: "center",
+    backgroundColor: "rgba(105,200,141,0.14)",
+    borderRadius: 999,
+    height: 78,
+    justifyContent: "center",
+    width: 78
+  },
+  buddyBeePod: {
+    alignItems: "center",
+    backgroundColor: "rgba(105,200,141,0.14)",
+    borderColor: "rgba(249,251,247,0.18)",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 72,
+    justifyContent: "center",
+    width: 72
+  },
+  buddyBeePodActive: {
+    borderColor: "#d7bd57",
+    borderWidth: 2
+  },
+  buddyBugPod: {
+    alignItems: "center",
+    backgroundColor: "rgba(249,251,247,0.10)",
+    borderColor: "rgba(215,189,87,0.34)",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: "center",
+    width: 48
+  },
+  buddyHeroBug: {
+    bottom: 5,
+    position: "absolute",
+    right: -2,
+    transform: [{ scale: 0.72 }]
+  },
+  buddyCancelButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderColor: "rgba(255,255,255,0.24)",
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 8
+  },
+  buddyCancelText: {
+    color: "#f9fbf7",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  buddyCard: {
+    backgroundColor: "#102018",
+    borderColor: "rgba(215,189,87,0.72)",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 6,
+    marginBottom: 8,
+    overflow: "hidden",
+    padding: 8
+  },
+  buddyCollapsedBee: {
+    height: 38,
+    width: 38
+  },
+  buddyCollapsedChevron: {
+    color: "#f8fafc",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  buddyCollapsedHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    minHeight: 48
+  },
+  buddyCollapsedTitle: {
+    color: "#f8fafc",
+    flex: 1,
+    fontSize: 17,
+    fontWeight: "900"
+  },
+  buddyFill: {
+    backgroundColor: "#22c55e",
+    borderRadius: 999,
+    height: "100%"
+  },
+  buddyGlow: {
+    borderRadius: 999,
+    height: 66,
+    opacity: 0.22,
+    position: "absolute",
+    width: 66
+  },
+  buddyFooterRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8
+  },
+  buddyHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 7
+  },
+  buddyHeaderSwitchButton: {
+    backgroundColor: "#d7bd57",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  buddyHeaderSwitchText: {
+    color: "#102018",
+    fontSize: 9,
+    fontWeight: "900"
+  },
+  buddyIdleScene: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 2
+  },
+  buddyControlBadge: {
+    backgroundColor: "#d7bd57",
+    borderRadius: 999,
+    color: "#102018",
+    fontSize: 10,
+    fontWeight: "900",
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  buddyControlHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  buddyInfoButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(249,251,247,0.18)",
+    borderColor: "rgba(249,251,247,0.32)",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 22,
+    justifyContent: "center",
+    width: 22
+  },
+  buddyInfoText: {
+    color: "#f9fbf7",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  buddyControlPanel: {
+    backgroundColor: "rgba(249,251,247,0.08)",
+    borderColor: "rgba(215,189,87,0.32)",
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 7,
+    padding: 10
+  },
+  buddyMessage: {
+    color: "#d7bd57",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  buddyHelpButton: {
+    backgroundColor: "rgba(249,251,247,0.14)",
+    borderColor: "rgba(249,251,247,0.28)",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 7
+  },
+  buddyHelpButtonText: {
+    color: "#f9fbf7",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  buddyHelpClose: {
+    alignItems: "center",
+    backgroundColor: "#d7bd57",
+    borderRadius: 10,
+    marginTop: 12,
+    paddingVertical: 11
+  },
+  buddyHelpCloseText: {
+    color: "#102018",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  buddyHelpLead: {
+    color: "#dce9df",
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 18
+  },
+  buddyHelpModal: {
+    backgroundColor: "#102018",
+    borderColor: "#d7bd57",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    marginHorizontal: 18,
+    padding: 16
+  },
+  buddyHelpNote: {
+    color: "#69c88d",
+    fontSize: 12,
+    fontWeight: "900",
+    lineHeight: 17
+  },
+  buddyHelpOverlay: {
+    backgroundColor: "rgba(0,0,0,0.62)",
+    flex: 1,
+    justifyContent: "center"
+  },
+  buddyHelpStep: {
+    color: "#f9fbf7",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 18
+  },
+  buddyHelpSteps: {
+    backgroundColor: "rgba(249,251,247,0.08)",
+    borderRadius: 12,
+    gap: 4,
+    padding: 10
+  },
+  buddyHelpTitle: {
+    color: "#d7bd57",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  buddyLogBox: {
+    backgroundColor: "rgba(105,200,141,0.12)",
+    borderColor: "rgba(105,200,141,0.35)",
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 3,
+    padding: 9
+  },
+  buddyLogText: {
+    color: "#dce9df",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 16
+  },
+  buddyLogTitle: {
+    color: "#69c88d",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  buddyLoopBox: {
+    backgroundColor: "rgba(249,251,247,0.08)",
+    borderColor: "rgba(215,189,87,0.32)",
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 6,
+    padding: 9
+  },
+  buddyLoopStep: {
+    color: "#dce9df",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  buddyLoopSteps: {
+    gap: 3
+  },
+  buddyLoopTitle: {
+    color: "#d7bd57",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  buddyCompactMeters: {
+    gap: 4
+  },
+  buddyDropdownAction: {
+    alignItems: "center",
+    backgroundColor: "#f9fbf7",
+    borderColor: "rgba(215,189,87,0.28)",
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  buddyHuntIcon: {
+    height: 34,
+    width: 34
+  },
+  buddyDropdownButton: {
+    alignItems: "center",
+    backgroundColor: "#d7bd57",
+    borderColor: "rgba(249,251,247,0.24)",
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  buddyDropdownButtonDisabled: {
+    opacity: 0.55
+  },
+  buddyDropdownMeta: {
+    color: "#294034",
+    fontSize: 10,
+    fontWeight: "900"
+  },
+  buddyDropdownPanel: {
+    gap: 5
+  },
+  buddyDropdownText: {
+    color: "#102018",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  buddyTaskBox: {
+    backgroundColor: "rgba(215,189,87,0.13)",
+    borderColor: "rgba(215,189,87,0.38)",
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 5,
+    padding: 8
+  },
+  buddyTaskFill: {
+    backgroundColor: "#d7bd57",
+    borderRadius: 999,
+    height: "100%"
+  },
+  buddyTaskMeta: {
+    color: "#dce9df",
+    fontSize: 10,
+    fontWeight: "800"
+  },
+  buddyTaskTitle: {
+    color: "#f9fbf7",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  buddyTaskTrack: {
+    backgroundColor: "rgba(249,251,247,0.18)",
+    borderRadius: 999,
+    height: 6,
+    overflow: "hidden"
+  },
+  buddyMasteryMini: {
+    alignItems: "center",
+    backgroundColor: "rgba(249,251,247,0.12)",
+    borderColor: "rgba(215,189,87,0.35)",
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    padding: 6
+  },
+  buddyMasteryMiniMeta: {
+    color: "#dce9df",
+    fontSize: 10,
+    fontWeight: "800"
+  },
+  buddyMasteryMiniText: {
+    flex: 1,
+    minWidth: 0
+  },
+  buddyMasteryMiniTitle: {
+    color: "#d7bd57",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  buddyMeta: {
+    color: "#dce9df",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 2
+  },
+  buddyMissionLabel: {
+    color: "#69c88d",
+    fontSize: 10,
+    fontWeight: "900"
+  },
+  buddyMissionRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 6
+  },
+  buddyMissionStars: {
+    color: "#d7bd57",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 1
+  },
+  buddyPrimaryAction: {
+    borderRadius: 12,
+    overflow: "hidden"
+  },
+  buddyPrimaryIcon: {
+    marginRight: 8
+  },
+  buddyPrimaryImage: {
+    borderRadius: 12
+  },
+  buddyPrimaryImageWrap: {
+    alignItems: "center",
+    flexDirection: "row",
+    minHeight: 58,
+    paddingHorizontal: 12,
+    paddingVertical: 9
+  },
+  buddyPrimaryLabel: {
+    color: "#102018",
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
+  buddyPrimaryText: {
+    color: "#102018",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  buddyPrimaryTextWrap: {
+    flex: 1
+  },
+  buddyPetImage: {
+    height: 60,
+    width: 60
+  },
+  buddyProgressText: {
+    color: "#dce9df",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 3
+  },
+  buddyRestBox: {
+    backgroundColor: "rgba(105,200,141,0.12)",
+    borderColor: "rgba(105,200,141,0.35)",
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 10
+  },
+  buddyRestText: {
+    color: "#dce9df",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 2
+  },
+  buddyRestTitle: {
+    color: "#69c88d",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+
+  buddySceneHint: {
+    backgroundColor: "rgba(215,189,87,0.14)",
+    borderColor: "rgba(215,189,87,0.32)",
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 9
+  },
+  buddySceneHintText: {
+    color: "#f9fbf7",
+    fontSize: 12,
+    fontWeight: "900",
+    lineHeight: 17
+  },
+  buddySparkOne: {
+    backgroundColor: "#d7bd57",
+    borderRadius: 999,
+    height: 8,
+    left: 15,
+    opacity: 0.9,
+    position: "absolute",
+    top: 16,
+    width: 8
+  },
+  buddySparkThree: {
+    backgroundColor: "#f9fbf7",
+    borderRadius: 999,
+    bottom: 17,
+    height: 6,
+    opacity: 0.85,
+    position: "absolute",
+    right: 18,
+    width: 6
+  },
+  buddySparkTwo: {
+    backgroundColor: "#69c88d",
+    borderRadius: 999,
+    height: 10,
+    opacity: 0.8,
+    position: "absolute",
+    right: 13,
+    top: 29,
+    width: 10
+  },
+  buddyStatus: {
+    color: "#69c88d",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 1
+  },
+  buddyMeterFill: {
+    backgroundColor: "#69c88d",
+    borderRadius: 999,
+    height: "100%"
+  },
+  buddyMeterIcon: {
+    height: 24,
+    width: 24
+  },
+  buddyMeterRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 5
+  },
+  buddyMeterTrack: {
+    backgroundColor: "rgba(249,251,247,0.16)",
+    borderRadius: 999,
+    flex: 1,
+    height: 6,
+    overflow: "hidden"
+  },
+  buddyMeterValue: {
+    color: "#d7bd57",
+    fontSize: 10,
+    fontWeight: "900",
+    textAlign: "right",
+    width: 24
+  },
+  buddyName: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  buddySwitchButton: {
+    backgroundColor: "#d7bd57",
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 7
+  },
+  buddySwitchText: {
+    color: "#102018",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  buddySelectOverlay: {
+    backgroundColor: "rgba(0,0,0,0.62)",
+    flex: 1,
+    justifyContent: "center",
+    padding: 18
+  },
+  buddyPopupModal: {
+    backgroundColor: "#102018",
+    borderColor: "#d7bd57",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 12,
+    padding: 16
+  },
+  buddyPopupHero: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10
+  },
+  buddyPopupIcon: {
+    backgroundColor: "rgba(249,251,247,0.1)",
+    borderColor: "rgba(215,189,87,0.38)",
+    borderRadius: 18,
+    borderWidth: 1,
+    height: 58,
+    width: 58
+  },
+  buddyPopupHeroText: {
+    flex: 1,
+    minWidth: 0
+  },
+  buddyPopupKicker: {
+    color: "#d7bd57",
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
+  buddyPopupTitle: {
+    color: "#f9fbf7",
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: 24
+  },
+  buddyPopupBody: {
+    color: "#dce9df",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20
+  },
+  buddyPopupPrimary: {
+    alignItems: "center",
+    backgroundColor: "#d7bd57",
+    borderRadius: 10,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 11
+  },
+  buddyPopupPrimaryText: {
+    color: "#102018",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  buddyPopupDetails: {
+    backgroundColor: "rgba(249,251,247,0.08)",
+    borderColor: "rgba(249,251,247,0.14)",
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 4,
+    padding: 12
+  },
+  buddyPopupLine: {
+    color: "#f9fbf7",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17
+  },
+  buddyPopupActions: {
+    flexDirection: "row",
+    gap: 9
+  },
+  buddyPopupSecondary: {
+    alignItems: "center",
+    backgroundColor: "rgba(249,251,247,0.1)",
+    borderColor: "rgba(249,251,247,0.24)",
+    borderRadius: 10,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 11
+  },
+  buddyPopupSecondaryText: {
+    color: "#f9fbf7",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  buddyPopupDanger: {
+    alignItems: "center",
+    backgroundColor: "#ff5c5c",
+    borderRadius: 10,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 11
+  },
+  buddyPopupDangerText: {
+    color: "#fff8f8",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  buddyPopupStars: {
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  buddyPopupActionsStack: {
+    gap: 9
+  },
+  buddySelectModal: {
+    backgroundColor: "#102018",
+    borderColor: "#d7bd57",
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14
+  },
+  buddySelectHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    marginBottom: 12
+  },
+  buddySelectTitle: {
+    color: "#d7bd57",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  buddySelectMeta: {
+    color: "#dce9df",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 3
+  },
+  buddySelectClose: {
+    alignItems: "center",
+    backgroundColor: "rgba(249,251,247,0.14)",
+    borderColor: "rgba(249,251,247,0.28)",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: "center",
+    width: 32
+  },
+  buddySelectCloseText: {
+    color: "#f9fbf7",
+    fontSize: 18,
+    fontWeight: "900",
+    lineHeight: 22
+  },
+  buddySelectGrid: {
+    gap: 9
+  },
+  buddySelectCard: {
+    alignItems: "center",
+    backgroundColor: "rgba(249,251,247,0.09)",
+    borderColor: "rgba(249,251,247,0.18)",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 9,
+    minHeight: 96,
+    padding: 9
+  },
+  buddySelectCardActive: {
+    backgroundColor: "rgba(215,189,87,0.18)",
+    borderColor: "#d7bd57"
+  },
+  buddySelectBugWrap: {
+    alignItems: "center",
+    backgroundColor: "#f9fbf7",
+    borderRadius: 14,
+    borderWidth: 2,
+    height: 82,
+    justifyContent: "center",
+    width: 82
+  },
+  buddySelectTextBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  buddySelectName: {
+    color: "#f9fbf7",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  buddySelectLevel: {
+    color: "#d7bd57",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  buddySelectBonus: {
+    color: "#dce9df",
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 14,
+    marginTop: 3
+  },
+  buddySelectNext: {
+    color: "#69c88d",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  buddySelectActivePill: {
+    backgroundColor: "#d7bd57",
+    borderRadius: 999,
+    color: "#102018",
+    fontSize: 9,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 7,
+    paddingVertical: 3
+  },
+  buddyText: {
+    flex: 1,
+    minWidth: 0
+  },
+  buddyTimerRing: {
+    alignItems: "center",
+    backgroundColor: "rgba(16,32,24,0.72)",
+    borderColor: "#d7bd57",
+    borderRadius: 999,
+    borderWidth: 2,
+    bottom: -2,
+    height: 31,
+    justifyContent: "center",
+    position: "absolute",
+    right: -2,
+    width: 31
+  },
+  buddyTimerText: {
+    color: "#f9fbf7",
+    fontSize: 9,
+    fontWeight: "900"
+  },
+  buddyTitleActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6
+  },
+  buddyTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "space-between"
+  },
+  buddyTitle: {
+    color: "#d7bd57",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  buddyTrack: {
+    backgroundColor: "rgba(249,251,247,0.18)",
+    borderRadius: 999,
+    height: 8,
+    marginTop: 6,
+    overflow: "hidden"
+  },
+  squadMasteryCard: {
+    backgroundColor: "#fdfefb",
+    borderColor: "#cddfd3",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    marginBottom: 12,
+    padding: 10
+  },
+  squadMasteryHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  squadMasteryTitle: {
+    color: "#102018",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  squadMasteryMeta: {
+    color: "#52665d",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  squadMasteryList: {
+    gap: 7
+  },
+  squadMasteryItem: {
+    alignItems: "center",
+    backgroundColor: "#f3f8f1",
+    borderColor: "#d7e1d9",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    minHeight: 56,
+    padding: 7
+  },
+  squadMasteryText: {
+    flex: 1,
+    minWidth: 0
+  },
+  squadMasteryName: {
+    color: "#102018",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  squadMasteryDetail: {
+    color: "#52665d",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 1
+  },
+  squadMasteryTrack: {
+    backgroundColor: "#dbe8de",
+    borderRadius: 8,
+    height: 5,
+    marginTop: 5,
+    overflow: "hidden"
+  },
+  squadMasteryFill: {
+    backgroundColor: "#f2a000",
+    height: "100%"
+  },
+  squadMasteryBadge: {
+    alignItems: "flex-end",
+    flexShrink: 0
+  },
+  squadMasteryLevel: {
+    color: "#15724f",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  squadMasteryRole: {
+    color: "#52665d",
+    fontSize: 10,
     fontWeight: "900"
   },
   bugLampCard: {
@@ -988,9 +2774,7 @@ const styles = StyleSheet.create({
   rankingCard: {
     backgroundColor: "#102018",
     borderRadius: 8,
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "space-between",
+    gap: 10,
     padding: 14
   },
   dexCard: {
@@ -1255,37 +3039,54 @@ const styles = StyleSheet.create({
   },
   rankingHeader: {
     alignItems: "center",
-    gap: 6,
-    justifyContent: "center",
-    width: 70
+    flexDirection: "row",
+    justifyContent: "space-between"
   },
   sectionTitle: {
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "900"
   },
-  rankingList: {
+  rankingBoards: {
     flex: 1,
-    gap: 4
+    flexDirection: "row",
+    gap: 10
+  },
+  rankingColumn: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0
+  },
+  rankingColumnLabel: {
+    color: "#d7bd57",
+    fontSize: 12,
+    fontWeight: "900"
   },
   rankingLine: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 7
+    gap: 5,
+    minWidth: 0
   },
   rank: {
     color: "#d7bd57",
+    fontSize: 12,
     fontWeight: "900",
-    width: 18
+    width: 24
   },
   rankingName: {
     color: "#ffffff",
     flex: 1,
     flexShrink: 1,
-    fontWeight: "800"
+    fontSize: 12,
+    fontWeight: "800",
+    minWidth: 0
   },
   rankingPoints: {
     color: "#d7bd57",
-    fontWeight: "900"
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "right",
+    width: 44
   },
 });

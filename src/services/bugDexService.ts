@@ -1,5 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { collection, doc, getDoc, getDocs, runTransaction, setDoc, writeBatch, type Transaction } from "firebase/firestore";
-import { db, isFirebaseConfigured } from "../firebase";
+import { auth, db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, BugDexUnlock, User } from "../types";
 import { bugLampStatus, shouldAwardBugLamp, withAwardedBugLamp } from "./bugLampService";
 import { activeBugSquadBonuses } from "./bugSquadService";
@@ -25,6 +26,10 @@ export type BugDexDropSource =
   | "solo_boss_rare"
   | "solo_campaign_clear"
   | "duel_win"
+  | "rank_up"
+  | "buddy_common"
+  | "buddy_rare"
+  | "buddy_epic"
   | "combine";
 
 export type BugDexDropResult = {
@@ -45,11 +50,15 @@ export type BugDexDropResult = {
   daysUntilBetterReward?: number;
   updatedUser?: User;
 };
+export type BugDexBugDropResult = Extract<BugDexDropResult, { rewardType: "bug" }>;
 
 const demoInventory = new Map<string, Map<string, BugDexInventoryItem>>();
 const demoUnlocks = new Map<string, Map<string, BugDexUnlock>>();
 const demoEvents = new Set<string>();
 const demoDailyStreaks = new Map<string, number>();
+const inventoryCache = new Map<string, { at: number; items: BugDexInventoryItem[] }>();
+const ownInventoryCacheTtlMs = 2 * 60 * 1000;
+const otherInventoryCacheTtlMs = 15 * 60 * 1000;
 
 const dailyStreakLength = 5;
 const upgradeSourceRarities: Array<Exclude<BugDexRarity, "Mythisch">> = ["Gewoon", "Zeldzaam", "Episch", "Legendarisch"];
@@ -75,6 +84,10 @@ const dropChances: Record<BugDexDropSource, number> = {
   solo_boss_rare: 1,
   solo_campaign_clear: 1,
   duel_win: 1,
+  rank_up: 1,
+  buddy_common: 1,
+  buddy_rare: 1,
+  buddy_epic: 1,
   combine: 1
 };
 
@@ -96,21 +109,13 @@ const rarityWeights: Record<BugDexDropSource, Array<[BugDexRarity, number]>> = {
   solo_boss_rare: [["Gewoon", 75], ["Zeldzaam", 24], ["Episch", 1]],
   solo_campaign_clear: [["Gewoon", 75], ["Zeldzaam", 24], ["Episch", 1]],
   duel_win: [["Gewoon", 71], ["Zeldzaam", 24], ["Episch", 4.5], ["Legendarisch", 0.5]],
+  rank_up: [["Gewoon", 60], ["Zeldzaam", 32], ["Episch", 7], ["Legendarisch", 1]],
+  buddy_common: [["Gewoon", 100]],
+  buddy_rare: [["Zeldzaam", 100]],
+  buddy_epic: [["Episch", 100]],
   combine: [["Zeldzaam", 100]]
 };
 
-const legendaryPools: Partial<Record<BugDexDropSource, string[]>> = {
-  bug_fixed: ["mestkever", "termiet", "schorpioen"],
-  weekly_mission: ["neushoornkever", "atlaskever", "herculeskever", "goliathkever"]
-};
-
-const mythicPools: Partial<Record<BugDexDropSource, string[]>> = {
-  bug_fixed: ["picasso-wants", "giraffekevertje", "glorieuze-scarabee"],
-  bug_reported: ["roze-esdoornmot", "picasso-wants", "lantaarndrager"],
-  bug_splat: ["zonsondergangsmot", "doornbloembidsprinkhaan", "glorieuze-scarabee"],
-  status_update: ["giraffekevertje", "lantaarndrager"],
-  weekly_mission: ["koningin-alexandravlinder", "zonsondergangsmot", "doornbloembidsprinkhaan", "glorieuze-scarabee"]
-};
 
 export function entryByBugId(bugId: string): BugDexEntry | undefined {
   return bugDexEntries.find((entry) => entry.id === bugId);
@@ -120,25 +125,73 @@ export function bugDexInventoryMap(items: BugDexInventoryItem[]): Record<string,
   return Object.fromEntries(items.map((item) => [item.bugId, item]));
 }
 
-export async function listBugDexInventory(user: User): Promise<BugDexInventoryItem[]> {
+type InventoryCacheOptions = { force?: boolean; ttlMs?: number };
+
+function inventoryCacheKey(uid: string): string {
+  return `bugbaas:bugdexInventory:${uid}`;
+}
+
+function sortInventory(items: BugDexInventoryItem[]): BugDexInventoryItem[] {
+  return [...items].sort((a, b) => b.lastUnlockedAt.localeCompare(a.lastUnlockedAt));
+}
+
+async function readStoredInventory(uid: string, ttlMs: number): Promise<BugDexInventoryItem[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(inventoryCacheKey(uid));
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as { at: number; items: BugDexInventoryItem[] };
+    if (!cached || Date.now() - cached.at >= ttlMs || !Array.isArray(cached.items)) return null;
+    return cached.items;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredInventory(uid: string, items: BugDexInventoryItem[]): void {
+  void AsyncStorage.setItem(inventoryCacheKey(uid), JSON.stringify({ at: Date.now(), items })).catch(() => undefined);
+}
+
+export function clearBugDexInventoryCache(uid?: string): void {
+  if (uid) {
+    inventoryCache.delete(uid);
+    void AsyncStorage.removeItem(inventoryCacheKey(uid)).catch(() => undefined);
+    return;
+  }
+  inventoryCache.clear();
+}
+
+export async function listBugDexInventory(user: User, options: InventoryCacheOptions = {}): Promise<BugDexInventoryItem[]> {
   if (!isFirebaseConfigured) {
-    return mergeLegacyInventory(user, Array.from(demoInventory.get(user.uid)?.values() ?? []))
+    return sortInventory(mergeLegacyInventory(user, Array.from(demoInventory.get(user.uid)?.values() ?? []))
       .map((item) => normalizeInventoryItem(item.bugId, item))
-      .filter(hasOwnedCount)
-      .sort((a, b) => b.lastUnlockedAt.localeCompare(a.lastUnlockedAt));
+      .filter(hasOwnedCount));
+  }
+
+  const isOwnUser = auth.currentUser?.uid === user.uid;
+  const ttlMs = options.ttlMs ?? (isOwnUser ? ownInventoryCacheTtlMs : otherInventoryCacheTtlMs);
+  if (!options.force) {
+    const cached = inventoryCache.get(user.uid);
+    if (cached && Date.now() - cached.at < ttlMs) return cached.items;
+    const stored = await readStoredInventory(user.uid, ttlMs);
+    if (stored) {
+      inventoryCache.set(user.uid, { at: Date.now(), items: stored });
+      return stored;
+    }
   }
 
   const snapshot = await getDocs(collection(db, "users", user.uid, "bugdex"));
-  return mergeLegacyInventory(user, snapshot.docs.map((item) => normalizeInventoryItem(item.id, item.data() as Partial<BugDexInventoryItem>)))
+  const items = sortInventory(mergeLegacyInventory(user, snapshot.docs.map((item) => normalizeInventoryItem(item.id, item.data() as Partial<BugDexInventoryItem>)))
     .map((item) => normalizeInventoryItem(item.bugId, item))
-    .filter(hasOwnedCount)
-    .sort((a, b) => b.lastUnlockedAt.localeCompare(a.lastUnlockedAt));
+    .filter(hasOwnedCount));
+  inventoryCache.set(user.uid, { at: Date.now(), items });
+  writeStoredInventory(user.uid, items);
+  return items;
 }
 
 export async function listBugDexUnlocks(user: User): Promise<BugDexUnlock[]> {
   if (!isFirebaseConfigured) {
     const unlocks = demoUnlocks.get(user.uid) ?? new Map<string, BugDexUnlock>();
-    for (const item of mergeLegacyInventory(user, Array.from(demoInventory.get(user.uid)?.values() ?? [])).map((item) => normalizeInventoryItem(item.bugId, item)).filter(hasOwnedCount)) {
+    for (const item of mergeLegacyInventory(user, Array.from(demoInventory.get(user.uid)?.values() ?? [])).map((item) => normalizeInventoryItem(item.bugId, item))) {
       if (!unlocks.has(item.bugId)) unlocks.set(item.bugId, bugDexUnlockFromInventory(item));
     }
     demoUnlocks.set(user.uid, unlocks);
@@ -152,7 +205,7 @@ export async function listBugDexUnlocks(user: User): Promise<BugDexUnlock[]> {
   ]);
   const unlocks = new Map(unlockSnapshot.docs.map((item) => [item.id, normalizeUnlockItem(item.id, item.data() as Partial<BugDexUnlock>)]));
   const missingUnlocks = mergeLegacyInventory(user, inventorySnapshot.docs.map((item) => normalizeInventoryItem(item.id, item.data() as Partial<BugDexInventoryItem>)))
-    .filter((item) => hasOwnedCount(item) && !unlocks.has(item.bugId))
+    .filter((item) => !unlocks.has(item.bugId))
     .map(bugDexUnlockFromInventory);
 
   if (missingUnlocks.length) {
@@ -211,6 +264,7 @@ export async function syncPointUnlockedBugDex(user: Pick<User, "uid" | "totalPoi
     batch.set(unlockRef, bugDexUnlockItem(entry, "rank_unlock", now, existingUnlock));
   }
   await batch.commit();
+  clearBugDexInventoryCache(user.uid);
 }
 
 export async function countBugDexInventory(userOrUid: Pick<User, "uid"> | string): Promise<number> {
@@ -342,6 +396,7 @@ export async function claimDailyLoginBug(user: User, preparedDrop?: BugDexDropRe
     return { rewardType: "bug", entry, item, isNew: !existing, source: "daily_login", streakDay, daysUntilBetterReward, updatedUser };
   });
   if (result?.rewardType === "bug") {
+    clearBugDexInventoryCache(user.uid);
     await writeBugDexUnlockBestEffort(user.uid, result.entry, "daily_login", new Date().toISOString());
   }
   return result;
@@ -400,6 +455,7 @@ export async function rollBugDexDrop(user: User, source: BugDexDropSource): Prom
     transaction.set(ref, item);
     return { rewardType: "bug", entry, item, isNew: !existing, source };
   });
+  clearBugDexInventoryCache(user.uid);
   await writeBugDexUnlockBestEffort(user.uid, entry, source, now);
   return result;
 }
@@ -419,6 +475,108 @@ export async function rollSpecificBugDexDrop(user: User, bugId: string, source: 
 
 export async function grantBugDexReward(user: User, source: BugDexDropSource): Promise<BugDexDropResult> {
   return grantSpecificBug(user, pickBugDexRewardEntry(user, source), source);
+}
+
+export async function grantBugDexRewardOnce(user: User, source: BugDexDropSource, eventId: string, count = 1): Promise<BugDexDropResult | null> {
+  const now = new Date().toISOString();
+  const rewardCount = Math.max(1, Math.floor(count));
+
+  if (!isFirebaseConfigured) {
+    const entry = pickBugDexRewardEntry(user, source);
+    const demoKey = `${user.uid}:${eventId}`;
+    if (demoEvents.has(demoKey)) return null;
+    demoEvents.add(demoKey);
+    const inventory = demoInventory.get(user.uid) ?? new Map<string, BugDexInventoryItem>();
+    const existing = inventory.get(entry.id);
+    const item = existing
+      ? { ...existing, count: ownedCount(existing) + rewardCount, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
+      : { bugId: entry.id, count: rewardCount, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
+    inventory.set(entry.id, item);
+    updateDemoUnlock(user.uid, entry, source, now);
+    demoInventory.set(user.uid, inventory);
+    return { rewardType: "bug", entry, item, isNew: !existing, source };
+  }
+
+  const result = await runTransaction(db, (transaction) => grantBugDexRewardOnceInTransaction(transaction, user, source, eventId, now, rewardCount));
+  if (result?.rewardType === "bug") clearBugDexInventoryCache(user.uid);
+  return result;
+}
+
+export async function grantBugDexRewardOnceInTransaction(transaction: Transaction, user: User, source: BugDexDropSource, eventId: string, now = new Date().toISOString(), count = 1): Promise<BugDexDropResult | null> {
+  const prepared = await prepareBugDexRewardOnceInTransaction(transaction, user, source, eventId, now, count);
+  prepared.commit();
+  return prepared.drop;
+}
+
+export type PreparedBugDexReward = {
+  commit: () => void;
+  drop: BugDexDropResult | null;
+};
+
+export async function prepareBugDexRewardOnceInTransaction(transaction: Transaction, user: User, source: BugDexDropSource, eventId: string, now = new Date().toISOString(), count = 1): Promise<PreparedBugDexReward> {
+  const eventRef = doc(db, "users", user.uid, "bugdexEvents", eventId);
+  const eventSnapshot = await transaction.get(eventRef);
+  if (eventSnapshot.exists()) return { commit: () => undefined, drop: null };
+  const rewardCount = Math.max(1, Math.floor(count));
+
+  const entry = pickBugDexRewardEntry(user, source);
+  const inventoryRef = doc(db, "users", user.uid, "bugdex", entry.id);
+  const unlockRef = doc(db, "users", user.uid, "bugdexUnlocks", entry.id);
+  const [inventorySnapshot, unlockSnapshot] = await Promise.all([
+    transaction.get(inventoryRef),
+    transaction.get(unlockRef)
+  ]);
+  const existing = inventorySnapshot.exists() ? normalizeInventoryItem(entry.id, inventorySnapshot.data() as Partial<BugDexInventoryItem>) : null;
+  const existingUnlock = unlockSnapshot.exists() ? unlockSnapshot.data() as BugDexUnlock : null;
+  const item: BugDexInventoryItem = existing
+    ? { ...existing, count: ownedCount(existing) + rewardCount, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
+    : { bugId: entry.id, count: rewardCount, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
+  const drop: BugDexBugDropResult = { rewardType: "bug", entry, item, isNew: !existing, source };
+
+  return {
+    drop,
+    commit: () => {
+      transaction.set(inventoryRef, item);
+      transaction.set(unlockRef, bugDexUnlockItem(entry, source, now, existingUnlock));
+      transaction.set(eventRef, { id: eventId, source, createdAt: now });
+    }
+  };
+}
+
+export async function grantBugDexRewardInTransaction(transaction: Transaction, user: User, bugId: string, source: BugDexDropSource, now = new Date().toISOString(), syncUnlock = true): Promise<BugDexBugDropResult & { previousCount: number }> {
+  const entry = entryByBugId(bugId);
+  if (!entry) throw new Error("BugDex item niet gevonden.");
+  const ref = doc(db, "users", user.uid, "bugdex", entry.id);
+  const snapshot = await transaction.get(ref);
+  const existing = snapshot.exists() ? normalizeInventoryItem(entry.id, snapshot.data() as Partial<BugDexInventoryItem>) : null;
+  const previousCount = existing ? ownedCount(existing) : 0;
+  const item: BugDexInventoryItem = existing
+    ? { ...existing, count: previousCount + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
+    : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
+  if (syncUnlock) await upsertBugDexUnlock(transaction, user.uid, entry, source, now);
+  transaction.set(ref, item);
+  return { rewardType: "bug", entry, item, isNew: !existing, source, previousCount };
+}
+
+export async function repairBugDexRewardInTransaction(transaction: Transaction, user: User, bugId: string, source: BugDexDropSource, minimumCount: number, now = new Date().toISOString(), syncUnlock = true): Promise<BugDexBugDropResult & { repaired: boolean }> {
+  const entry = entryByBugId(bugId);
+  if (!entry) throw new Error("BugDex item niet gevonden.");
+  const ref = doc(db, "users", user.uid, "bugdex", entry.id);
+  const snapshot = await transaction.get(ref);
+  const existing = snapshot.exists() ? normalizeInventoryItem(entry.id, snapshot.data() as Partial<BugDexInventoryItem>) : null;
+  const currentCount = existing ? ownedCount(existing) : 0;
+  const repaired = currentCount < minimumCount;
+  const item: BugDexInventoryItem = existing
+    ? {
+        ...existing,
+        count: Math.max(currentCount, minimumCount),
+        lastUnlockedAt: repaired ? now : existing.lastUnlockedAt,
+        sources: Array.from(new Set([...existing.sources, source]))
+      }
+    : { bugId: entry.id, count: Math.max(1, minimumCount), firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
+  if (syncUnlock) await upsertBugDexUnlock(transaction, user.uid, entry, source, now);
+  if (repaired || !existing || !existing.sources.includes(source)) transaction.set(ref, item);
+  return { rewardType: "bug", entry, item, isNew: !existing, source, repaired };
 }
 
 export async function hasBugDexRewardAvailable(user: User, source: BugDexDropSource): Promise<boolean> {
@@ -443,11 +601,7 @@ export async function combineBugDexDuplicates(user: User, bugId: string): Promis
   const currentInventory = await listBugDexInventory(user);
   const targetEntry = pickCombineTarget(targetRarity, currentInventory);
   const now = new Date().toISOString();
-  const day = localDayId();
-  const dailyEventId = dailyUpgradeEventId(day);
-
   if (!isFirebaseConfigured) {
-    if (hasDemoUpgradeUsedToday(user.uid, day)) throw new Error("Vandaag is al een upgrade gebruikt.");
     const inventory = demoInventory.get(user.uid) ?? new Map<string, BugDexInventoryItem>();
     const sourceItem = inventory.get(bugId);
     if (!sourceItem || ownedCount(sourceItem) < requiredCount) throw new Error(`Je hebt x${requiredCount} nodig om te combineren.`);
@@ -459,18 +613,13 @@ export async function combineBugDexDuplicates(user: User, bugId: string): Promis
       : { bugId: targetEntry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: targetEntry.rarity, sources: ["combine"] };
     inventory.set(targetEntry.id, targetItem);
     updateDemoUnlock(user.uid, targetEntry, "combine", now);
-    demoEvents.add(`${user.uid}:${dailyEventId}`);
     demoInventory.set(user.uid, inventory);
     return { rewardType: "bug", entry: targetEntry, item: targetItem, isNew: !existingTarget, source: "combine" };
   }
 
   const sourceRef = doc(db, "users", user.uid, "bugdex", bugId);
   const targetRef = doc(db, "users", user.uid, "bugdex", targetEntry.id);
-  const dailyEventRef = doc(db, "users", user.uid, "bugdexEvents", dailyEventId);
-  const legacyRouteEventRefs = getUpgradeEventIdsForDay(day).map((eventId) => doc(db, "users", user.uid, "bugdexEvents", eventId));
-  return runTransaction(db, async (transaction) => {
-    const upgradeEventSnapshots = await Promise.all([transaction.get(dailyEventRef), ...legacyRouteEventRefs.map((ref) => transaction.get(ref))]);
-    if (upgradeEventSnapshots.some((snapshot) => snapshot.exists())) throw new Error("Vandaag is al een upgrade gebruikt.");
+  const result: BugDexDropResult = await runTransaction(db, async (transaction) => {
     const sourceSnapshot = await transaction.get(sourceRef);
     if (!sourceSnapshot.exists()) throw new Error("Bug niet gevonden.");
     const sourceItem = sourceSnapshot.data() as BugDexInventoryItem;
@@ -485,9 +634,10 @@ export async function combineBugDexDuplicates(user: User, bugId: string): Promis
     await upsertBugDexUnlock(transaction, user.uid, targetEntry, "combine", now);
     transaction.set(sourceRef, { ...sourceItem, count: nextSourceCount, lastUnlockedAt: now });
     transaction.set(targetRef, targetItem);
-    transaction.set(dailyEventRef, upgradeEventPayload(dailyEventId, sourceEntry.rarity, targetRarity, targetEntry.id, now));
     return { rewardType: "bug", entry: targetEntry, item: targetItem, isNew: !existingTarget, source: "combine" };
   });
+  clearBugDexInventoryCache(user.uid);
+  return result;
 }
 
 export async function combineDifferentBugDexUpgrade(user: User, bugIds: string[]): Promise<BugDexDropResult> {
@@ -534,7 +684,7 @@ export async function combineDifferentBugDexUpgrade(user: User, bugIds: string[]
   const targetRef = doc(db, "users", user.uid, "bugdex", targetEntry.id);
   const dailyEventRef = doc(db, "users", user.uid, "bugdexEvents", dailyEventId);
   const legacyRouteEventRefs = getUpgradeEventIdsForDay(day).map((eventId) => doc(db, "users", user.uid, "bugdexEvents", eventId));
-  return runTransaction(db, async (transaction) => {
+  const result: BugDexDropResult = await runTransaction(db, async (transaction) => {
     const upgradeEventSnapshots = await Promise.all([transaction.get(dailyEventRef), ...legacyRouteEventRefs.map((ref) => transaction.get(ref))]);
     if (upgradeEventSnapshots.some((snapshot) => snapshot.exists())) throw new Error("Vandaag is al een upgrade gebruikt.");
     const sourceSnapshots = await Promise.all(sourceRefs.map((ref) => transaction.get(ref)));
@@ -556,6 +706,8 @@ export async function combineDifferentBugDexUpgrade(user: User, bugIds: string[]
     transaction.set(dailyEventRef, upgradeEventPayload(dailyEventId, sourceRarity, targetRarity, targetEntry.id, now));
     return { rewardType: "bug", entry: targetEntry, item: targetItem, isNew: !existingTarget, source: "combine" };
   });
+  clearBugDexInventoryCache(user.uid);
+  return result;
 }
 
 async function grantDailyReward(user: User, streakDay: number, entry = pickDailyCommonEntry()): Promise<BugDexDropResult> {
@@ -616,6 +768,7 @@ async function grantSpecificBug(user: User, entry: BugDexEntry, source: BugDexDr
     if (eventRef && dailyEventId) transaction.set(eventRef, { id: dailyEventId, source, createdAt: now });
     return { rewardType: "bug", entry, item, isNew: !existing, source };
   });
+  clearBugDexInventoryCache(user.uid);
   await writeBugDexUnlockBestEffort(user.uid, entry, source, now);
   return result;
 }
@@ -633,7 +786,7 @@ async function upsertBugDexUnlock(transaction: Transaction, uid: string, entry: 
   transaction.set(ref, bugDexUnlockItem(entry, source, now, existing));
 }
 
-async function writeBugDexUnlockBestEffort(uid: string, entry: BugDexEntry, source: string, now: string): Promise<void> {
+export async function writeBugDexUnlockBestEffort(uid: string, entry: BugDexEntry, source: string, now: string): Promise<void> {
   if (!isFirebaseConfigured) return;
   try {
     const ref = doc(db, "users", uid, "bugdexUnlocks", entry.id);
@@ -805,15 +958,12 @@ function upgradeEventPayload(id: string, sourceRarity: BugDexRarity, targetRarit
 }
 
 export function combineRequiredCount(rarity: BugDexRarity): number {
-  if (rarity === "Gewoon") return 3;
-  if (rarity === "Zeldzaam") return 4;
-  if (rarity === "Episch") return 5;
-  if (rarity === "Legendarisch") return 10;
-  return Number.POSITIVE_INFINITY;
+  if (rarity === "Mythisch") return Number.POSITIVE_INFINITY;
+  return 5;
 }
 
 export function differentUpgradeRequiredCount(rarity: BugDexRarity): number {
-  return rarity === "Legendarisch" ? 10 : 3;
+  return rarity === "Legendarisch" ? 5 : 3;
 }
 
 function nextRarity(rarity: BugDexRarity): BugDexRarity | null {
@@ -833,16 +983,6 @@ function pickCombineTarget(rarity: BugDexRarity, inventory: BugDexInventoryItem[
 
 function pickEntry(source: BugDexDropSource, rarityBoost = 0): BugDexEntry {
   const rarity = pickRarity(source, rarityBoost);
-  if (rarity === "Mythisch") {
-    const specialIds = mythicPools[source] ?? [];
-    const special = pickFrom(specialIds.map((id) => entryByBugId(id)).filter((entry): entry is BugDexEntry => Boolean(entry)));
-    if (special) return special;
-  }
-  if (rarity === "Legendarisch") {
-    const specialIds = legendaryPools[source] ?? [];
-    const special = pickFrom(specialIds.map((id) => entryByBugId(id)).filter((entry): entry is BugDexEntry => Boolean(entry)));
-    if (special) return special;
-  }
   return pickFrom(bugDexEntries.filter((entry) => entry.rarity === rarity)) ?? bugDexEntries[0];
 }
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.10.0
+
+- 45 nieuwe BugDex-insecten toegevoegd met transparante 512x512-crops, Nederlandse namen, type, zeldzaamheid en oplopende unlocks.
+- Vier nieuwe scoretiers toegevoegd op 5.000, 10.000, 20.000 en 40.000 punten, met eigen insectbeelden en frames.
+- Nest Defense koppelt tap-effecten en vijandselectie exact aan de aangetikte positie binnen het speelveld, ook wanneer de bug zelf het touch-target is.
+- Ranked Duel rating daalt met 5 punten per volledig gemiste dag; decay stopt op 1000 en wordt per dag maar eenmaal toegepast.
+- Bug Tower toegevoegd als vijfde Arcade-game met kantelbesturing, tap-to-jump en zichtbare touchfallback.
+- Nieuwe geanimeerde kever met idle-, ren-, spring-, val- en landingsposes plus een originele ijstorenachtergrond.
+- Endless floors, wall-bounces, multi-floor combo's, vier torenzones, bewegende platforms en oplopende scrollsnelheid toegevoegd.
+- Bug Tower gekoppeld aan training, ranked duels, lokale highscores, Arcade-resultaten en de dagelijkse five-game missie.
+- Ranked Bug Tower-runs worden in Firebase herkenbaar gekoppeld aan hun duel; bestaande Arcade-games blijven hun oude recordvorm gebruiken.
+
+## 2.9.3 - local changes
+
+- Medailles, collectie-achievements en bijbehorende characters blijven unlocked nadat een bug is geruild of gebruikt.
+- Web Runner, Nest Defense en Bug Glide blijven op tablets in portrait en kunnen tijdens ranked niet worden geannuleerd.
+- Bug Glide heeft links een zichtbare klikbare stuurstrook waarmee de bug betrouwbaar naar rechts kan worden gestuurd.
+- Nest Defense herkent taps op naderende vijanden betrouwbaarder op verschillende schermformaten.
+- De buddywidget wisselt nu tussen afbeeldingen voor expeditievoortgang, reward klaar, beschikbaar en rust.
+
 ## 2.5.2
 
 - Foreground reward-bugs uit wandelen/widget-claims blijven nu in queue tot ze gevangen zijn; unlock-popups wachten tot de reward-queue leeg is.

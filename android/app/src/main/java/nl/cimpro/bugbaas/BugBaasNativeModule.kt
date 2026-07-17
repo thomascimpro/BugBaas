@@ -26,6 +26,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,8 +36,60 @@ import java.time.ZoneId
 
 class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
   private val scope = CoroutineScope(Dispatchers.IO)
+  private var tiltListener: SensorEventListener? = null
+  private var tiltSensorManager: SensorManager? = null
 
   override fun getName(): String = "BugBaasNative"
+
+  @ReactMethod
+  fun addListener(eventName: String) = Unit
+
+  @ReactMethod
+  fun removeListeners(count: Int) = Unit
+
+  @ReactMethod
+  fun startTiltUpdates(promise: Promise) {
+    stopTiltUpdatesInternal()
+    val manager = reactContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    val sensor = manager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+      ?: manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    if (sensor == null) {
+      promise.resolve(false)
+      return
+    }
+
+    val listener = object : SensorEventListener {
+      override fun onSensorChanged(event: SensorEvent) {
+        val values = event.values
+        val payload = Arguments.createMap().apply {
+          putDouble("x", values.getOrNull(0)?.toDouble() ?: 0.0)
+          putDouble("y", values.getOrNull(1)?.toDouble() ?: 0.0)
+          putDouble("z", values.getOrNull(2)?.toDouble() ?: 0.0)
+        }
+        reactContext
+          .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+          .emit("BugBaasTilt", payload)
+      }
+
+      override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+    }
+
+    tiltSensorManager = manager
+    tiltListener = listener
+    promise.resolve(manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME))
+  }
+
+  @ReactMethod
+  fun stopTiltUpdates(promise: Promise) {
+    stopTiltUpdatesInternal()
+    promise.resolve(true)
+  }
+
+  private fun stopTiltUpdatesInternal() {
+    tiltListener?.let { tiltSensorManager?.unregisterListener(it) }
+    tiltListener = null
+    tiltSensorManager = null
+  }
 
   @ReactMethod
   fun playSound(name: String, promise: Promise) {
@@ -45,6 +98,14 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
       "bug_catch" -> R.raw.bug_catch
       "bug_unlock" -> R.raw.bug_unlock
       "bug_rare_unlock" -> R.raw.bug_rare_unlock
+      "spray_hit" -> R.raw.spray_hit
+      "spray_start" -> R.raw.spray_start
+      "arcade_build" -> R.raw.arcade_build
+      "arcade_finish" -> R.raw.arcade_finish
+      "arcade_hit" -> R.raw.arcade_hit
+      "arcade_pickup" -> R.raw.arcade_pickup
+      "arcade_start" -> R.raw.arcade_start
+      "arcade_tap" -> R.raw.arcade_tap
       else -> 0
     }
     if (resId == 0) {
@@ -243,6 +304,12 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
   }
 
   @ReactMethod
+  fun setBuddyWidgetState(bugName: String, status: String, xp: Int, readyCount: Int, actionLabel: String, taskProgress: Int, taskRemaining: String, widgetState: String, promise: Promise) {
+    BugBuddyWidgetProvider.setBuddyState(reactContext, bugName, status, xp, readyCount, actionLabel, taskProgress, taskRemaining, widgetState)
+    promise.resolve(true)
+  }
+
+  @ReactMethod
   fun getMovementRadarProgress(movementBoost: Double, promise: Promise) {
     scope.launch {
       val progress = MovementRadarNative.progress(reactContext, movementBoost)
@@ -251,6 +318,7 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
       result.putInt("awardedToday", progress.awardedToday)
       result.putInt("claimableRewards", progress.claimableRewards)
       result.putInt("maxRewards", progress.maxRewards)
+      result.putDouble("estimatedWeekKm", progress.estimatedWeekKm)
       progress.reason?.let { result.putString("reason", it) }
       val goals = Arguments.createArray()
       for (goal in progress.goals) {
@@ -286,6 +354,7 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
       val result = Arguments.createMap()
       result.putInt("awarded", claim.awarded)
       result.putDouble("estimatedKm", claim.estimatedKm)
+      result.putDouble("estimatedWeekKm", claim.estimatedWeekKm)
       claim.reason?.let { result.putString("reason", it) }
       val bugIds = Arguments.createArray()
       for (bugId in claim.bugIds) bugIds.pushString(bugId)
@@ -302,6 +371,7 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
       val result = Arguments.createMap()
       result.putInt("awarded", claim.awarded)
       result.putDouble("estimatedKm", claim.estimatedKm)
+      result.putDouble("estimatedWeekKm", claim.estimatedWeekKm)
       claim.reason?.let { result.putString("reason", it) }
       val bugIds = Arguments.createArray()
       for (bugId in claim.bugIds) bugIds.pushString(bugId)
@@ -333,8 +403,7 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
   }
 
   private fun trustedStepRecording(recordingMethod: Int): Boolean {
-    return recordingMethod == Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED
-      || recordingMethod == Metadata.RECORDING_METHOD_ACTIVELY_RECORDED
+    return recordingMethod != Metadata.RECORDING_METHOD_MANUAL_ENTRY
   }
 
   private fun exerciseBucket(type: Int): String? {

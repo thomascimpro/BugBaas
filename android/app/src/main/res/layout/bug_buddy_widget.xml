@@ -1,0 +1,73 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/buddyWidgetRoot"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@android:color/transparent"
+  android:padding="0dp">
+
+  <FrameLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:foregroundGravity="center">
+
+    <ProgressBar
+      android:id="@+id/buddyWidgetProgress"
+      style="?android:attr/progressBarStyleHorizontal"
+      android:layout_width="76dp"
+      android:layout_height="76dp"
+      android:layout_gravity="center"
+      android:max="100"
+      android:progress="100"
+      android:progressDrawable="@drawable/bug_buddy_widget_timer_ring" />
+
+    <ImageView
+      android:id="@+id/buddyWidgetImage"
+      android:layout_width="56dp"
+      android:layout_height="56dp"
+      android:layout_gravity="center"
+      android:contentDescription="Bug Buddy"
+      android:scaleType="fitCenter"
+      android:src="@drawable/buddy_bee_widget_3d" />
+  </FrameLayout>
+
+  <LinearLayout
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:visibility="gone">
+
+    <TextView
+      android:id="@+id/buddyWidgetTitle"
+      android:layout_width="0dp"
+      android:layout_height="0dp" />
+
+    <TextView
+      android:id="@+id/buddyWidgetReady"
+      android:layout_width="0dp"
+      android:layout_height="0dp" />
+
+    <TextView
+      android:id="@+id/buddyWidgetXp"
+      android:layout_width="0dp"
+      android:layout_height="0dp" />
+
+    <TextView
+      android:id="@+id/buddyWidgetName"
+      android:layout_width="0dp"
+      android:layout_height="0dp" />
+
+    <TextView
+      android:id="@+id/buddyWidgetStatus"
+      android:layout_width="0dp"
+      android:layout_height="0dp" />
+
+    <TextView
+      android:id="@+id/buddyWidgetPerfect"
+      android:layout_width="0dp"
+      android:layout_height="0dp" />
+
+    <TextView
+      android:id="@+id/buddyWidgetUpdated"
+      android:layout_width="0dp"
+      android:layout_height="0dp" />
+  </LinearLayout>
+</FrameLayout>

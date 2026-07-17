@@ -1,5 +1,19 @@
 # Decisions
 
+- Nieuwe BugDex-beelden gebruiken uitsluitend exacte uitsneden uit de aangeleverde bronbladen; onduidelijke exemplaren worden niet toegevoegd en zeldzaamheid volgt de visuele bijzonderheid.
+- Hogere scoretiers schalen na 2.400 punten grofweg exponentieel naar 5.000, 10.000, 20.000 en 40.000; behaalde bestaande tiers blijven daardoor intact, terwijl de nieuwe top langdurig doel blijft.
+- Nest Defense gebruikt absolute touchposities minus de gemeten speelveldoorsprong; lokale `locationX/locationY` van geneste vijand-views zijn hiervoor onbetrouwbaar.
+- De vaste linker Bug Glide-strook is een actieve stuurzone: taps lopen door naar dezelfde physics-handler en geven daardoor een duidelijke impuls naar rechts.
+- Ranked-inactiviteit wordt client-side bij Arena-open verwerkt: 5 Duel rating per volledig gemiste lokale kalenderdag, nooit lager dan 1000 en met een dagcheckpoint tegen dubbele decay.
+- Bug Tower gebruikt originele BugBaas-assets en retro arcadefeedback; originele Icy Tower-sprites, muziek en samples worden niet gekopieerd.
+- Alleen Bug Tower-ranked breidt het bestaande Arcade-resultaat uit met `ranked` en `duelId`; de vier bestaande gamerecords behouden hun huidige schema en aanroep.
+- Tiltbesturing gebruikt de bestaande Android native module met gravity/accelerometer en geen nieuwe dependency; zichtbare links/rechtsknoppen blijven beschikbaar als sensorfallback.
+- Een Bug Tower-run wordt uiteindelijk onhoudbaar door tijd- en floor-gebonden scrollversnelling, terwijl platformbreedte, gaten en beweging per hoogteband moeilijker worden.
+- BugDex-achievements tellen unieke bugs uit `bugdexUnlocks`; inventory blijft alleen de bron voor actueel bezit en actieve squads.
+- Ranked minigames mogen vóór het resultaat niet via de UI of Android-back worden verlaten.
+- BugBaas gebruikt Android `appCategory=game`, zodat de bestaande portraitrestrictie op Android 16-tablets van toepassing blijft zonder de mobiele flow te wijzigen.
+- De buddywidget communiceert zijn primaire status met bestaande state-drawables; verborgen tekstvelden blijven alleen compatibiliteitsdata.
+- Nest Defense bepaalt handmatige tap-targets in pixels met een geschaalde hitradius, niet met één procentuele afstand over verschillende aspectratio's.
 - Expo + React Native + TypeScript gebruikt voor Android-first mobiele app.
 - Handmatige schermnavigatie gebruikt om V1 klein te houden en extra navigatie-dependency te vermijden.
 - Firebase config staat als lege placeholder in `app.json`; geen secrets hardcoded.

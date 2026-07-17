@@ -1,7 +1,7 @@
 import { doc, getDoc, runTransaction } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { BugDexInventoryItem, BugReport, BugSmashDuel, User } from "../types";
-import { BugDexDropResult, BugDexDropSource, pickBugDexRewardEntry, grantBugDexReward } from "./bugDexService";
+import { BugDexDropResult, BugDexDropSource, clearBugDexInventoryCache, pickBugDexRewardEntry, grantBugDexReward } from "./bugDexService";
 import { SoloCampaignBossProgress } from "./missionProgressService";
 import { badgesForUser, titleForPoints } from "./pointsService";
 import { weeklyMissionBonusXp } from "./rewardBalanceService";
@@ -45,6 +45,7 @@ const weeklyMissionTemplates: MissionTemplate[] = [
     title: "mission.walk15Week",
     target: 15,
     reward: "mission.rewardXp15",
+    rewardSource: "weekly_mission",
     rewardType: "xp",
     rewardXp: 15,
     progressFor: (user, _context, weekStart) => weeklyWalkingKm(user, weekStart)
@@ -54,6 +55,7 @@ const weeklyMissionTemplates: MissionTemplate[] = [
     title: "mission.walk30Week",
     target: 30,
     reward: "mission.rewardXp20",
+    rewardSource: "weekly_mission",
     rewardType: "xp",
     rewardXp: 20,
     progressFor: (user, _context, weekStart) => weeklyWalkingKm(user, weekStart)
@@ -63,6 +65,7 @@ const weeklyMissionTemplates: MissionTemplate[] = [
     title: "mission.walk45Week",
     target: 45,
     reward: "mission.rewardXp25",
+    rewardSource: "weekly_mission",
     rewardType: "xp",
     rewardXp: 25,
     progressFor: (user, _context, weekStart) => weeklyWalkingKm(user, weekStart)
@@ -72,6 +75,7 @@ const weeklyMissionTemplates: MissionTemplate[] = [
     title: "mission.walk60Week",
     target: 60,
     reward: "mission.rewardXp30",
+    rewardSource: "weekly_mission",
     rewardType: "xp",
     rewardXp: 30,
     progressFor: (user, _context, weekStart) => weeklyWalkingKm(user, weekStart)
@@ -79,8 +83,9 @@ const weeklyMissionTemplates: MissionTemplate[] = [
   {
     id: "duel-player",
     title: "mission.duelPlayFive",
-    target: 5,
+    target: 50,
     reward: "mission.rewardXp25",
+    rewardSource: "weekly_mission",
     rewardType: "xp",
     rewardXp: 25,
     progressFor: (user, { duels }, weekStart) => duels.filter((duel) => isUserDuel(duel, user) && isThisWeek(duel.scores?.[user.uid]?.submittedAt ?? "", weekStart)).length
@@ -90,6 +95,7 @@ const weeklyMissionTemplates: MissionTemplate[] = [
     title: "mission.soloBosses10",
     target: 10,
     reward: "mission.rewardXp25",
+    rewardSource: "weekly_mission",
     rewardType: "xp",
     rewardXp: 25,
     progressFor: (_user, { bossProgress }) => bossProgress.weekCount
@@ -278,27 +284,24 @@ export async function claimWeeklyMissionReward(user: User, mission: WeeklyMissio
   if (!isFirebaseConfigured) {
     if (demoWeeklyClaims.has(claimKey)) return null;
     demoWeeklyClaims.add(claimKey);
-    if (mission.rewardType === "bug" && mission.rewardSource) {
-      const drop = await grantBugDexReward(user, mission.rewardSource);
-      return { drop, user };
-    }
     const totalPoints = Math.max(0, user.totalPoints + starterBoostedXp(user, mission.rewardXp));
     const updated = { ...user, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
-    return { user: updated };
+    const drop = mission.rewardSource ? await grantBugDexReward(updated, mission.rewardSource) : undefined;
+    return { drop, user: updated };
   }
 
   const userRef = doc(db, "users", user.uid);
   const claimRef = doc(db, "users", user.uid, "weeklyMissionClaims", mission.id);
-  const rewardEntry = mission.rewardType === "bug" && mission.rewardSource ? pickBugDexRewardEntry(user, mission.rewardSource) : null;
+  const rewardEntry = mission.rewardSource ? pickBugDexRewardEntry(user, mission.rewardSource) : null;
   const rewardRef = rewardEntry ? doc(db, "users", user.uid, "bugdex", rewardEntry.id) : null;
-  return runTransaction(db, async (transaction) => {
+  const result = await runTransaction(db, async (transaction) => {
     const userSnapshot = await transaction.get(userRef);
     const claimSnapshot = await transaction.get(claimRef);
     const rewardSnapshot = rewardRef ? await transaction.get(rewardRef) : null;
     if (!userSnapshot.exists() || claimSnapshot.exists()) return null;
     const current = userSnapshot.data() as User;
-    const totalPoints = Math.max(0, current.totalPoints + starterBoostedXp(current, mission.rewardType === "xp" ? mission.rewardXp : 0));
+    const totalPoints = Math.max(0, current.totalPoints + starterBoostedXp(current, mission.rewardXp));
     const updated = { ...current, totalPoints, title: titleForPoints(totalPoints) };
     updated.badges = badgesForUser(updated);
 
@@ -327,8 +330,8 @@ export async function claimWeeklyMissionReward(user: User, mission: WeeklyMissio
     const claimData: Record<string, string | number> = {
       id: mission.id,
       missionTitle: mission.title,
-      rewardType: mission.rewardType,
-      rewardXp: mission.rewardType === "xp" ? mission.rewardXp : 0,
+      rewardType: drop ? "bugdex_plus_xp" : mission.rewardType,
+      rewardXp: mission.rewardXp,
       claimedAt: now
     };
     if (rewardEntry && mission.rewardSource) {
@@ -338,15 +341,15 @@ export async function claimWeeklyMissionReward(user: User, mission: WeeklyMissio
       claimData.rewardSource = mission.rewardSource;
     }
     transaction.set(claimRef, claimData);
-    if (mission.rewardType === "xp") {
-      transaction.update(userRef, {
-        badges: updated.badges,
-        title: updated.title,
-        totalPoints: updated.totalPoints
-      });
-    }
+    transaction.update(userRef, {
+      badges: updated.badges,
+      title: updated.title,
+      totalPoints: updated.totalPoints
+    });
     return { drop, user: updated };
   });
+  if (result?.drop) clearBugDexInventoryCache(user.uid);
+  return result;
 }
 
 export async function claimWeeklyMissionXp(user: User, mission: WeeklyMission): Promise<User | null> {

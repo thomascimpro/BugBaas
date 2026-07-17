@@ -4,11 +4,18 @@ BugBaas gebruikt eigen insect-tiers. Punten komen uit bugmeldingen en statuswijz
 
 ## Tiers
 
-- `Larve` vanaf 0 punten: startniveau.
-- `Keverscout` vanaf 25 punten: eerste echte bugvinder.
-- `Sprinkhaan Specialist` vanaf 75 punten: snelle reproduceerbare meldingen.
-- `Libelle Leider` vanaf 150 punten: overzicht en statusdiscipline.
-- `Opperbugmeister` vanaf 300 punten: hoogste tier.
+- `Zilvervisje Starter` vanaf 0 punten.
+- `Mierenmelder` vanaf 40 punten.
+- `Sprinkhaan Speurder` vanaf 120 punten.
+- `Lieveheers Fixer` vanaf 260 punten.
+- `Duizendpoot Regisseur` vanaf 520 punten.
+- `Schorpioen Sentinel` vanaf 900 punten.
+- `Neushoorn Commander` vanaf 1.500 punten.
+- `Goliath BugBaas` vanaf 2.400 punten.
+- `Hercules Vanguard` vanaf 5.000 punten.
+- `Juweel Overlord` vanaf 10.000 punten.
+- `Maanvleugel Orakel` vanaf 20.000 punten.
+- `Kosmische Bugkeizer` vanaf 40.000 punten: hoogste stretch-tier.
 
 ## Werking
 
@@ -17,16 +24,14 @@ BugBaas gebruikt eigen insect-tiers. Punten komen uit bugmeldingen en statuswijz
 - `Gefixt` geeft hoogste bonus.
 - `Afgekeurd` en `Dubbel` zetten bugpunten op 0.
 - Profiel, Home en Ranglijst tonen tier, insectbeeld en voortgang.
-- Nummer 1 in de ranglijst toont altijd `Opperbugmeister` als leaderboard-label.
+- Nummer 1 in de ranglijst toont altijd de hoogste tier als leaderboard-label.
 
 ## Visuals
 
 - Elke tier heeft eigen insectvariant en kleur.
 - Elke hogere tier toont een grotere bug met meer details:
   - grotere body en hit area;
-  - extra shell-details vanaf `Keverscout`;
-  - aura vanaf `Sprinkhaan Specialist`;
-  - vleugels vanaf `Libelle Leider`;
-  - kroon bij `Opperbugmeister`.
+  - extra details en steeds exclusievere frames bij hogere tiers;
+  - een kosmisch kroonframe bij `Kosmische Bugkeizer`.
 - Insecten zijn lokaal opgebouwd met React Native views.
 - Bewegende bugs lopen subtiel over het scherm zonder knoppen te blokkeren.
