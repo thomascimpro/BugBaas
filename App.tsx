@@ -5,7 +5,7 @@ import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, AppState, Image, ImageSourcePropType, Linking, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppNotification, BugComment, BugReport, NotificationSettings, User } from "./src/types";
-import { activateBugLamp, applyUserPoints, createOrganizationForUser, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, syncMovementKilometers, touchUserActivity, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
+import { activateBugLamp, applyUserPoints, createOrganizationForUser, ensureUserDocument, getUserById, login, loginWithGoogle, loginWithGooglePopup, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, syncMovementKilometers, touchUserActivity, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
 import { activeBugSquadBonuses } from "./src/services/bugSquadService";
 import { movementBoostWithBugLamp } from "./src/services/bugLampService";
 import { LoginScreen } from "./src/screens/LoginScreen";
@@ -682,6 +682,18 @@ function AppContent() {
     }
   }
 
+  async function handleGoogleWebLogin() {
+    setAuthError("");
+    try {
+      const appUser = await loginWithGooglePopup();
+      setUser(appUser);
+      scheduleEngagementSync(appUser);
+      setRoute("home");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Google-login mislukt.");
+    }
+  }
+
   async function handleLogout() {
     await logout();
     setUser(null);
@@ -1031,7 +1043,7 @@ function AppContent() {
 
   async function registerMovementKilometers(estimatedKm: number, estimatedWeekKm?: number) {
     const currentUser = userRef.current;
-    if (!currentUser || estimatedKm <= 0) return;
+    if (!currentUser || (estimatedKm <= 0 && (estimatedWeekKm ?? 0) <= 0)) return;
     const updated = await syncMovementKilometers(currentUser, estimatedKm, estimatedWeekKm);
     setUser(updated);
     userRef.current = updated;
@@ -1191,7 +1203,7 @@ function AppContent() {
   if (!user) {
     return (
       <View style={styles.fullScreen}>
-        <LoginScreen error={authError} loading={authLoading} onGoogleSubmit={handleGoogleLogin} onSubmit={handleLogin} />
+        <LoginScreen error={authError} loading={authLoading} onGoogleSubmit={handleGoogleLogin} onGoogleWebSubmit={handleGoogleWebLogin} onSubmit={handleLogin} />
         <VersionToast notice={versionNotice} onDismiss={() => setVersionNotice(null)} />
       </View>
     );

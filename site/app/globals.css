@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: #081a12;
+  color: #f9fff9;
+  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+  margin: 0;
+}
+
+.site-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 620px;
+  width: 100%;
+}
+
+.site-header {
+  align-items: center;
+  background: linear-gradient(135deg, #102d20, #194d35);
+  border-bottom: 1px solid rgba(215, 189, 87, 0.45);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  min-height: 64px;
+  padding: 10px max(16px, calc((100vw - 1060px) / 2));
+}
+
+.site-header div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.site-header strong {
+  color: #f3d675;
+  font-size: 18px;
+}
+
+.site-header span {
+  color: #d8e8df;
+  font-size: 12px;
+}
+
+.site-header a {
+  background: #f3d675;
+  border-radius: 8px;
+  color: #102018;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 9px 12px;
+  text-decoration: none;
+}
+
+.game-frame {
+  align-self: center;
+  background: #eef4ed;
+  border: 0;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.28);
+  flex: 1;
+  max-width: 1060px;
+  width: 100%;
+}
+
+@media (max-width: 680px) {
+  .site-header {
+    min-height: 54px;
+    padding: 8px 10px;
+  }
+
+  .site-header span,
+  .site-header a {
+    font-size: 10px;
+  }
+
+  .site-header a {
+    padding: 7px 9px;
+  }
+}

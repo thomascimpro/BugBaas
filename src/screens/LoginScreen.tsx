@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Animated, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppBackground } from "../components/AppBackground";
 import { BugArtImage } from "../components/BugArtImage";
 import { WalkingBugsLayer } from "../components/WalkingBugsLayer";
@@ -22,10 +22,11 @@ type Props = {
   error: string;
   loading: boolean;
   onGoogleSubmit: (idToken: string, accessToken?: string) => Promise<void>;
+  onGoogleWebSubmit: () => Promise<void>;
   onSubmit: (email: string, password: string, createAccount: boolean, displayName?: string) => Promise<void>;
 };
 
-export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props) {
+export function LoginScreen({ error, loading, onGoogleSubmit, onGoogleWebSubmit, onSubmit }: Props) {
   const { t, tr } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -73,18 +74,19 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
   }
 
   async function submitGoogle() {
-    if (!googleClientId) {
+    if (Platform.OS !== "web" && !googleClientId) {
       setGoogleError(t("login.googleNotConfigured"));
-      return;
-    }
-    const google = googleSignInModule();
-    if (!google?.GoogleSignin) {
-      setGoogleError(t("login.googleFailed"));
       return;
     }
     setGoogleBusy(true);
     setGoogleError("");
     try {
+      if (Platform.OS === "web") {
+        await onGoogleWebSubmit();
+        return;
+      }
+      const google = googleSignInModule();
+      if (!google?.GoogleSignin) throw new Error(t("login.googleFailed"));
       await google.GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const result = await google.GoogleSignin.signIn();
       if (result.type === "cancelled") {
@@ -105,7 +107,8 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
       handledGoogleTokenRef.current = idToken;
       await onGoogleSubmit(idToken);
     } catch (error) {
-      if (typeof error === "object" && error !== null && "code" in error && error.code === google.statusCodes.SIGN_IN_CANCELLED) {
+      const google = googleSignInModule();
+      if (typeof error === "object" && error !== null && "code" in error && google && error.code === google.statusCodes.SIGN_IN_CANCELLED) {
         setGoogleBusy(false);
         return;
       }
@@ -131,7 +134,7 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
           <Text style={sharedStyles.title}>BugBaas</Text>
           <BugArtImage bugId="neushoornkever" size={62} />
         </View>
-        <Pressable style={styles.googlePrimaryButton} disabled={isBusy || !googleClientId} onPress={submitGoogle}>
+        <Pressable style={styles.googlePrimaryButton} disabled={isBusy || (Platform.OS !== "web" && !googleClientId)} onPress={submitGoogle}>
           {googleBusy ? (
             <ActivityIndicator color="#17211c" />
           ) : (

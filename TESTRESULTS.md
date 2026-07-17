@@ -1,5 +1,18 @@
 # Test Results
 
+## 2026-07-18 web and Strava release
+
+- npm run typecheck: geslaagd voor de gedeelde Expo-app.
+- site npx tsc --noEmit: geslaagd voor Sites, D1 en vijf Strava-routes.
+- Expo webexport: geslaagd met 313 assets en een bundle van circa 2,51 MB.
+- Sites-productiebuild: geslaagd; dist/server/index.js, clientassets, hostingconfig en D1-migratie aanwezig.
+- D1-migratie gecontroleerd: drie tabellen voor OAuth-states, versleutelde connecties en ontdubbelde activiteiten.
+- Weekkilometers zonder activiteit op de huidige dag lopen door het bestaande profielpad en worden niet door de dagwaarde nul geblokkeerd.
+- Lokale HTTP-smoke: shell, game-index, gamebundle en bugasset geven 200; Strava-status zonder Firebase-token geeft correct 401.
+- Headless Chromium op 1440x900 en iPhone 390x844: shell en game-iframe renderen zonder horizontale overflow of consolefouten.
+- Demo-flow: e-maillogin, Home, Arena en actieve gameplay gecontroleerd voor Tap Duel, Web Runner, Nest Defense en Bug Glide; Bug Tower en Bubble Swarm renderden hun trainingsschermen en assets zonder consolefout.
+- Echte Firebase-login en Strava OAuth zijn niet live gevalideerd: hiervoor zijn het uiteindelijke Sites-domein, Firebase Authorized Domain en Strava client-ID/secret vereist.
+
 ## 2026-07-17 release 2.10.1 implementation
 
 - `npm run typecheck`: geslaagd na Bubble Swarm-, popup-, categorie-, tier- en dagmissiewijzigingen.

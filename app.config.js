@@ -14,6 +14,7 @@ const requiredExtraEnv = {
 
 function readExtra() {
   loadDotEnv();
+  if (process.env.BUGBAAS_DEMO_MODE === "1") return Object.fromEntries(Object.keys(requiredExtraEnv).map((key) => [key, ""]));
   const extra = Object.fromEntries(
     Object.entries(requiredExtraEnv).map(([key, envName]) => [key, process.env[envName] ?? ""])
   );

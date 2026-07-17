@@ -6,6 +6,10 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "web": {
+      "favicon": "./assets/icon.png",
+      "name": "BugBaas"
+    },
     "assetBundlePatterns": [
       "assets/*.png",
       "assets/*.jpg",

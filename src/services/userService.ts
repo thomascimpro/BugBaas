@@ -6,6 +6,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithCredential,
+  signInWithPopup,
   signOut,
   updateProfile
 } from "firebase/auth";
@@ -238,6 +239,13 @@ export async function loginWithGoogle(idToken: string, accessToken?: string): Pr
   return ensureUserDocument(userCredential.user);
 }
 
+export async function loginWithGooglePopup(): Promise<User> {
+  if (!isFirebaseConfigured) throw new Error("Firebase is nog niet geconfigureerd.");
+  const provider = new GoogleAuthProvider();
+  const userCredential = await signInWithPopup(auth, provider);
+  return ensureUserDocument(userCredential.user);
+}
+
 export async function ensureUserDocument(firebaseUser: FirebaseUser, preferredDisplayName?: string): Promise<User> {
   const ref = doc(db, "users", firebaseUser.uid);
   const snapshot = await getDoc(ref);
@@ -346,7 +354,7 @@ export async function syncEngagementPoints(user: User): Promise<User> {
 }
 
 export async function syncMovementKilometers(user: User, todayKm: number, weekKm = todayKm): Promise<User> {
-  if (!Number.isFinite(todayKm) || todayKm <= 0) return normalizeUser(user);
+  if (!Number.isFinite(todayKm) || todayKm < 0 || !Number.isFinite(weekKm) || (todayKm <= 0 && weekKm <= 0)) return normalizeUser(user);
   const day = new Date().toISOString().slice(0, 10);
   const week = isoWeekId();
   const roundedTodayKm = Math.round(todayKm * 100) / 100;

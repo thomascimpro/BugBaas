@@ -4,6 +4,7 @@ import { getApp, getApps, initializeApp } from "firebase/app";
 import * as firebaseAuth from "firebase/auth";
 import { getAuth, initializeAuth, type Persistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { Platform } from "react-native";
 
 const extra = Constants.expoConfig?.extra ?? {};
 
@@ -30,6 +31,7 @@ const appConfig = isFirebaseConfigured
 const app = getApps().length ? getApp() : initializeApp(appConfig);
 
 function initializeFirebaseAuth() {
+  if (Platform.OS === "web") return getAuth(app);
   const getReactNativePersistence = (
     firebaseAuth as typeof firebaseAuth & {
       getReactNativePersistence?: (storage: typeof AsyncStorage) => Persistence;

@@ -1,5 +1,9 @@
 # Decisions
 
+- De webversie hergebruikt exact dezelfde Expo/React Native-gamecode; Sites host de export in een responsive shell, zodat Android niet wordt geforkt of gebroken.
+- Strava OAuth-codewisseling gebeurt uitsluitend server-side. Access- en refresh-tokens worden AES-GCM-versleuteld in D1 en activiteiten worden per Strava-ID ontdubbeld.
+- Sites controleert ieder Strava API-verzoek met het Firebase ID-token van de ingelogde BugBaas-gebruiker; kilometerstanden blijven daarna via de bestaande profieltransactie lopen.
+- De Sites-publicatie is openbaar; BugBaas-accountdata blijft door Firebase-auth en bestaande Firestore-regels afgeschermd.
 - Character unlocks worden afgeleid uit echte puntengrenzen en behaalde setbadges; de popupqueue wacht op bestaande rank-, badge- en BugDex-popups.
 - Solo Arcade-dagvoortgang wordt lokaal per gebruiker en kalenderdag vastgelegd en samengevoegd met de bestaande duelresultaten, zodat zowel training als ranked meetelt zonder nieuw Firestore-querypad.
 - Beschadigde halve tierbeelden worden niet opnieuw gegenereerd: de 20.000- en 40.000-tiers gebruiken volledige bestaande bugs uit de aangeleverde juli-batch met daarop afgestemde frames.

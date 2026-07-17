@@ -2,6 +2,9 @@
 
 ## 2.10.1
 
+- Volledige webversie toegevoegd voor pc, iPhone en iPad, gehost via Sites met dezelfde gamecode als Android.
+- Firebase e-mail- en Google-login werken nu ook in de browser.
+- Strava-koppeling toegevoegd om wandel-, hardloop- en fietskilometers veilig in het BugBaas-profiel te importeren.
 - Character unlocks tonen voortaan een eigen popup met het vrijgespeelde character.
 - Alle 45 bugs uit de 2.10.0-batch zijn aan passende BugDex-categorieën toegevoegd.
 - De tiers op 20.000 en 40.000 punten gebruiken volledige nieuwe bugbeelden; alle vier hoge tiers hebben beter passende framekleuren.

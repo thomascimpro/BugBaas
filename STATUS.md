@@ -1,5 +1,8 @@
 # Status
 
+- BugBaas 2.10.1 compileert als volledige Expo-webapp en is verpakt in een Sites-compatible Cloudflare Worker met pc/iPhone/iPad-layout.
+- Web-login ondersteunt Firebase e-mail en Google popup; Android behoudt de bestaande native Google-login.
+- Strava OAuth, versleutelde tokenopslag, activity-import en kilometerregistratie zijn geimplementeerd; live OAuth-validatie wacht op een Strava client-ID/secret en callbackconfiguratie.
 - Release 2.10.1 is inhoudelijk gereed met character-unlockpopups, volledige categorie-indeling, herstelde hoge tiers, Bubble Swarm en zichtbare dagelijkse gamevoortgang; releasebuild, metadata en signing zijn geverifieerd.
 - Alle 45 bugs uit de juli-batch zitten in minstens één BugDex-categorie zonder dubbele IDs binnen een categorie.
 - De dagelijkse elk-spel-missie telt zes Arcade-modi en bewaart voltooide solo-runs per lokale dag; ranked/tap-resultaten worden samengevoegd met dueldata.

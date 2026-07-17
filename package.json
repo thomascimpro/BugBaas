@@ -5,6 +5,9 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
+    "web": "expo start --web",
+    "web:export": "expo export --platform web --output-dir site/public/game && node scripts/prepare_web_export.mjs",
+    "site:build": "npm --prefix site run build",
     "android": "expo run:android",
     "apk:release": "cd android && gradlew.bat :app:assembleRelease --console=plain",
     "apk:fast": "cd android && gradlew.bat :app:assembleRelease --console=plain -Pandroid.enableMinifyInReleaseBuilds=false -Pandroid.enableShrinkResourcesInReleaseBuilds=false -Pandroid.enablePngCrunchInReleaseBuilds=false",
@@ -16,6 +19,7 @@
     "ios": "expo run:ios"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~6.1.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-google-signin/google-signin": "^16.1.2",
     "expo": "^54.0.0",
@@ -25,7 +29,9 @@
     "expo-notifications": "~0.32.17",
     "firebase": "^12.0.0",
     "react": "^19.1.0",
-    "react-native": "^0.81.5"
+    "react-dom": "19.1.0",
+    "react-native": "^0.81.5",
+    "react-native-web": "^0.21.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.10",

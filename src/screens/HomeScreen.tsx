@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, DimensionValue, Easing, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, DimensionValue, Easing, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { RouteName } from "../../App";
 import { BugArtImage } from "../components/BugArtImage";
 import { CharacterAvatarImage } from "../components/CharacterAvatarImage";
@@ -24,6 +24,7 @@ import { loadSoloCampaignBossProgress, SoloCampaignBossProgress } from "../servi
 import { claimedWeeklyMissionIds, claimWeeklyMissionBonusWithReward, claimWeeklyMissionReward, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
 import { ArcadeMode, BugDexInventoryItem, BugDexUnlock, BugMastery, BugReport, BugSmashDuel, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
+import { connectStrava, disconnectStrava, getStravaStatus, StravaStatus, StravaSyncResult, syncStravaKilometers } from "../services/stravaService";
 
 type Props = {
   movementBoost?: number;
@@ -89,6 +90,10 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [queuedRadarBugIds, setQueuedRadarBugIds] = useState<BugArtId[]>([]);
   const [bugLampActivating, setBugLampActivating] = useState(false);
   const [movementClaiming, setMovementClaiming] = useState(false);
+  const [stravaBusy, setStravaBusy] = useState(false);
+  const [stravaError, setStravaError] = useState("");
+  const [stravaResult, setStravaResult] = useState<StravaSyncResult | null>(null);
+  const [stravaStatus, setStravaStatus] = useState<StravaStatus | null>(null);
   const [soloCampaignWave, setSoloCampaignWave] = useState(1);
   const [bossProgress, setBossProgress] = useState<SoloCampaignBossProgress>({ dayCount: 0, dayId: "", updatedAt: "", weekCount: 0, weekId: "" });
   const [claimedDailyIds, setClaimedDailyIds] = useState<Set<string>>(new Set());
@@ -173,6 +178,13 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   useEffect(() => {
     refreshMovementProgress();
   }, [movementBoost, user.uid]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    void getStravaStatus().then(setStravaStatus).catch((error) => {
+      setStravaError(error instanceof Error ? error.message : "Could not load Strava status.");
+    });
+  }, [user.uid]);
 
   useEffect(() => {
     buddyAnim.setValue(0);
@@ -274,6 +286,49 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
       await refreshMovementProgress();
     } finally {
       setMovementClaiming(false);
+    }
+  }
+
+  async function handleStravaConnect() {
+    if (stravaBusy) return;
+    setStravaBusy(true);
+    setStravaError("");
+    try {
+      await connectStrava();
+    } catch (error) {
+      setStravaError(error instanceof Error ? error.message : "Could not connect Strava.");
+      setStravaBusy(false);
+    }
+  }
+
+  async function handleStravaSync() {
+    if (stravaBusy) return;
+    setStravaBusy(true);
+    setStravaError("");
+    try {
+      const result = await syncStravaKilometers();
+      setStravaResult(result);
+      setStravaStatus((current) => ({ ...current, athleteName: result.athleteName, configured: true, connected: true, lastSyncAt: new Date().toISOString() }));
+      if (result.today.total > 0 || result.week.total > 0) await onMovementRegistered?.(result.today.total, result.week.total);
+    } catch (error) {
+      setStravaError(error instanceof Error ? error.message : "Could not sync Strava.");
+    } finally {
+      setStravaBusy(false);
+    }
+  }
+
+  async function handleStravaDisconnect() {
+    if (stravaBusy) return;
+    setStravaBusy(true);
+    setStravaError("");
+    try {
+      await disconnectStrava();
+      setStravaStatus({ configured: true, connected: false });
+      setStravaResult(null);
+    } catch (error) {
+      setStravaError(error instanceof Error ? error.message : "Could not disconnect Strava.");
+    } finally {
+      setStravaBusy(false);
     }
   }
 
@@ -631,6 +686,41 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
           <Text style={styles.statLabel}>{tr(tier.title)}</Text>
         </View>
       </View>
+      {Platform.OS === "web" && (
+        <View style={[styles.movementCard, styles.stravaCard]}>
+          <View style={styles.movementHeader}>
+            <View>
+              <Text style={styles.movementTitle}>Strava kilometers</Text>
+              <Text style={styles.stravaSubtitle}>
+                {stravaStatus?.connected
+                  ? `Connected${stravaStatus.athleteName ? ` as ${stravaStatus.athleteName}` : ""}`
+                  : "Import walking, running and cycling"}
+              </Text>
+            </View>
+            <Pressable
+              disabled={stravaBusy || stravaStatus?.configured === false}
+              onPress={stravaStatus?.connected ? handleStravaSync : handleStravaConnect}
+              style={[styles.stravaButton, (stravaBusy || stravaStatus?.configured === false) && styles.movementClaimButtonDisabled]}
+            >
+              <Text style={styles.stravaButtonText}>{stravaBusy ? "..." : stravaStatus?.connected ? "Sync now" : "Connect with Strava"}</Text>
+            </Pressable>
+          </View>
+          {stravaResult && (
+            <View style={styles.stravaStats}>
+              <Text style={styles.stravaStat}>Today {formatKm(stravaResult.today.total)} km</Text>
+              <Text style={styles.stravaStat}>This week {formatKm(stravaResult.week.total)} km</Text>
+              <Text style={styles.stravaStat}>{stravaResult.importedActivities} new activities</Text>
+            </View>
+          )}
+          {stravaStatus?.configured === false && <Text style={styles.stravaError}>Strava is not configured yet.</Text>}
+          {!!stravaError && <Text style={styles.stravaError}>{stravaError}</Text>}
+          {stravaStatus?.connected && (
+            <Pressable disabled={stravaBusy} onPress={handleStravaDisconnect} style={styles.stravaDisconnect}>
+              <Text style={styles.stravaDisconnectText}>Disconnect</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
       {movementProgress && (
         <View style={styles.movementCard}>
           <View style={styles.movementHeader}>
@@ -2963,6 +3053,51 @@ const styles = StyleSheet.create({
   },
   missionDone: {
     color: "#15724f"
+  },
+  stravaButton: {
+    backgroundColor: "#fc4c02",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9
+  },
+  stravaButtonText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  stravaCard: {
+    borderColor: "#f7a47e"
+  },
+  stravaDisconnect: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingVertical: 4
+  },
+  stravaDisconnectText: {
+    color: "#7b4a35",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  stravaError: {
+    color: "#b42318",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 7
+  },
+  stravaStat: {
+    color: "#66321c",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  stravaStats: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12
+  },
+  stravaSubtitle: {
+    color: "#7b4a35",
+    fontSize: 11,
+    marginTop: 2
   },
   missionGameList: {
     flexDirection: "row",
