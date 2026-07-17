@@ -65,6 +65,7 @@ export function arcadeRatingPreview(result: Pick<ArcadeRunResult, "mode" | "scor
   const expectedScore: Record<ArcadeMode, number> = {
     bug_glide: 650,
     bug_tower: 900,
+    bubble_swarm: 1100,
     nest_defense: 700,
     tap_duel: 600,
     web_runner: 650

@@ -6,6 +6,7 @@ import { BugJarArt } from "../components/BugJarArt";
 import { BugSwatterHit, playBugSwatterFeedback } from "../components/BugSwatterHit";
 import { BugGlideGame } from "../components/minigames/BugGlideGame";
 import { BugTowerGame } from "../components/minigames/BugTowerGame";
+import { BubbleSwarmGame } from "../components/minigames/BubbleSwarmGame";
 import { NestDefenseGame } from "../components/minigames/NestDefenseGame";
 import { WebRunnerGame } from "../components/minigames/WebRunnerGame";
 import { loadArcadeHighScore, saveArcadeRunResult } from "../services/arcadeResultService";
@@ -68,6 +69,7 @@ const soloPowerupSprayImage = require("../../assets/generated/bugspray-hd.png");
 const soloPowerupBombImage = require("../../assets/generated/solo-powerup-bomb-hd.jpg");
 const arcadeShowcaseImage = require("../../assets/generated/ChatGPT Image 18 jun 2026, 22_34_06.png");
 const bugTowerImage = require("../../assets/minigames/bug-tower/bug-tower-background.png");
+const bubbleSwarmImage = require("../../assets/minigames/bubble-swarm/bubble-swarm-background.png");
 const arcadeCardArt = {
   bugGlide: { x: 390, y: 744, width: 756, height: 744 },
   nestDefense: { x: 768, y: 20, width: 744, height: 724 },
@@ -148,7 +150,7 @@ type SoloRun = {
   mode: "campaign";
 };
 
-type ArenaMode = "bug_glide" | "bug_tower" | "duel" | "nest_defense" | "solo" | "training" | "web_runner";
+type ArenaMode = "bubble_swarm" | "bug_glide" | "bug_tower" | "duel" | "nest_defense" | "solo" | "training" | "web_runner";
 
 const rarityColors: Record<BugDexRarity, string> = {
   Gewoon: "#2f9e44",
@@ -1588,7 +1590,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const activeDuelScore = retryingActiveDuel ? (runSubmitted ? score + duelBonusScore(score, assist) : score) : ownSubmittedScore ? displayDuelScore(ownSubmittedScore) : (runSubmitted ? score + duelBonusScore(score, assist) : score);
   const incomingPendingDuel = activeDuel?.status === "pending" && activeDuel.toUserId === user.uid;
   const showActiveArcadeGame = Boolean(activeDuel && activeArcadeMode && duelCanRun && activeLocalStartAt && (!activeDuelOwnScore || activeArcadeOwnScoreIsZero) && !awaitingOpponentResult);
-  const fullscreenGame = showActiveArcadeGame || arenaMode === "web_runner" || arenaMode === "nest_defense" || arenaMode === "bug_glide" || arenaMode === "bug_tower" || Boolean(trainingDuel) || Boolean(duelCanRun && activeLocalStartAt && !playerNeedsManualStart && !awaitingOpponentResult && !runSubmitted);
+  const fullscreenGame = showActiveArcadeGame || arenaMode === "web_runner" || arenaMode === "nest_defense" || arenaMode === "bug_glide" || arenaMode === "bug_tower" || arenaMode === "bubble_swarm" || Boolean(trainingDuel) || Boolean(duelCanRun && activeLocalStartAt && !playerNeedsManualStart && !awaitingOpponentResult && !runSubmitted);
   const gameScore = trainingDuel && runSubmitted ? score + duelBonusScore(score, assist) : trainingDuel ? score : activeDuelScore;
   const soloCampaign = soloRun?.mode === "campaign" ? soloRun : null;
   const soloProgress = gameStartAt && gameDuel ? Math.max(0, Math.min(1, (now - Date.parse(gameStartAt)) / gameDuel.durationMs)) : 0;
@@ -1718,6 +1720,9 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   }
   if (!activeDuel && arenaMode === "bug_tower") {
     return <BugTowerGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
+  }
+  if (!activeDuel && arenaMode === "bubble_swarm") {
+    return <BubbleSwarmGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
   }
 
   if (showActiveArcadeGame && activeDuel && activeArcadeMode) {
@@ -1891,6 +1896,12 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 title={t("arcade.bugTower.title")}
                 onPress={() => confirmRankedStart(() => { void startRandomChallenge("bug_tower"); })}
                 onTrain={() => { setArcadeTrainingMode(true); setArenaMode("bug_tower"); }}
+              />
+              <ArcadeModeCard
+                active={false}
+                image={bubbleSwarmImage}
+                title={t("arcade.bubbleSwarm.title")}
+                onPress={() => { setArcadeTrainingMode(false); setArenaMode("bubble_swarm"); }}
               />
             </View>
             <View style={styles.arenaUtilityRow}>
