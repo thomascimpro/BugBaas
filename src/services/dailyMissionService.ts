@@ -14,6 +14,7 @@ export type DailyMission = {
   reward: string;
   rewardSource: BugDexDropSource;
   rewardXp: number;
+  gameProgress?: Array<{ completed: boolean; labelKey: string; mode: ArcadeMode }>;
 };
 
 type DailyMissionTemplate = {
@@ -27,12 +28,21 @@ type DailyMissionTemplate = {
 };
 
 type DailyMissionContext = {
+  arcadeModesPlayed: Set<ArcadeMode>;
   bossProgress: SoloCampaignBossProgress;
   duels: BugSmashDuel[];
 };
 
 const dailyMissionXp = 10;
-const allArcadeModes: ArcadeMode[] = ["tap_duel", "web_runner", "nest_defense", "bug_glide", "bug_tower"];
+const allArcadeModes: ArcadeMode[] = ["tap_duel", "web_runner", "nest_defense", "bug_glide", "bug_tower", "bubble_swarm"];
+const arcadeModeLabelKeys: Record<ArcadeMode, string> = {
+  tap_duel: "arcade.tapDuel.title",
+  web_runner: "arcade.webRunner.title",
+  nest_defense: "arcade.nestDefense.title",
+  bug_glide: "arcade.bugGlide.title",
+  bug_tower: "arcade.bugTower.title",
+  bubble_swarm: "arcade.bubbleSwarm.title"
+};
 const demoDailyClaims = new Set<string>();
 
 const dailyMissionTemplates: DailyMissionTemplate[] = [
@@ -52,11 +62,7 @@ const dailyMissionTemplates: DailyMissionTemplate[] = [
     reward: "mission.rewardXp20",
     rewardSource: "daily_mission_bonus",
     rewardXp: 20,
-    progressFor: (user, { duels }, day) => new Set(duels
-      .filter((duel) => isUserDuel(duel, user) && isThisDay(duel.scores?.[user.uid]?.submittedAt ?? "", day))
-      .map((duel) => duel.arcadeMode ?? "tap_duel")
-      .filter((mode): mode is ArcadeMode => allArcadeModes.includes(mode as ArcadeMode))
-    ).size
+    progressFor: (_user, { arcadeModesPlayed }) => arcadeModesPlayed.size
   },
   {
     id: "duel-play-5",
@@ -87,11 +93,19 @@ const dailyMissionTemplates: DailyMissionTemplate[] = [
   }
 ];
 
-export function dailyMissionSet(user: User, options: { bossProgress: SoloCampaignBossProgress; duels?: BugSmashDuel[]; now?: Date }): DailyMission[] {
+export function dailyMissionSet(user: User, options: { arcadeModesPlayed?: ArcadeMode[]; bossProgress: SoloCampaignBossProgress; duels?: BugSmashDuel[]; now?: Date }): DailyMission[] {
   const day = localDayId(options.now);
+  const duels = options.duels ?? [];
+  const arcadeModesPlayed = new Set<ArcadeMode>(options.arcadeModesPlayed ?? []);
+  duels
+    .filter((duel) => isUserDuel(duel, user) && isThisDay(duel.scores?.[user.uid]?.submittedAt ?? "", day))
+    .map((duel) => duel.arcadeMode ?? "tap_duel")
+    .filter((mode): mode is ArcadeMode => allArcadeModes.includes(mode as ArcadeMode))
+    .forEach((mode) => arcadeModesPlayed.add(mode));
   const context: DailyMissionContext = {
+    arcadeModesPlayed,
     bossProgress: options.bossProgress,
-    duels: options.duels ?? []
+    duels
   };
   return dailyMissionTemplates.map((template) => {
     const progress = Math.min(template.target, template.progressFor(user, context, day));
@@ -102,7 +116,10 @@ export function dailyMissionSet(user: User, options: { bossProgress: SoloCampaig
       progress,
       reward: template.reward,
       rewardSource: template.rewardSource,
-      rewardXp: template.rewardXp
+      rewardXp: template.rewardXp,
+      ...(template.id === "play-all-game-types" ? {
+        gameProgress: allArcadeModes.map((mode) => ({ completed: arcadeModesPlayed.has(mode), labelKey: arcadeModeLabelKeys[mode], mode }))
+      } : {})
     };
   });
 }

@@ -1,5 +1,18 @@
 # Test Results
 
+## 2026-07-17 release 2.10.1 implementation
+
+- `npm run typecheck`: geslaagd na Bubble Swarm-, popup-, categorie-, tier- en dagmissiewijzigingen.
+- Categorie-audit: 45 nieuwe bug-IDs gevonden, 0 ongecategoriseerd en 0 dubbele IDs binnen een categorie.
+- Versiebronnen voorbereid op package/Expo/Android `2.10.1` met Android versionCode `181`.
+- Tieraudit: alle 12 puntenbereiken gecontroleerd van `0–39` tot `40000+`; de vier hoge tierbeelden hebben rondom minimaal 20 transparante pixels en worden niet afgeknipt.
+- Productiebuild met `NODE_ENV=production` en `BUGBAAS_REQUIRE_ENV=1`: geslaagd (`BUILD SUCCESSFUL` met R8/minify en resource-optimalisatie).
+- APK: `dist/BugBaas-2.10.1.apk`, 75.317.168 bytes.
+- Metadata: package `nl.cimpro.bugbaas`, versionCode `181`, versionName `2.10.1`, minSdk `26`, targetSdk `36`.
+- Signing: APK Signature Scheme v2 geldig, 1 signer, certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA-256: `AB135BEC6B9A6A922B66F1A45EB6D9E0DD9C20369936707EDC9A4EA5D7FCC87A`.
+- Device-smoke: niet uitgevoerd; `adb devices` gaf geen aangesloten apparaten.
+
 ## 2026-07-17 release 2.10.0
 
 - Versiebronnen: package/Expo `2.10.0`, Android versionName `2.10.0`, versionCode `180`.

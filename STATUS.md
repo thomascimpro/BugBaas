@@ -1,5 +1,8 @@
 # Status
 
+- Release 2.10.1 is inhoudelijk gereed met character-unlockpopups, volledige categorie-indeling, herstelde hoge tiers, Bubble Swarm en zichtbare dagelijkse gamevoortgang; releasebuild, metadata en signing zijn geverifieerd.
+- Alle 45 bugs uit de juli-batch zitten in minstens één BugDex-categorie zonder dubbele IDs binnen een categorie.
+- De dagelijkse elk-spel-missie telt zes Arcade-modi en bewaart voltooide solo-runs per lokale dag; ranked/tap-resultaten worden samengevoegd met dueldata.
 - Release 2.10.0 is lokaal geminificeerd en gesigneerd gebouwd; metadata, v2-signing en SHA-256 zijn geverifieerd, publicatie op GitHub volgt.
 - BugDex bevat 45 nieuwe, transparant gecropte bugs uit `new17-17-2026`; catalogus-, asset- en Android-releasecontrole zijn geslaagd.
 - De scoreladder loopt nu door tot 40.000 punten met vier nieuwe stretch-tiers boven Goliath BugBaas.

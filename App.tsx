@@ -24,13 +24,14 @@ import { WalkingBugsLayer } from "./src/components/WalkingBugsLayer";
 import { BugDexUnlockModal } from "./src/components/BugDexUnlockModal";
 import { RankUpModal } from "./src/components/RankUpModal";
 import { BadgeUnlockModal } from "./src/components/BadgeUnlockModal";
+import { CharacterUnlockModal } from "./src/components/CharacterUnlockModal";
 import { BugSplatBonusOverlay } from "./src/components/BugSplatBonusOverlay";
 import { ForegroundCatchBug } from "./src/components/ForegroundCatchBug";
 import { DisplayNameModal } from "./src/components/DisplayNameModal";
 import { InAppNotificationToast } from "./src/components/InAppNotificationToast";
 import { HelpTourOverlay } from "./src/components/HelpTourOverlay";
 import { allBugArtIds, BugArtId } from "./src/services/bugArt";
-import { CharacterId, CharacterUnlockContext } from "./src/services/characterService";
+import { CharacterId, CharacterOption, CharacterUnlockContext, unlockedCharacterOptionsForUser } from "./src/services/characterService";
 import { bugDexEntryName, LanguageProvider, rarityLabel, useI18n } from "./src/services/i18n";
 import { listBugs } from "./src/services/bugService";
 import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, entryByBugId, grantBugDexReward, hasBugDexRewardAvailable, pickBugDexRewardEntry, pickQueuedBugDexRewardEntry, prepareDailyLoginBug, rollSpecificBugDexDrop } from "./src/services/bugDexService";
@@ -113,6 +114,11 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.10.1": [
+    { key: "changelog.2.10.1.bubbleSwarm", image: require("./assets/minigames/bubble-swarm/bubble-swarm-background.png"), tone: "purple" },
+    { key: "changelog.2.10.1.characters", image: require("./assets/characters/character-mythic-prism-monarch.png"), tone: "green" },
+    { key: "changelog.2.10.1.tiers", image: require("./assets/bugdex/gouden-vogelvlinder.png"), tone: "gold" }
+  ],
   "2.2.5": [
     { key: "changelog.2.2.5.arena", image: require("./assets/generated/bug-smash-duel-concept.jpg"), tone: "purple" },
     { key: "changelog.2.2.5.widget", image: require("./assets/generated/bug-radar-request-signal-hd.png"), tone: "green" },
@@ -248,8 +254,10 @@ function AppContent() {
   const [bugDexClaiming, setBugDexClaiming] = useState(false);
   const [rankUpTier, setRankUpTier] = useState<UserTier | null>(null);
   const [badgeUnlock, setBadgeUnlock] = useState<BadgeDefinition | null>(null);
+  const [characterUnlock, setCharacterUnlock] = useState<CharacterOption | null>(null);
   const [bugDexDropQueue, setBugDexDropQueue] = useState<BugDexDropResult[]>([]);
   const [badgeUnlockQueue, setBadgeUnlockQueue] = useState<BadgeDefinition[]>([]);
+  const [characterUnlockQueue, setCharacterUnlockQueue] = useState<CharacterOption[]>([]);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(defaultNotificationSettings);
   const [notification, setNotification] = useState<AppNotification | null>(null);
   const [requestTabBadges, setRequestTabBadges] = useState<RequestTabBadges>(emptyRequestTabBadges);
@@ -272,6 +280,7 @@ function AppContent() {
   const previousRankRef = useRef<{ uid: string; minPoints: number } | null>(null);
   const queuedRankBugDexRewardsRef = useRef(new Set<string>());
   const previousBadgesRef = useRef<{ badges: string[]; uid: string } | null>(null);
+  const previousCharacterUnlocksRef = useRef<{ ids: string[]; uid: string } | null>(null);
   const queuedBadgeIdsRef = useRef(new Set<string>());
   const engagementSyncInProgress = useRef(new Set<string>());
   const notificationSettingsRef = useRef<NotificationSettings>(defaultNotificationSettings);
@@ -282,6 +291,7 @@ function AppContent() {
     user
     && user.nameSet === true
     && !badgeUnlock
+    && !characterUnlock
     && !bugDexDrop
     && !rankUpTier
     && !notification
@@ -404,12 +414,36 @@ function AppContent() {
   }, [badgeNamesKey, badgeUnlock, user?.uid]);
 
   useEffect(() => {
-    if (badgeUnlock || rankUpTier || bugDexDrop || notification || helpVisible || changelogVersion || splatBonusVisible || versionNotice) return;
+    if (!user) {
+      previousCharacterUnlocksRef.current = null;
+      setCharacterUnlock(null);
+      setCharacterUnlockQueue([]);
+      return;
+    }
+    const unlocked = unlockedCharacterOptionsForUser(user);
+    const previous = previousCharacterUnlocksRef.current;
+    if (previous?.uid === user.uid) {
+      const previousIds = new Set(previous.ids);
+      const additions = unlocked.filter((option) => !previousIds.has(option.id));
+      if (additions.length) setCharacterUnlockQueue((queue) => [...queue, ...additions.filter((option) => !queue.some((queued) => queued.id === option.id))]);
+    }
+    previousCharacterUnlocksRef.current = { ids: unlocked.map((option) => option.id), uid: user.uid };
+  }, [badgeNamesKey, user?.totalPoints, user?.uid]);
+
+  useEffect(() => {
+    if (badgeUnlock || characterUnlock || rankUpTier || bugDexDrop || notification || helpVisible || changelogVersion || splatBonusVisible || versionNotice) return;
     const [nextBadge, ...remaining] = badgeUnlockQueue;
     if (!nextBadge) return;
     setBadgeUnlock(nextBadge);
     setBadgeUnlockQueue(remaining);
-  }, [badgeUnlock, badgeUnlockQueue, bugDexDrop, changelogVersion, helpVisible, notification, rankUpTier, splatBonusVisible, versionNotice]);
+  }, [badgeUnlock, badgeUnlockQueue, bugDexDrop, changelogVersion, characterUnlock, helpVisible, notification, rankUpTier, splatBonusVisible, versionNotice]);
+
+  useEffect(() => {
+    if (characterUnlock || !characterUnlockQueue.length || badgeUnlock || badgeUnlockQueue.length || rankUpTier || bugDexDrop || notification || helpVisible || changelogVersion || splatBonusVisible || versionNotice) return;
+    const [nextCharacter, ...remaining] = characterUnlockQueue;
+    setCharacterUnlock(nextCharacter);
+    setCharacterUnlockQueue(remaining);
+  }, [badgeUnlock, badgeUnlockQueue.length, bugDexDrop, changelogVersion, characterUnlock, characterUnlockQueue, helpVisible, notification, rankUpTier, splatBonusVisible, versionNotice]);
 
   useEffect(() => {
     if (
@@ -417,6 +451,7 @@ function AppContent() {
       || activeForegroundRewardRef.current
       || pendingForegroundRewards.length > 0
       || badgeUnlock
+      || characterUnlock
       || rankUpTier
       || notification
       || helpVisible
@@ -428,7 +463,7 @@ function AppContent() {
     if (!nextDrop) return;
     setBugDexDrop(nextDrop);
     setBugDexDropQueue(remaining);
-  }, [badgeUnlock, bugDexDrop, bugDexDropQueue, changelogVersion, helpVisible, notification, pendingForegroundRewards.length, rankUpTier, splatBonusVisible, versionNotice]);
+  }, [badgeUnlock, bugDexDrop, bugDexDropQueue, changelogVersion, characterUnlock, helpVisible, notification, pendingForegroundRewards.length, rankUpTier, splatBonusVisible, versionNotice]);
 
   useEffect(() => {
     notificationSettingsRef.current = notificationSettings;
@@ -1325,6 +1360,7 @@ function AppContent() {
       />
       <RankUpModal tier={rankUpTier} onClose={() => setRankUpTier(null)} />
       <BadgeUnlockModal badge={badgeUnlock} onClose={closeBadgeUnlock} />
+      <CharacterUnlockModal character={characterUnlock} onClose={() => setCharacterUnlock(null)} />
       <BugDexUnlockModal drop={bugDexDrop} busy={bugDexClaiming} onClose={closeBugDexDrop} />
       <DisplayNameModal user={user} visible={Boolean(user && user.nameSet !== true)} onSave={handleDisplayNameSave} />
       <HelpTourOverlay visible={helpVisible && user.nameSet === true} onFinish={finishHelpTour} onNavigate={navigateHelp} />

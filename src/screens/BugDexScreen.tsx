@@ -13,7 +13,7 @@ import { bugMasteryLevelCap, bugMasteryNextUnlockLevel, bugMasterySessionSkill, 
 import { activeBugSquadBonusList, maxActiveBugSquadSize, sanitizeActiveBugSquad, BugSquadBonusCategory } from "../services/bugSquadService";
 import { bugDexEntryName, bugDexEntryNote, bugDexEntryTitle, rarityLabel, useI18n } from "../services/i18n";
 import { notifyTradeAccepted, notifyTradeRequest } from "../services/notificationService";
-import { bugDexEntries, BugDexEntry, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
+import { bugDexEntries, BugDexEntry, BugDexRarity, getTierForPoints, tierPointRange, userTiers } from "../services/pointsService";
 import { cancelTradeRequest, createTradeRequest, listTradeRequests, markTradeRequesterSeen, respondToTradeRequest } from "../services/tradeService";
 import { listUsersLight, updateUserBugSquad } from "../services/userService";
 import { BugDexInventoryItem, BugDexUnlock, BugMastery, BugMasterySkill, TradeRequest, User } from "../types";
@@ -1361,7 +1361,7 @@ export function BugDexScreen({ openTradeRequest = 0, onUserUpdated, user, onBack
                   </View>
                 </View>
                 <Text style={[styles.tierTitle, { color: item.color }]} numberOfLines={1}>{tr(item.title)}</Text>
-                <Text style={styles.tierMeta}>{item.minPoints}+ {t("common.pointsShort")}</Text>
+                <Text style={styles.tierMeta}>{tierPointRange(item)} {t("common.pointsShort")}</Text>
                 <Text style={styles.tierDescription} numberOfLines={2}>{tr(item.description)}</Text>
                 <Text style={[styles.tierReward, { color: item.frameColor }]} numberOfLines={1}>{tr(item.rewardText)}</Text>
                 {current && <Text style={styles.tierCurrentPill}>{t("bugdex.current")}</Text>}

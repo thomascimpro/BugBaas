@@ -13,6 +13,7 @@ import { awardBugMasteryXp, bugMasteryNextUnlockLevel, bugMasteryUnlockedSkills,
 import { maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
 import { dismissPhoneNotification, scheduleBuddyTaskNotification } from "../services/notificationService";
 import { listBugSmashDuels } from "../services/bugSmashDuelService";
+import { loadArcadeModesPlayedToday } from "../services/arcadeResultService";
 import { claimMovementRadarBonusesForApp, claimQueuedRadarBugs, getMovementRadarProgress, getQueuedRadarBugIds, MovementRadarProgress } from "../services/movementRadarService";
 import { bugDexEntries, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { languages, useI18n } from "../services/i18n";
@@ -21,7 +22,7 @@ import { loadSoloCampaignProgress } from "../services/soloCampaignProgressServic
 import { claimedDailyMissionIds as fetchClaimedDailyMissionIds, claimDailyMissionBonusWithReward, claimDailyMissionReward, dailyMissionSet, dailyMissionSetComplete, isDailyMissionBonusClaimed } from "../services/dailyMissionService";
 import { loadSoloCampaignBossProgress, SoloCampaignBossProgress } from "../services/missionProgressService";
 import { claimedWeeklyMissionIds, claimWeeklyMissionBonusWithReward, claimWeeklyMissionReward, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
-import { BugDexInventoryItem, BugDexUnlock, BugMastery, BugReport, BugSmashDuel, User } from "../types";
+import { ArcadeMode, BugDexInventoryItem, BugDexUnlock, BugMastery, BugReport, BugSmashDuel, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
@@ -80,6 +81,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [users, setUsers] = useState<User[]>([]);
   const [bugs, setBugs] = useState<BugReport[]>([]);
   const [duels, setDuels] = useState<BugSmashDuel[]>([]);
+  const [dailyArcadeModes, setDailyArcadeModes] = useState<ArcadeMode[]>([]);
   const [inventory, setInventory] = useState<BugDexInventoryItem[]>([]);
   const [unlockHistory, setUnlockHistory] = useState<BugDexUnlock[]>([]);
   const [masteryByBugId, setMasteryByBugId] = useState<Record<string, BugMastery>>({});
@@ -147,7 +149,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const buddyMotionStyle = buddyBeeMotionStyle(buddyActiveTask?.action, buddyAnim);
   const buddyProgress = Math.min(100, Math.round((buddyMasteryProgressXp / buddyMasteryNextXp) * 100));
   const buddyLastAction = buddyCareState.lastAction ? buddyActionLabel(buddyCareState.lastAction, t) : t("buddy.noAction");
-  const dailyMissions = dailyMissionSet(user, { bossProgress, duels });
+  const dailyMissions = dailyMissionSet(user, { arcadeModesPlayed: dailyArcadeModes, bossProgress, duels });
   const dailyMissionIdsKey = dailyMissions.map((mission) => mission.id).join("|");
   const missions = weeklyMissionSet(user, bugs, { bossProgress, duels, inventory, soloCampaignWave });
   const missionIdsKey = missions.map((mission) => mission.id).join("|");
@@ -160,6 +162,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     listLeaderboardUsers().then(setUsers);
     listBugs().then(setBugs);
     listBugSmashDuels(user).then(setDuels).catch(() => setDuels([]));
+    loadArcadeModesPlayedToday(user.uid).then(setDailyArcadeModes).catch(() => setDailyArcadeModes([]));
     listBugDexInventory(user).then(setInventory);
     listBugDexUnlocks(user).then(setUnlockHistory).catch(() => setUnlockHistory([]));
     listBugMastery(user).then((items) => setMasteryByBugId(Object.fromEntries(items.map((item) => [item.bugId, item])))).catch(() => setMasteryByBugId({}));
@@ -808,6 +811,16 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
                   <Text style={styles.missionName}>{tr(mission.title)}</Text>
                   <Text style={[styles.missionCount, done && styles.missionDone]}>{formatMissionValue(mission.progress)}/{formatMissionValue(mission.target)}</Text>
                 </View>
+                {mission.gameProgress && (
+                  <View style={styles.missionGameList}>
+                    {mission.gameProgress.map((game) => (
+                      <View key={game.mode} style={[styles.missionGameChip, game.completed && styles.missionGameChipDone]}>
+                        <Text style={[styles.missionGameState, game.completed && styles.missionGameStateDone]}>{game.completed ? "✓" : "○"}</Text>
+                        <Text style={[styles.missionGameName, game.completed && styles.missionGameNameDone]}>{t(game.labelKey)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
                 <View style={styles.missionTrack}>
                   <View style={[styles.missionFill, { width }]} />
                 </View>
@@ -2949,6 +2962,43 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   missionDone: {
+    color: "#15724f"
+  },
+  missionGameList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 8
+  },
+  missionGameChip: {
+    alignItems: "center",
+    backgroundColor: "#edf1ee",
+    borderColor: "#cad5ce",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 4
+  },
+  missionGameChipDone: {
+    backgroundColor: "#e5f6ec",
+    borderColor: "#71b98d"
+  },
+  missionGameName: {
+    color: "#64716b",
+    fontSize: 10,
+    fontWeight: "800"
+  },
+  missionGameNameDone: {
+    color: "#15724f"
+  },
+  missionGameState: {
+    color: "#8a9690",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  missionGameStateDone: {
     color: "#15724f"
   },
   missionTrack: {

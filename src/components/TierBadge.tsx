@@ -1,7 +1,7 @@
 import React from "react";
 import { DimensionValue, StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../services/i18n";
-import { getTierForPoints, pointsUntilNextTier, userTiers } from "../services/pointsService";
+import { getTierForPoints, pointsUntilNextTier, tierPointRange, userTiers } from "../services/pointsService";
 import { BugArtImage } from "./BugArtImage";
 
 type Props = {
@@ -32,7 +32,7 @@ export function TierBadge({ points, compact = false, rank }: Props) {
       </View>
       <View style={styles.body}>
         <Text style={[styles.name, { color: tier.color }]}>{rank === 0 ? t("tier.super") : tr(tier.title)}</Text>
-        <Text style={styles.meta}>{points} {t("common.pointsShort")}</Text>
+        <Text style={styles.meta}>{points} {t("common.pointsShort")} · {tierPointRange(tier)} {t("common.pointsShort")}</Text>
         {!compact && (
           <>
             <View style={styles.progressTrack}>

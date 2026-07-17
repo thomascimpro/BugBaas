@@ -107,6 +107,17 @@ export function bestUnlockedCharacterId(totalPoints: number, context: CharacterU
     .find((item) => isCharacterUnlocked(item.id, totalPoints, context))?.id ?? defaultCharacterId;
 }
 
+export function unlockedCharacterOptionsForUser(user: User): CharacterOption[] {
+  const badgeNames = new Set(user.badges ?? []);
+  return characterOptions.filter((option) => {
+    if (option.unlockBadgeId) {
+      const badge = badgeDefinitions.find((item) => item.id === option.unlockBadgeId);
+      return Boolean(badge && badgeNames.has(badge.name));
+    }
+    return option.unlockPoints > 0 && user.totalPoints >= option.unlockPoints;
+  });
+}
+
 function isCharacterBadgeUnlocked(badgeId: string, context: CharacterUnlockContext): boolean {
   const badge = badgeDefinitions.find((item) => item.id === badgeId);
   if (!badge) return false;

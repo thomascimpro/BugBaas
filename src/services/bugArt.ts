@@ -198,7 +198,11 @@ export const tierBugArtIds: BugArtId[] = [
   "smaragdlibel",
   "schorpioen",
   "olifantskever",
-  "titanus-kever"
+  "titanus-kever",
+  "herculeskever",
+  "juweelkever",
+  "reuzenpantervlinder",
+  "gouden-vogelvlinder"
 ];
 
 export function getBugArtSource(id: string | undefined): ImageSourcePropType | null {

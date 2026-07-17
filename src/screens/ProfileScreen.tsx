@@ -35,7 +35,7 @@ import {
   removeOrganizationMember,
   updateOrganizationName
 } from "../services/organizationService";
-import { BadgeDefinition, badgeDefinitions, BugDexEntry, BugDexRarity, bugDexEntries, getTierForPoints, userTiers } from "../services/pointsService";
+import { BadgeDefinition, badgeDefinitions, BugDexEntry, BugDexRarity, bugDexEntries, getTierForPoints, tierPointRange, userTiers } from "../services/pointsService";
 import { bestUnlockedCharacterId, CharacterId, CharacterUnlockContext, characterOptions, isCharacterUnlocked, safeCharacterId } from "../services/characterService";
 import { getUserById, listUsersLight, upvotePointValue } from "../services/userService";
 import { BugDexInventoryItem, BugDexUnlock, BugMastery, BugReport, Organization, OrganizationInvite, User } from "../types";
@@ -729,7 +729,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
         </View>
         <View style={styles.statusLine}>
           <Text style={styles.statusLabel}>{t("profile.tier")}</Text>
-          <Text style={[styles.statusValue, { color: tier.color }]}>{tr(tier.title)}</Text>
+          <Text style={[styles.statusValue, { color: tier.color }]}>{tr(tier.title)} · {tierPointRange(tier)} {t("common.pointsShort")}</Text>
         </View>
         <View style={styles.statusLine}>
           <Text style={styles.statusLabel}>{t("profile.splats")}</Text>

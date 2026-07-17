@@ -169,10 +169,10 @@ export const userTiers: UserTier[] = [
     description: "Draagt releases die voor anderen te zwaar worden.",
     prestige: "Master",
     prestigeLevel: "Master I",
-    color: "#8f5a18",
-    frameColor: "#d68121",
-    frameAccent: "#fff0ba",
-    frameBackground: "#fff7df",
+    color: "#87470e",
+    frameColor: "#d97706",
+    frameAccent: "#ffd166",
+    frameBackground: "#fff4d6",
     rewardText: "Amber master frame",
     bugArtId: "herculeskever",
     insect: "beetle",
@@ -185,10 +185,10 @@ export const userTiers: UserTier[] = [
     description: "Vindt zeldzame fouten in elke verborgen hoek.",
     prestige: "Master",
     prestigeLevel: "Master II",
-    color: "#087f78",
-    frameColor: "#18b7a6",
-    frameAccent: "#bffdf2",
-    frameBackground: "#eafffa",
+    color: "#056b65",
+    frameColor: "#0f9f8e",
+    frameAccent: "#f2c94c",
+    frameBackground: "#e8fff9",
     rewardText: "Emerald master frame",
     bugArtId: "juweelkever",
     insect: "beetle",
@@ -197,32 +197,32 @@ export const userTiers: UserTier[] = [
   },
   {
     minPoints: 20000,
-    title: "Maanvleugel Orakel",
-    description: "Ziet regressies al voordat ze de nacht bereiken.",
+    title: "Pantervleugel Orakel",
+    description: "Ziet elk verborgen patroon voordat het een regressie wordt.",
     prestige: "Mythic",
     prestigeLevel: "Mythic",
-    color: "#4968b7",
-    frameColor: "#8f7cff",
-    frameAccent: "#e5dcff",
-    frameBackground: "#f3efff",
-    rewardText: "Mythic moon frame",
-    bugArtId: "maanmot",
+    color: "#443653",
+    frameColor: "#76539a",
+    frameAccent: "#eee6f7",
+    frameBackground: "#faf7ff",
+    rewardText: "Mythic panther frame",
+    bugArtId: "reuzenpantervlinder",
     insect: "dragonfly",
     bugSize: 124,
     evolutionLevel: 5
   },
   {
     minPoints: 40000,
-    title: "Kosmische Bugkeizer",
-    description: "De bijna onbereikbare heerser van het BugBaas-universum.",
+    title: "Gouden Bugkeizer",
+    description: "De bijna onbereikbare kroon op elke BugBaas-jacht.",
     prestige: "Cosmic",
     prestigeLevel: "Cosmic Crown",
-    color: "#8e3dc4",
-    frameColor: "#ff5fd7",
-    frameAccent: "#fff1ff",
-    frameBackground: "#fff0fb",
-    rewardText: "Cosmic crown frame",
-    bugArtId: "komeetmot",
+    color: "#745000",
+    frameColor: "#a87300",
+    frameAccent: "#f8cc4f",
+    frameBackground: "#fff7d6",
+    rewardText: "Golden cosmic crown",
+    bugArtId: "gouden-vogelvlinder",
     insect: "dragonfly",
     bugSize: 128,
     evolutionLevel: 5
@@ -582,6 +582,12 @@ export function titleForPoints(points: number): string {
 
 export function getTierForPoints(points: number): UserTier {
   return [...userTiers].reverse().find((tier) => points >= tier.minPoints) ?? userTiers[0];
+}
+
+export function tierPointRange(tier: UserTier): string {
+  const index = userTiers.findIndex((item) => item.minPoints === tier.minPoints);
+  const next = index >= 0 ? userTiers[index + 1] : undefined;
+  return next ? `${tier.minPoints}–${next.minPoints - 1}` : `${tier.minPoints}+`;
 }
 
 export function pointsUntilNextTier(points: number): number | null {

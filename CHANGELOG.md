@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.10.1
+
+- Character unlocks tonen voortaan een eigen popup met het vrijgespeelde character.
+- Alle 45 bugs uit de 2.10.0-batch zijn aan passende BugDex-categorieën toegevoegd.
+- De tiers op 20.000 en 40.000 punten gebruiken volledige nieuwe bugbeelden; alle vier hoge tiers hebben beter passende framekleuren.
+- Tierkaarten en profielstatus tonen een exact puntenbereik, zodat duidelijk is wanneer iedere tier geldt.
+- Bubble Swarm is toegevoegd als zesde Arcade-game met solo highscore en dagelijkse voortgang.
+- De dagelijkse missie `Speel elk type spel 1x` toont per game of deze vandaag wel of niet voltooid is en telt Tap Duel, Web Runner, Nest Defense, Bug Glide, Bug Tower en Bubble Swarm.
+
 ## 2.10.0
 
 - 45 nieuwe BugDex-insecten toegevoegd met transparante 512x512-crops, Nederlandse namen, type, zeldzaamheid en oplopende unlocks.

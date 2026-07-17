@@ -1,5 +1,8 @@
 # Decisions
 
+- Character unlocks worden afgeleid uit echte puntengrenzen en behaalde setbadges; de popupqueue wacht op bestaande rank-, badge- en BugDex-popups.
+- Solo Arcade-dagvoortgang wordt lokaal per gebruiker en kalenderdag vastgelegd en samengevoegd met de bestaande duelresultaten, zodat zowel training als ranked meetelt zonder nieuw Firestore-querypad.
+- Beschadigde halve tierbeelden worden niet opnieuw gegenereerd: de 20.000- en 40.000-tiers gebruiken volledige bestaande bugs uit de aangeleverde juli-batch met daarop afgestemde frames.
 - Nieuwe BugDex-beelden gebruiken uitsluitend exacte uitsneden uit de aangeleverde bronbladen; onduidelijke exemplaren worden niet toegevoegd en zeldzaamheid volgt de visuele bijzonderheid.
 - Hogere scoretiers schalen na 2.400 punten grofweg exponentieel naar 5.000, 10.000, 20.000 en 40.000; behaalde bestaande tiers blijven daardoor intact, terwijl de nieuwe top langdurig doel blijft.
 - Nest Defense gebruikt absolute touchposities minus de gemeten speelveldoorsprong; lokale `locationX/locationY` van geneste vijand-views zijn hiervoor onbetrouwbaar.

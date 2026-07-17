@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { addDoc, collection } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../firebase";
 import { ArcadeMode, ArcadeRunResult } from "../types";
+import { localDayId } from "./missionProgressService";
 
 type RankedArcadeRunContext = {
   duelId: string;
@@ -10,6 +11,29 @@ type RankedArcadeRunContext = {
 
 function highScoreKey(uid: string, mode: ArcadeMode) {
   return `bugbaas:arcade:highScore:${uid}:${mode}`;
+}
+
+function dailyPlayedKey(uid: string, day: string) {
+  return `bugbaas:arcade:played:${uid}:${day}`;
+}
+
+export async function loadArcadeModesPlayedToday(uid: string, now = new Date()): Promise<ArcadeMode[]> {
+  const raw = await AsyncStorage.getItem(dailyPlayedKey(uid, localDayId(now)));
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter(isArcadeMode) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function markArcadeModePlayedToday(uid: string, mode: ArcadeMode, timestamp: string): Promise<void> {
+  const day = localDayId(new Date(timestamp));
+  const key = dailyPlayedKey(uid, day);
+  const current = await loadArcadeModesPlayedToday(uid, new Date(timestamp));
+  if (current.includes(mode)) return;
+  await AsyncStorage.setItem(key, JSON.stringify([...current, mode]));
 }
 
 export function createArcadeSeed(mode: ArcadeMode, id: string, version = 1, difficulty = "normal"): string {
@@ -45,6 +69,7 @@ export async function saveArcadeHighScore(uid: string, mode: ArcadeMode, score: 
 }
 
 export async function saveArcadeRunResult(uid: string, result: ArcadeRunResult, context?: RankedArcadeRunContext): Promise<void> {
+  await markArcadeModePlayedToday(uid, result.mode, result.timestamp);
   if (!isFirebaseConfigured || result.mode === "tap_duel") return;
   await addDoc(collection(db, "arcadeGameResults", result.mode, "runs"), {
     combo: Math.max(0, Math.floor(result.combo)),
@@ -59,6 +84,15 @@ export async function saveArcadeRunResult(uid: string, result: ArcadeRunResult, 
     userId: uid,
     ...(context ? { duelId: context.duelId, ranked: context.ranked } : {})
   });
+}
+
+function isArcadeMode(value: unknown): value is ArcadeMode {
+  return value === "tap_duel"
+    || value === "web_runner"
+    || value === "nest_defense"
+    || value === "bug_glide"
+    || value === "bug_tower"
+    || value === "bubble_swarm";
 }
 
 export function arcadeRatingPreview(result: Pick<ArcadeRunResult, "mode" | "score">): number {
