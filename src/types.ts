@@ -229,7 +229,7 @@ export type BugSmashDuelScore = {
   submittedAt: string;
 };
 
-export type ArcadeMode = "tap_duel" | "web_runner" | "nest_defense" | "bug_glide" | "bug_tower";
+export type ArcadeMode = "tap_duel" | "web_runner" | "nest_defense" | "bug_glide" | "bug_tower" | "bubble_swarm";
 
 export type BugSmashDuel = {
   id: string;

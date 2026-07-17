@@ -187,6 +187,10 @@ service cloud.firestore {
       return mode in ['web_runner', 'nest_defense', 'bug_glide', 'bug_tower'];
     }
 
+    function validArcadeResultMode(mode) {
+      return validArcadeMode(mode) || mode == 'bubble_swarm';
+    }
+
     function validDuelMode(mode) {
       return mode in ['tap_duel', 'web_runner', 'nest_defense', 'bug_glide', 'bug_tower'];
     }
@@ -220,7 +224,7 @@ service cloud.firestore {
     }
 
     function validArcadeRunData(mode) {
-      return validArcadeMode(mode)
+      return validArcadeResultMode(mode)
         && request.resource.data.keys().hasOnly(['combo', 'duelId', 'durationMs', 'hits', 'localHighScore', 'mode', 'pickups', 'ranked', 'score', 'streak', 'timestamp', 'userId'])
         && validRankedBugTowerRun(mode)
         && request.resource.data.mode == mode
@@ -1275,7 +1279,7 @@ service cloud.firestore {
     }
 
     match /arcadeGameResults/{mode}/runs/{runId} {
-      allow read: if signedIn() && validArcadeMode(mode) && resource.data.userId == request.auth.uid;
+      allow read: if signedIn() && validArcadeResultMode(mode) && resource.data.userId == request.auth.uid;
       allow create: if signedIn() && validArcadeRunData(mode);
       allow update, delete: if false;
     }
