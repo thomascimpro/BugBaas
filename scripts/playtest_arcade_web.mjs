@@ -8,6 +8,7 @@ if (!playwrightPath) throw new Error("Set BUGBAAS_PLAYWRIGHT_PATH to an isolated
 const require = createRequire(import.meta.url);
 const { chromium } = require(playwrightPath);
 const baseUrl = process.env.BUGBAAS_PLAYTEST_URL ?? "http://127.0.0.1:4173/game/";
+const sitesBypassToken = process.env.BUGBAAS_SITES_BYPASS_TOKEN;
 const outputDir = path.resolve("dist", "playtest-2.10.3");
 await mkdir(outputDir, { recursive: true });
 const browserErrors = [];
@@ -21,6 +22,12 @@ function watchPage(page, label) {
   });
   page.on("pageerror", (error) => browserErrors.push(`${label}: ${error.message}`));
   return page;
+}
+
+async function newTestPage(browser, viewport, label) {
+  const page = await browser.newPage({ viewport });
+  if (sitesBypassToken) await page.setExtraHTTPHeaders({ "OAI-Sites-Authorization": `Bearer ${sitesBypassToken}` });
+  return watchPage(page, label);
 }
 
 async function login(page, suffix) {
@@ -77,7 +84,7 @@ const browser = await chromium.launch({
 });
 
 try {
-  const towerPage = watchPage(await browser.newPage({ viewport: { height: 844, width: 390 } }), "tower");
+  const towerPage = await newTestPage(browser, { height: 844, width: 390 }, "tower");
   await openTraining(towerPage, "tower", "Bug Tower");
   await towerPage.getByText("Start climb", { exact: true }).click();
   const towerText = await towerPage.locator("body").innerText();
@@ -96,7 +103,7 @@ try {
   await towerPage.waitForTimeout(260);
   await towerPage.screenshot({ path: path.join(outputDir, "bug-tower-jump-mobile.png") });
 
-  const bubblePage = watchPage(await browser.newPage({ viewport: { height: 844, width: 390 } }), "bubble");
+  const bubblePage = await newTestPage(browser, { height: 844, width: 390 }, "bubble");
   await openTraining(bubblePage, "bubble", "Bubble Swarm", "Ranked");
   await bubblePage.getByText("Start training", { exact: true }).click();
   const bubbleField = bubblePage.getByLabel("Bubble Swarm playfield");
@@ -132,7 +139,7 @@ try {
   await bubblePage.screenshot({ path: path.join(outputDir, "bubble-swarm-shot-mobile.png") });
   await bubblePage.waitForTimeout(650);
 
-  const glidePage = watchPage(await browser.newPage({ viewport: { height: 844, width: 390 } }), "glide");
+  const glidePage = await newTestPage(browser, { height: 844, width: 390 }, "glide");
   await openTraining(glidePage, "glide", "Bug Glide");
   await glidePage.getByText("Start", { exact: true }).click();
   const glideField = glidePage.getByLabel("Bug Glide playfield");
@@ -144,7 +151,7 @@ try {
   assert.ok(characterBox && characterBox.x >= glideBox.x + 31, "character must stay outside the clickable left strip");
   await glidePage.screenshot({ path: path.join(outputDir, "bug-glide-left-strip-mobile.png") });
 
-  const desktopPage = watchPage(await browser.newPage({ viewport: { height: 800, width: 1280 } }), "desktop");
+  const desktopPage = await newTestPage(browser, { height: 800, width: 1280 }, "desktop");
   await openTraining(desktopPage, "desktop", "Bubble Swarm", "Ranked");
   await desktopPage.getByText("Start training", { exact: true }).click();
   const desktopField = desktopPage.getByLabel("Bubble Swarm playfield");
