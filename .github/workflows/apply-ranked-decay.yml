@@ -1,0 +1,55 @@
+name: Apply ranked rating decay
+
+on:
+  schedule:
+    - cron: "10 0 * * *"
+  workflow_dispatch:
+    inputs:
+      confirm_write:
+        description: Apply the calculated decay after the dry-run
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: ranked-rating-decay
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  apply-ranked-decay:
+    name: Apply daily ranked decay
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Dry-run ranked decay
+        env:
+          FIREBASE_PROJECT_ID: thomascimpro-6266f
+        run: |
+          FIRESTORE_ACCESS_TOKEN="$(gcloud auth print-access-token)" node scripts/apply_ranked_decay.mjs
+
+      - name: Apply ranked decay
+        if: github.event_name == 'schedule' || inputs.confirm_write == true
+        env:
+          FIREBASE_PROJECT_ID: thomascimpro-6266f
+        run: |
+          FIRESTORE_ACCESS_TOKEN="$(gcloud auth print-access-token)" node scripts/apply_ranked_decay.mjs --confirm-write
