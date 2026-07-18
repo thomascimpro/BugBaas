@@ -1,5 +1,6 @@
 # Decisions
 
+- Tower gebruikt een interne difficulty-offset van 150 zonder zichtbare floors, score of achtergrondzones te verschuiven. Bubble-projectielen animeren met native-driver pixeltransforms; Bomb en Freeze starten elk met één charge en worden opnieuw verdiend door bubbles te verwijderen.
 - Bug Tower gebruikt een convex chargecurve: korte aanrakingen blijven beheersbare één-tredesprongen, terwijl volledige charge ruim vijfmaal zoveel verticale hoogte geeft. Luchtmomentum en muurkaatsen behouden 96% of meer snelheid om ritmische combo-runs mogelijk te maken.
 - Platformkrimp bereikt zijn minimum rond verdieping 240. De gemiddelde breedte ligt rond 47% op verdieping 100 en 33% op verdieping 200; extra moeilijkheid komt daarna uit beweging, gaten en scrollpressure.
 - Bubble Swarm houdt het projectiel na een lineaire vlucht 90 ms zichtbaar op de exacte doelpositie voordat bord- en matchlogica starten, zodat het laatste animatiestuk niet wordt afgekapt.

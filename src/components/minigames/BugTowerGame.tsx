@@ -391,7 +391,7 @@ function createPlatform(previous: Platform | null, floor: number, seed: string):
   const offset = towerHorizontalOffset(floor, seededNumber(seed, floor * 5 + 2));
   const x = clamp(previousCenter + offset - width / 2, 3.5, 96.5 - width);
   const driftRoll = seededNumber(seed, floor * 5 + 3);
-  const drift = floor >= 30 && floor % difficulty.movingEvery === 0 ? (driftRoll > 0.5 ? 1 : -1) * (0.025 + difficulty.level * 0.0045) : 0;
+  const drift = floor > 0 && floor % difficulty.movingEvery === 0 ? (driftRoll > 0.5 ? 1 : -1) * (0.025 + difficulty.level * 0.0045) : 0;
   return { drift, floor, id: `floor-${floor}`, width, x, y: (previous?.y ?? 2) - gap };
 }
 

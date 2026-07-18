@@ -62,6 +62,27 @@ export function resolveBubbleMatch<T extends BubbleCell>(board: T[], placed: T, 
   return { board: nextBoard, dropped: afterPop.length - nextBoard.length, popped: cluster.length };
 }
 
+export function resolveBubbleBomb<T extends BubbleCell>(board: T[], target: Pick<BubbleCell, "col" | "row">) {
+  const blastCells = [target, ...bubbleNeighborCells(target.row, target.col)];
+  const blastKeys = new Set(blastCells.map(bubbleCellKey));
+  const afterBlast = board.filter((bubble) => !blastKeys.has(bubbleCellKey(bubble)));
+  const supported = bubbleSupportedIds(afterBlast);
+  const nextBoard = afterBlast.filter((bubble) => supported.has(bubble.id));
+  return {
+    board: nextBoard,
+    cleared: board.length - afterBlast.length,
+    dropped: afterBlast.length - nextBoard.length
+  };
+}
+
+export function bubblePressureDelay(elapsedMs: number): number {
+  return clamp(17500 - Math.floor(Math.max(0, elapsedMs) / 15000) * 1900, 6500, 17500);
+}
+
+export function bubbleMissLimit(elapsedMs: number): number {
+  return clamp(6 - Math.floor(Math.max(0, elapsedMs) / 30000), 3, 6);
+}
+
 export function bubbleAvailableKinds<T extends Pick<BubbleCell, "kind">>(board: T[]): string[] {
   return [...new Set(board.map((bubble) => bubble.kind))];
 }

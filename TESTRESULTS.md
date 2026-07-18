@@ -1,5 +1,15 @@
 # Test Results
 
+## 2026-07-18 Tower challenge and Bubble power-ups
+
+- `npm run test:arcade`: geslaagd; Tower floor 1 is smaller dan 43% breed, scroll start direct op minimaal `0.03` per tick en is na 90 seconden meer dan tweemaal zo snel.
+- Bubble-pressure daalt getest van 17,5 naar 6,5 seconden; veilige missers dalen van 6 naar 3; Bomb wist doel en buren terwijl ondersteunde verre bubbles blijven staan.
+- `npm run typecheck` en `npm run site:build`: geslaagd; webbundle `AppEntry-a0e5f39a89259a8c533149b45d15cb0b.js` bevat 317 assets.
+- Mobiele Chromium-flow 390x844: Bomb en Freeze zichtbaar en bruikbaar; projectile blijft door meerdere frames zichtbaar, reist meer dan 100 px en houdt eindimpactframes vast vóór plaatsing.
+- Desktop Bubble Swarm, Tower touchcontrols en Bug Glide-regressie bleven groen; screenshots zijn visueel gecontroleerd zonder overlap of afkapping.
+- Android `apk:fast` vanaf dezelfde gameplaybron: geslaagd met verplichte env-config; package `nl.cimpro.bugbaas`, versionName `2.10.5`, targetSdk 36 en bestaand certificaat `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- Lokale kandidaat `dist/BugBaas-2.10.5-gameplay-candidate.apk`: SHA-256 `938867DB20C6D61B5C9483962099FED7F9EAE8D7B15663E59ABC92DDDFB5ABA1`; niet gepubliceerd en niet fysiek op toestel getest.
+
 ## 2026-07-18 release 2.10.5 movement and animation
 
 - Root cause authregressie: de eerder gepubliceerde 2.10.5-APK bevatte in `assets/app.config` geen release-env en viel daardoor terug op demo-auth; authbroncode en certificaat waren niet gewijzigd.

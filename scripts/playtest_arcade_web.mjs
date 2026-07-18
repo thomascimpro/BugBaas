@@ -118,6 +118,14 @@ try {
   const bubbleField = bubblePage.getByLabel("Bubble Swarm playfield");
   const bubbleBox = await bubbleField.boundingBox();
   assert.ok(bubbleBox && bubbleBox.height > 400, "bubble playfield must have useful mobile height");
+  const bombPowerup = bubblePage.getByLabel("Arm bubble bomb");
+  const freezePowerup = bubblePage.getByLabel("Freeze swarm pressure");
+  assert.equal(await bombPowerup.count(), 1, "Bubble Swarm must expose a bomb power-up");
+  assert.equal(await freezePowerup.count(), 1, "Bubble Swarm must expose a freeze power-up");
+  await freezePowerup.click();
+  assert.ok((await freezePowerup.innerText()).includes("x0"), "Freeze must consume one charge");
+  await bombPowerup.click();
+  assert.ok((await bombPowerup.innerText()).includes("ARMED"), "Bomb must visibly arm the next shot");
   const visibleBubbleImages = await bubblePage.locator("img").evaluateAll((images) => images
     .filter((image) => image.src.includes("bug-bubble") && image.getBoundingClientRect().width > 0)
     .map((image) => ({ height: image.getBoundingClientRect().height, width: image.getBoundingClientRect().width })));
@@ -167,6 +175,7 @@ try {
     requestAnimationFrame(sample);
   }));
   const lastFlightFrame = flightFrames.at(-1);
+  assert.ok(Math.hypot(lastFlightFrame.x - flightFrames[0].x, lastFlightFrame.y - flightFrames[0].y) > 100, "the bubble projectile must visibly travel across the field");
   const finalPositionFrames = flightFrames.filter((frame) => Math.abs(frame.x - lastFlightFrame.x) < 0.5 && Math.abs(frame.y - lastFlightFrame.y) < 0.5);
   assert.ok(finalPositionFrames.length >= 4, "the projectile must visibly complete its final impact frames before joining the board");
 
