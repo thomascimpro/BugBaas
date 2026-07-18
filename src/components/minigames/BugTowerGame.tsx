@@ -5,12 +5,12 @@ import { arcadeSquadAssistForUser } from "../../services/bugSquadGameBalance";
 import { playBugSound } from "../../services/soundService";
 import { ArcadeRunResult, User } from "../../types";
 import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
-import { TOWER_MAX_CHARGE_MS, clamp, towerDifficulty, towerDifficultyLabel, towerJumpVelocity, towerPlatformGap, towerPlatformWidth } from "./bugTowerLogic";
+import { TOWER_MAX_CHARGE_MS, clamp, towerDifficulty, towerHeightScore, towerJumpVelocity, towerPlatformGap, towerPlatformWidth, towerZoneIndex, towerZoneName } from "./bugTowerLogic";
 
 type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; ranked?: boolean; seed?: string; user: User };
 type GameState = "ready" | "result" | "running";
 type Platform = { drift: number; floor: number; id: string; width: number; x: number; y: number };
-type Player = { grounded: boolean; lastGroundAt: number; vx: number; vy: number; x: number; y: number };
+type Player = { grounded: boolean; lastGroundAt: number; spinAngle: number; spinning: boolean; vx: number; vy: number; x: number; y: number };
 type RenderState = { charge: number; combo: number; difficulty: number; floor: number; maxCombo: number; platforms: Platform[]; player: Player; score: number };
 
 const tickMs = 20;
@@ -20,6 +20,11 @@ const maxHorizontalSpeed = 1.08;
 const playerHalfWidth = 6.5;
 const playerHalfHeight = 5.2;
 const towerBackground = require("../../../assets/minigames/bug-tower/bug-tower-background.png");
+const towerJungleBackground = require("../../../assets/minigames/bug-tower/bug-tower-jungle.png");
+const towerForgeBackground = require("../../../assets/minigames/bug-tower/bug-tower-forge.png");
+const towerSkyBackground = require("../../../assets/minigames/bug-tower/bug-tower-sky.png");
+const towerVoidBackground = require("../../../assets/minigames/bug-tower/bug-tower-void.png");
+const towerBackgrounds = [towerBackground, towerJungleBackground, towerForgeBackground, towerSkyBackground, towerVoidBackground];
 const beetleSpriteSheet = require("../../../assets/minigames/bug-tower/bug-tower-beetle.png");
 
 export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: Props) {
@@ -91,6 +96,7 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
     let nextPlayer: Player = {
       ...previous,
       grounded: false,
+      spinAngle: previous.spinning ? previous.spinAngle + Math.sign(previous.vx || input || 1) * 18 : 0,
       vx,
       vy: Math.min(2.25, previous.vy + gravity),
       x: previous.x + vx,
@@ -122,6 +128,8 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
         nextPlayer.vy = 0;
         nextPlayer.grounded = true;
         nextPlayer.lastGroundAt = now;
+        nextPlayer.spinAngle = 0;
+        nextPlayer.spinning = false;
         if (landing.floor > landedFloorRef.current) landOnFloor(landing.floor, now);
       }
     }
@@ -142,7 +150,6 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
 
     playerRef.current = nextPlayer;
     platformsRef.current = platforms;
-    scoreRef.current += 0.08 + Math.max(0, comboRef.current - 1) * 0.012;
     setRenderState({
       charge: holdStartedAtRef.current ? clamp((now - holdStartedAtRef.current) / TOWER_MAX_CHARGE_MS, 0, 1) : 0,
       combo: comboRef.current,
@@ -172,8 +179,10 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
     holdStartedAtRef.current = 0;
     const player = playerRef.current;
     if (!player.grounded && now - player.lastGroundAt > 120) return;
-    playerRef.current = { ...player, grounded: false, vy: towerJumpVelocity(holdMs) };
-    playBugSound("arcade_build");
+    const charge = clamp(holdMs / TOWER_MAX_CHARGE_MS, 0, 1);
+    const spinning = charge >= 0.58 && Math.abs(player.vx) >= maxHorizontalSpeed * 0.68;
+    playerRef.current = { ...player, grounded: false, spinAngle: 0, spinning, vy: towerJumpVelocity(holdMs) };
+    playBugSound("tower_jump");
   }
 
   function landOnFloor(floor: number, now: number) {
@@ -182,16 +191,17 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
     if (skipped >= 2) comboRef.current += 1;
     else comboRef.current = 0;
     maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
-    scoreRef.current += floor * 2 + Math.max(0, skipped - 1) * 35 + comboRef.current * 25;
+    scoreRef.current = towerHeightScore(floor, maxComboRef.current);
     landedAtRef.current = now;
-    playBugSound(skipped >= 2 ? "arcade_pickup" : "arcade_build");
+    if (floor > 0 && floor % 100 === 0) playBugSound("tower_zone");
+    else playBugSound(skipped >= 2 ? "tower_combo" : "tower_land");
   }
 
   function finish() {
     if (finishedRef.current) return;
     finishedRef.current = true;
     const durationMs = Math.min(90000, Math.max(0, Date.now() - startAtRef.current));
-    const finalScore = Math.max(1, Math.round(scoreRef.current + landedFloorRef.current * 14 + maxComboRef.current * 45));
+    const finalScore = Math.max(1, towerHeightScore(landedFloorRef.current, maxComboRef.current));
     playBugSound("arcade_finish");
     void saveArcadeHighScore(user.uid, "bug_tower", finalScore).then((highScore) => {
       const nextResult: ArcadeRunResult = {
@@ -238,15 +248,15 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
           <View style={styles.hud}>
             <HudChip label={`Floor ${renderState.floor}`} />
             <HudChip label={`${renderState.score} pt`} />
-            <HudChip active={renderState.difficulty >= 3} label={`${towerDifficultyLabel(renderState.difficulty)} ${renderState.difficulty + 1}`} />
+            <HudChip active={renderState.difficulty >= 3} label={towerZoneName(renderState.floor)} />
           </View>
           <View style={styles.playfield}>
-            <ImageBackground resizeMode="cover" source={towerBackground} style={styles.background}>
+            <ImageBackground key={towerZoneIndex(renderState.floor)} resizeMode="cover" source={towerBackgrounds[towerZoneIndex(renderState.floor)]} style={styles.background}>
               <View style={styles.backgroundShade} />
               <View style={styles.squadOverlay}><ArcadeSquadAssist compact label={`Squad ${squadAssist.activeCount}/3`} user={user} /></View>
               <View pointerEvents="none" style={styles.controlHint}><Text style={styles.controlHintText}>Hold a side to run - release to jump</Text></View>
               {renderState.platforms.map((platform) => <TowerPlatform key={platform.id} platform={platform} />)}
-              <View pointerEvents="none" style={[styles.player, percentPosition(renderState.player.x, renderState.player.y)]}>
+              <View pointerEvents="none" style={[styles.player, percentPosition(renderState.player.x, renderState.player.y), { transform: [{ rotate: `${renderState.player.spinAngle}deg` }] }]}>
                 <BugTowerSprite frame={animationFrame} />
               </View>
               <View pointerEvents="none" style={styles.chargeTrack}><View style={[styles.chargeFill, { width: `${Math.max(4, renderState.charge * 100)}%` as DimensionValue }]} /></View>
@@ -284,7 +294,7 @@ function Ready({ onStart }: { onStart: () => void }) {
         <View style={styles.difficultyRow}>
           <Text style={styles.difficultyChip}>Hold = jump power</Text>
           <Text style={styles.difficultyChip}>Alternating ledges</Text>
-          <Text style={styles.difficultyChip}>8 difficulty levels</Text>
+          <Text style={styles.difficultyChip}>New world every 100</Text>
         </View>
         <Pressable style={styles.primaryButton} onPress={onStart}><Text style={styles.primaryText}>Start climb</Text></Pressable>
       </View>
@@ -309,14 +319,15 @@ function HudChip({ active = false, label }: { active?: boolean; label: string })
 }
 
 function TowerPlatform({ platform }: { platform: Platform }) {
-  const zone = Math.floor(platform.floor / 25) % 4;
+  const zone = towerZoneIndex(platform.floor);
   return (
-    <View style={[styles.platform, zone === 1 && styles.platformViolet, zone === 2 && styles.platformAmber, zone === 3 && styles.platformVoid, {
+    <View style={[styles.platform, zone === 1 && styles.platformJungle, zone === 2 && styles.platformForge, zone === 3 && styles.platformSky, zone === 4 && styles.platformVoid, {
       left: `${platform.x}%` as DimensionValue,
       top: `${platform.y}%` as DimensionValue,
       width: `${platform.width}%` as DimensionValue
     }]}>
       <View style={styles.platformShine} />
+      <Text style={styles.floorNumber}>#{platform.floor}</Text>
     </View>
   );
 }
@@ -351,7 +362,7 @@ function initialRenderState(seed: string): RenderState {
 }
 
 function initialPlayer(): Player {
-  return { grounded: true, lastGroundAt: Date.now(), vx: 0, vy: 0, x: 50, y: 82.8 };
+  return { grounded: true, lastGroundAt: Date.now(), spinAngle: 0, spinning: false, vx: 0, vy: 0, x: 50, y: 82.8 };
 }
 
 function buildInitialPlatforms(seed: string) {
@@ -369,7 +380,7 @@ function createPlatform(previous: Platform | null, floor: number, seed: string):
   const offset = alternate * (10 + seededNumber(seed, floor * 5 + 2) * Math.min(18, 11 + difficulty.level));
   const x = clamp(previousCenter + offset - width / 2, 3.5, 96.5 - width);
   const driftRoll = seededNumber(seed, floor * 5 + 3);
-  const drift = floor >= 18 && floor % difficulty.movingEvery === 0 ? (driftRoll > 0.5 ? 1 : -1) * (0.026 + difficulty.level * 0.003) : 0;
+  const drift = floor >= 40 && floor % difficulty.movingEvery === 0 ? (driftRoll > 0.5 ? 1 : -1) * (0.022 + difficulty.level * 0.004) : 0;
   return { drift, floor, id: `floor-${floor}`, width, x, y: (previous?.y ?? 2) - gap };
 }
 
@@ -424,9 +435,11 @@ const styles = StyleSheet.create({
   panel: { alignItems: "center", alignSelf: "center", backgroundColor: "rgba(7,19,48,0.94)", borderColor: "#5dd9ff", borderRadius: 16, borderWidth: 1, gap: 14, margin: 16, maxWidth: 520, padding: 20 },
   panelTitle: { color: "#f8fbff", fontSize: 26, fontWeight: "900", textAlign: "center" },
   platform: { backgroundColor: "#4bc7ed", borderBottomColor: "#163e85", borderBottomWidth: 6, borderColor: "#d9f8ff", borderRadius: 8, borderTopWidth: 2, height: 12, position: "absolute", zIndex: 4 },
-  platformAmber: { backgroundColor: "#f59e0b", borderBottomColor: "#78350f", borderColor: "#fef3c7" },
+  floorNumber: { backgroundColor: "rgba(5,13,36,0.82)", borderRadius: 4, color: "#fff", fontSize: 9, fontWeight: "900", paddingHorizontal: 4, paddingVertical: 1, position: "absolute", right: 4, top: -18 },
+  platformForge: { backgroundColor: "#f97316", borderBottomColor: "#7c2d12", borderColor: "#ffedd5" },
+  platformJungle: { backgroundColor: "#22c55e", borderBottomColor: "#14532d", borderColor: "#dcfce7" },
   platformShine: { backgroundColor: "rgba(255,255,255,0.5)", borderRadius: 999, height: 2, left: 5, position: "absolute", right: 5, top: 2 },
-  platformViolet: { backgroundColor: "#8b5cf6", borderBottomColor: "#3b1975", borderColor: "#ede9fe" },
+  platformSky: { backgroundColor: "#38bdf8", borderBottomColor: "#075985", borderColor: "#f0f9ff" },
   platformVoid: { backgroundColor: "#ec4899", borderBottomColor: "#701a75", borderColor: "#fce7f3" },
   player: { alignItems: "center", height: 72, justifyContent: "center", marginLeft: -32, marginTop: -36, position: "absolute", width: 64, zIndex: 7 },
   playfield: { flex: 1 },

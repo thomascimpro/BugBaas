@@ -1,5 +1,10 @@
 # Decisions
 
+- Bug Tower wisselt iedere 100 verdiepingen tussen vijf originele BugBaas-werelden; de wereldselectie is floor-gebaseerd en cyclisch, zodat lange runs altijd een geldige achtergrond houden.
+- Tower-platformbreedte en -afstand schalen continu tot ongeveer verdieping 500; verdieping 100 blijft bewust ruim. Tijd versnelt de scroll onafhankelijk van score, terwijl bewegende platforms vanaf verdieping 40 steeds vaker voorkomen.
+- Bug Tower-score gebruikt alleen bereikte verdieping en beste combo. Overlevingstijd blijft resultaatmetadata maar levert geen scorepunten op.
+- Icy Tower-audio wordt niet gekopieerd: 2.10.3 gebruikt negen nieuw gesynthetiseerde, originele Tower- en Bubble-effecten op Android en equivalente Web Audio-feedback in de browser.
+- Bubble Swarm kiest ieder huidig en volgend projectiel uit de unieke kleuren die werkelijk op het bord staan. Het richtpad gebruikt maximaal één berekende muurbounce en dezelfde polyline voor doelkeuze, dots en animatie.
 - Bug Tower gebruikt twee onzichtbare schermhelften als enige besturing: vasthouden bouwt horizontale snelheid en sprongkracht op, loslaten activeert de sprong. Tilt en losse jumpknoppen zijn verwijderd.
 - Tower-moeilijkheid stijgt in acht zichtbare niveaus met afwisselend links/rechts geplaatste, smallere platforms, grotere gaten, eerdere platformbeweging en snellere scroll.
 - Bubble Swarm gebruikt een hex-grid met match-3, unsupported-cluster drops en pressure rows; individuele ronde bugbubbel-assets blijven de visuele eenheid op mobiel en desktop.

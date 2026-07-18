@@ -106,6 +106,15 @@ class BugBaasNativeModule(private val reactContext: ReactApplicationContext) : R
       "arcade_pickup" -> R.raw.arcade_pickup
       "arcade_start" -> R.raw.arcade_start
       "arcade_tap" -> R.raw.arcade_tap
+      "bubble_bounce" -> R.raw.bubble_bounce
+      "bubble_drop" -> R.raw.bubble_drop
+      "bubble_pop" -> R.raw.bubble_pop
+      "bubble_pressure" -> R.raw.bubble_pressure
+      "bubble_shoot" -> R.raw.bubble_shoot
+      "tower_combo" -> R.raw.tower_combo
+      "tower_jump" -> R.raw.tower_jump
+      "tower_land" -> R.raw.tower_land
+      "tower_zone" -> R.raw.tower_zone
       else -> 0
     }
     if (resId == 0) {

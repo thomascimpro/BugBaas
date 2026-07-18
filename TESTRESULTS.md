@@ -1,5 +1,16 @@
 # Test Results
 
+## 2026-07-18 release 2.10.3 arcade balance
+
+- `npm run test:arcade`: geslaagd voor geleidelijke Tower-breedte/gaten, latere bewegende platforms, tijdsversnelling, vijf zones, hoogtegebaseerde score, alleen aanwezige Bubble-kleuren en begrensde muurbounce.
+- `npm run typecheck`: geslaagd met de nieuwe game-, audio- en browsertestcode.
+- Expo-webexport: geslaagd met 317 assets; alle vier nieuwe Tower-zonebeelden zitten in de export.
+- Headless Chromium mobiel 390x844: Tower-halfschermbesturing, charge/release-sprong, spinframe, actieve zonenaam en tredennummers zichtbaar gecontroleerd.
+- Headless Chromium mobiel: Bubble toont een contrastrijke 15-dot bouncepreview, minimaal 34 ronde 9.7%-bubbles en een projectiel dat tijdens de 440-720 ms vlucht zichtbaar blijft.
+- Headless Chromium desktop 1280x800: Bubble-playfield schaalt mee; bestaande Bug Glide-linkerstrookregressie blijft groen.
+- Screenshots staan lokaal onder `dist/playtest-2.10.3` en worden niet gecommit.
+- Productie-Sites-build, live Sites-test en Android APK-build worden na de definitieve versiecommit opnieuw uitgevoerd.
+
 ## 2026-07-18 release 2.10.2 gameplay and permissions
 
 - `npm run test:arcade`: geslaagd voor hold-duration versus spronghoogte, kleinere platforms, grotere gaten, oplopende scroll, match-3, geen pop bij twee bubbels en vallende unsupported clusters.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.10.3
+
+- Bug Tower toont nu een nieuwe originele achtergrondwereld per 100 verdiepingen en nummert iedere trede zichtbaar.
+- Platforms krimpen gelijkmatig en veel langzamer; bewegende treden worden pas later en vervolgens geleidelijk frequenter.
+- De stijgende vloerdruk versnelt met speeltijd en hoogte, terwijl Tower-score alleen nog uit hoogte en combo komt.
+- Snelle opgeladen sprongen geven de geanimeerde bug een volledige spin; Tower heeft nieuwe originele jump-, land-, combo- en zonegeluiden op Android en web.
+- Bubble Swarm schiet alleen kleuren die nog op het bord voorkomen, gebruikt negen kleinere bubbles per rij en voert druk en extra kleuren later op.
+- Bubble Swarm toont een contrastrijke stippellijn, ondersteunt één muurbounce en animeert het projectiel vloeiend over exact hetzelfde pad.
+- Nieuwe originele Bubble-effecten toegevoegd voor schot, bounce, pop, drop en pressure row.
+- Arcade-logica- en browsertests uitgebreid met Tower-zones/hoogtescore, beschikbare Bubble-kleuren, bouncegeometrie, zichtbare dots en projectielvlucht.
+
 ## 2.10.2
 
 - Bug Tower gebruikt geen tilt meer: houd de linker- of rechter schermhelft vast om te rennen en laat los om te springen; langer vasthouden geeft een hogere sprong.

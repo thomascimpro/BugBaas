@@ -1,7 +1,9 @@
 export type BubbleCell = { col: number; id: string; kind: string; row: number };
 
-export const BUBBLE_COLUMNS = 8;
-export const BUBBLE_DANGER_ROW = 10;
+export const BUBBLE_COLUMNS = 9;
+export const BUBBLE_DANGER_ROW = 11;
+
+export type BubblePoint = { x: number; y: number };
 
 export function bubbleCellKey(cell: Pick<BubbleCell, "col" | "row">): string {
   return `${cell.row}:${cell.col}`;
@@ -58,4 +60,26 @@ export function resolveBubbleMatch<T extends BubbleCell>(board: T[], placed: T, 
   const supported = bubbleSupportedIds(afterPop);
   const nextBoard = afterPop.filter((bubble) => supported.has(bubble.id));
   return { board: nextBoard, dropped: afterPop.length - nextBoard.length, popped: cluster.length };
+}
+
+export function bubbleAvailableKinds<T extends Pick<BubbleCell, "kind">>(board: T[]): string[] {
+  return [...new Set(board.map((bubble) => bubble.kind))];
+}
+
+export function bubbleAimPath(from: BubblePoint, aim: BubblePoint, targetY = 5): BubblePoint[] {
+  const dy = Math.min(-4, aim.y - from.y);
+  const dx = aim.x - from.x;
+  const slopeX = dx / -dy;
+  const projectedX = from.x + slopeX * (from.y - targetY);
+  if (projectedX >= 5 && projectedX <= 95) return [from, { x: projectedX, y: targetY }];
+
+  const wallX = projectedX < 5 ? 5 : 95;
+  const wallY = from.y - Math.abs((wallX - from.x) / Math.max(0.001, Math.abs(slopeX)));
+  const remainingY = Math.max(0, wallY - targetY);
+  const reflectedX = wallX - Math.sign(slopeX) * Math.abs(slopeX) * remainingY;
+  return [from, { x: wallX, y: wallY }, { x: clamp(reflectedX, 5, 95), y: targetY }];
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }

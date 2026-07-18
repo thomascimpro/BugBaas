@@ -8,30 +8,54 @@ if (!playwrightPath) throw new Error("Set BUGBAAS_PLAYWRIGHT_PATH to an isolated
 const require = createRequire(import.meta.url);
 const { chromium } = require(playwrightPath);
 const baseUrl = process.env.BUGBAAS_PLAYTEST_URL ?? "http://127.0.0.1:4173/game/";
-const outputDir = path.resolve("dist", "playtest-2.10.2");
+const outputDir = path.resolve("dist", "playtest-2.10.3");
 await mkdir(outputDir, { recursive: true });
+const browserErrors = [];
+
+function watchPage(page, label) {
+  page.on("console", (message) => {
+    const url = message.location().url;
+    const expectedStaticMiss = baseUrl.startsWith("http://127.0.0.1") && (url.endsWith("/favicon.ico") || url.endsWith("/api/strava/status"));
+    const unrelatedExternalFailure = message.text().startsWith("Failed to load resource") && (url.startsWith("https://api.github.com/") || url.startsWith("https://firestore.googleapis.com/"));
+    if (message.type() === "error" && !expectedStaticMiss && !unrelatedExternalFailure) browserErrors.push(`${label}: ${message.text()} (${url})`);
+  });
+  page.on("pageerror", (error) => browserErrors.push(`${label}: ${error.message}`));
+  return page;
+}
 
 async function login(page, suffix) {
   await page.goto(baseUrl);
+  if (await page.getByText("Arena", { exact: true }).count()) return;
   await page.getByText("Met e-mail inloggen").click();
-  await page.locator("input").nth(0).fill(`playtest-${suffix}@bugbaas.local`);
+  await page.locator("input").nth(0).fill("playtest-1784358571780-tower@example.com");
   await page.locator("input").nth(1).fill("test1234");
   await page.getByText("E-mail login", { exact: true }).click();
-  await page.waitForTimeout(500);
-  const save = page.getByText("Opslaan", { exact: true });
-  if (await save.count()) await save.click();
-  const skip = page.getByText("Overslaan", { exact: true });
-  if (await skip.count()) await skip.click();
-  for (const label of ["Klaar", "Doorgaan"]) {
-    const dismiss = page.getByText(label, { exact: true });
-    if (await dismiss.count()) await dismiss.last().click();
+  await page.waitForTimeout(2000);
+  for (let step = 0; step < 12; step += 1) {
+    let progressed = false;
+    for (const label of ["Opslaan", "Overslaan", "Klaar", "Doorgaan"]) {
+      const dismiss = page.getByText(label, { exact: true }).last();
+      if (await dismiss.count() && await dismiss.isVisible()) {
+        await dismiss.click({ timeout: 2000 }).catch(() => undefined);
+        await page.waitForTimeout(180);
+        progressed = true;
+        break;
+      }
+    }
+    if (!progressed) await page.waitForTimeout(250);
   }
   await page.waitForTimeout(350);
 }
 
 async function openArena(page, suffix) {
   await login(page, suffix);
-  await page.getByText("Arena", { exact: true }).last().click();
+  const arena = page.getByText("Arena", { exact: true });
+  if (!await arena.count()) {
+    await page.screenshot({ path: path.join(outputDir, `login-blocked-${suffix}.png`), fullPage: true });
+    throw new Error(`Arena unavailable after demo login (${suffix}): ${await page.locator("body").innerText()}`);
+  }
+  await page.screenshot({ path: path.join(outputDir, `before-arena-${suffix}.png`), fullPage: true });
+  await arena.last().click();
   await page.getByText("Bubble Swarm", { exact: true }).waitFor();
 }
 
@@ -53,12 +77,14 @@ const browser = await chromium.launch({
 });
 
 try {
-  const towerPage = await browser.newPage({ viewport: { height: 844, width: 390 } });
+  const towerPage = watchPage(await browser.newPage({ viewport: { height: 844, width: 390 } }), "tower");
   await openTraining(towerPage, "tower", "Bug Tower");
   await towerPage.getByText("Start climb", { exact: true }).click();
   const towerText = await towerPage.locator("body").innerText();
   assert.ok(!towerText.includes("Tilt"), "Bug Tower must not advertise tilt controls");
   assert.ok(!towerText.includes("JUMP"), "Bug Tower must not render a separate jump button");
+  assert.ok(towerText.includes("Ice Citadel"), "Tower must show the active 100-floor background zone");
+  assert.ok(towerText.includes("#1"), "Tower platforms must display floor numbers");
   const rightControl = towerPage.getByLabel("Run right and charge jump");
   const rightBox = await rightControl.boundingBox();
   assert.ok(rightBox && rightBox.width >= 180, "right input must cover half the mobile playfield");
@@ -70,7 +96,7 @@ try {
   await towerPage.waitForTimeout(260);
   await towerPage.screenshot({ path: path.join(outputDir, "bug-tower-jump-mobile.png") });
 
-  const bubblePage = await browser.newPage({ viewport: { height: 844, width: 390 } });
+  const bubblePage = watchPage(await browser.newPage({ viewport: { height: 844, width: 390 } }), "bubble");
   await openTraining(bubblePage, "bubble", "Bubble Swarm", "Ranked");
   await bubblePage.getByText("Start training", { exact: true }).click();
   const bubbleField = bubblePage.getByLabel("Bubble Swarm playfield");
@@ -79,16 +105,34 @@ try {
   const visibleBubbleImages = await bubblePage.locator("img").evaluateAll((images) => images
     .filter((image) => image.src.includes("bug-bubble") && image.getBoundingClientRect().width > 0)
     .map((image) => ({ height: image.getBoundingClientRect().height, width: image.getBoundingClientRect().width })));
-  assert.ok(visibleBubbleImages.length >= 30, "bubble board must render a full bubble grid");
+  assert.ok(visibleBubbleImages.length >= 34, "bubble board must render a full nine-column bubble grid");
   assert.ok(visibleBubbleImages.every((bubble) => Math.abs(bubble.width - bubble.height) <= 1.5), "bubbles must be round, not stretched bars");
+  assert.ok(visibleBubbleImages[0].width < 42, "mobile bubbles must be smaller than the old 11% layout");
   await bubblePage.mouse.move(bubbleBox.x + bubbleBox.width * 0.72, bubbleBox.y + bubbleBox.height * 0.72);
   await bubblePage.mouse.down();
-  await bubblePage.mouse.move(bubbleBox.x + bubbleBox.width * 0.38, bubbleBox.y + bubbleBox.height * 0.25, { steps: 8 });
+  await bubblePage.mouse.move(bubbleBox.x + bubbleBox.width * 0.05, bubbleBox.y + bubbleBox.height * 0.52, { steps: 8 });
+  const trajectoryDots = bubblePage.getByTestId("bubble-trajectory-guide").locator("div");
+  assert.ok(await trajectoryDots.count() >= 15, "aiming must render a dotted wall-bounce trajectory");
+  const visibleDots = await trajectoryDots.evaluateAll((dots) => dots.filter((dot) => {
+    const box = dot.getBoundingClientRect();
+    const style = getComputedStyle(dot);
+    return box.width >= 7 && box.height >= 7 && style.backgroundColor !== "rgba(0, 0, 0, 0)";
+  }).length);
+  assert.ok(visibleDots >= 15, "trajectory dots must be visibly sized and colored");
+  const dotBoxes = await trajectoryDots.evaluateAll((dots) => dots.map((dot) => {
+    const box = dot.getBoundingClientRect();
+    return { x: box.x, y: box.y };
+  }));
+  const dotsInField = dotBoxes.filter((dot) => dot.x >= bubbleBox.x && dot.x <= bubbleBox.x + bubbleBox.width && dot.y >= bubbleBox.y && dot.y <= bubbleBox.y + bubbleBox.height);
+  assert.ok(dotsInField.length >= 12, `trajectory dots must fall inside the playfield: ${JSON.stringify(dotBoxes)}`);
+  await bubblePage.screenshot({ path: path.join(outputDir, "bubble-swarm-bounce-aim-mobile.png") });
   await bubblePage.mouse.up();
-  await bubblePage.waitForTimeout(600);
+  await bubblePage.waitForTimeout(150);
+  assert.equal(await bubblePage.getByLabel("Bubble projectile").count(), 1, "the projectile must animate visibly instead of appearing at its target");
   await bubblePage.screenshot({ path: path.join(outputDir, "bubble-swarm-shot-mobile.png") });
+  await bubblePage.waitForTimeout(650);
 
-  const glidePage = await browser.newPage({ viewport: { height: 844, width: 390 } });
+  const glidePage = watchPage(await browser.newPage({ viewport: { height: 844, width: 390 } }), "glide");
   await openTraining(glidePage, "glide", "Bug Glide");
   await glidePage.getByText("Start", { exact: true }).click();
   const glideField = glidePage.getByLabel("Bug Glide playfield");
@@ -100,7 +144,7 @@ try {
   assert.ok(characterBox && characterBox.x >= glideBox.x + 31, "character must stay outside the clickable left strip");
   await glidePage.screenshot({ path: path.join(outputDir, "bug-glide-left-strip-mobile.png") });
 
-  const desktopPage = await browser.newPage({ viewport: { height: 800, width: 1280 } });
+  const desktopPage = watchPage(await browser.newPage({ viewport: { height: 800, width: 1280 } }), "desktop");
   await openTraining(desktopPage, "desktop", "Bubble Swarm", "Ranked");
   await desktopPage.getByText("Start training", { exact: true }).click();
   const desktopField = desktopPage.getByLabel("Bubble Swarm playfield");
@@ -108,7 +152,8 @@ try {
   assert.ok(desktopBox && desktopBox.width >= 600, "bubble playfield must expand on desktop");
   await desktopPage.screenshot({ path: path.join(outputDir, "bubble-swarm-desktop.png") });
 
-  console.log("Browser playtest passed: Tower hold/release, Bubble round grid/shot/buttons, Glide left strip, mobile and desktop.");
+  assert.deepEqual(browserErrors, [], `browser console must remain clean:\n${browserErrors.join("\n")}`);
+  console.log("Browser playtest passed: Tower controls/zone/floor labels, Bubble dotted bounce/smooth shot/smaller grid, Glide, mobile and desktop.");
 } finally {
   await browser.close();
 }
