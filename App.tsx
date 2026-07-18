@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Application from "expo-application";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, Image, ImageSourcePropType, Linking, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Image, ImageSourcePropType, Linking, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppNotification, BugComment, BugReport, NotificationSettings, User } from "./src/types";
 import { activateBugLamp, applyUserPoints, createOrganizationForUser, ensureUserDocument, getUserById, login, loginWithGoogle, logout, markHelpSeen, recordBugSplat, register, subscribeAuth, syncEngagementPoints, syncMovementKilometers, touchUserActivity, updateUserCharacter, updateUserDisplayName } from "./src/services/userService";
 import { activeBugSquadBonuses } from "./src/services/bugSquadService";
@@ -293,6 +293,44 @@ function AppContent() {
   const foregroundRewardPending = pendingForegroundRewards.length > 0;
   const foregroundBugEnabled = foregroundUiClear && ["home", "bugs", "new", "bugdex", "leaderboard"].includes(route);
   const forcedForegroundRewardEnabled = foregroundUiClear && foregroundRewardPending && !(route === "duel" && duelFullscreen);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    const html = document.documentElement;
+    const body = document.body;
+    const root = document.getElementById("root");
+    const previous = [html, body, root].filter(Boolean).map((element) => ({
+      element: element as HTMLElement,
+      height: (element as HTMLElement).style.height,
+      minHeight: (element as HTMLElement).style.minHeight,
+      overflow: (element as HTMLElement).style.overflow,
+      overscrollBehavior: (element as HTMLElement).style.overscrollBehavior,
+      width: (element as HTMLElement).style.width
+    }));
+    [html, body, root].filter(Boolean).forEach((element) => {
+      const target = element as HTMLElement;
+      target.style.height = "100%";
+      target.style.minHeight = "100%";
+      target.style.width = "100%";
+      target.style.overflow = "hidden";
+      target.style.overscrollBehavior = "none";
+    });
+    const keepViewportPinned = () => {
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+    window.addEventListener("scroll", keepViewportPinned, { passive: true });
+    keepViewportPinned();
+    return () => {
+      window.removeEventListener("scroll", keepViewportPinned);
+      previous.forEach(({ element, height, minHeight, overflow, overscrollBehavior, width }) => {
+        element.style.height = height;
+        element.style.minHeight = minHeight;
+        element.style.width = width;
+        element.style.overflow = overflow;
+        element.style.overscrollBehavior = overscrollBehavior;
+      });
+    };
+  }, []);
 
   function recordUserActivity(currentUser: User, force = false) {
     void touchUserActivity(currentUser, force)
@@ -1143,21 +1181,26 @@ function AppContent() {
 
   if (authLoading) {
     return (
-      <SafeAreaView style={styles.shell}>
+      <View style={styles.webStage}>
         <AppBackground />
-        <View style={styles.loadingScreen}>
-          <ActivityIndicator color="#15724f" size="large" />
-        </View>
-        <VersionToast notice={versionNotice} onDismiss={() => setVersionNotice(null)} />
-      </SafeAreaView>
+        <SafeAreaView style={styles.shell}>
+          <View style={styles.loadingScreen}>
+            <ActivityIndicator color="#15724f" size="large" />
+          </View>
+          <VersionToast notice={versionNotice} onDismiss={() => setVersionNotice(null)} />
+        </SafeAreaView>
+      </View>
     );
   }
 
   if (!user) {
     return (
-      <View style={styles.fullScreen}>
-        <LoginScreen error={authError} loading={authLoading} onGoogleSubmit={handleGoogleLogin} onSubmit={handleLogin} />
-        <VersionToast notice={versionNotice} onDismiss={() => setVersionNotice(null)} />
+      <View style={styles.webStage}>
+        <AppBackground />
+        <View style={[styles.fullScreen, styles.shell]}>
+          <LoginScreen error={authError} loading={authLoading} onGoogleSubmit={handleGoogleLogin} onSubmit={handleLogin} />
+          <VersionToast notice={versionNotice} onDismiss={() => setVersionNotice(null)} />
+        </View>
       </View>
     );
   }
@@ -1165,10 +1208,11 @@ function AppContent() {
   const duelRouteActive = route === "duel";
 
   return (
-    <SafeAreaView style={styles.shell}>
+    <View style={styles.webStage}>
       <AppBackground />
-      {!duelRouteActive && <WalkingBugsLayer onSplat={() => void handleBugSplat()} />}
-      <View style={styles.content}>
+      <SafeAreaView style={[styles.shell, duelFullscreen && styles.gameShell]}>
+        {!duelRouteActive && <WalkingBugsLayer onSplat={() => void handleBugSplat()} />}
+        <View style={styles.content}>
         {route === "home" && (
           <HomeScreen
             movementBoost={movementBoostForUser()}
@@ -1300,10 +1344,10 @@ function AppContent() {
             onShowHelp={showHelpTour}
           />
         )}
-      </View>
-      {!(duelRouteActive && duelFullscreen) && <BottomNav activeRoute={route} badges={{ bugdex: requestTabBadges.trade, duel: requestTabBadges.duel }} onNavigate={navigateMain} />}
-      {!duelRouteActive && <InAppNotificationToast notification={notification && !isRequestNotification(notification) ? notification : null} onClose={closeNotification} onOpen={openNotification} />}
-      <ForegroundCatchBug
+        </View>
+        {!(duelRouteActive && duelFullscreen) && <BottomNav activeRoute={route} badges={{ bugdex: requestTabBadges.trade, duel: requestTabBadges.duel }} onNavigate={navigateMain} />}
+        {!duelRouteActive && <InAppNotificationToast notification={notification && !isRequestNotification(notification) ? notification : null} onClose={closeNotification} onOpen={openNotification} />}
+        <ForegroundCatchBug
         catchAssist={squadBonuses().catch_assist}
         catchTimeBonus={squadBonuses().catch_time}
         enabled={foregroundBugEnabled || forcedForegroundRewardEnabled}
@@ -1322,16 +1366,17 @@ function AppContent() {
           });
           activeForegroundRewardRef.current = null;
         }}
-      />
-      <RankUpModal tier={rankUpTier} onClose={() => setRankUpTier(null)} />
-      <BadgeUnlockModal badge={badgeUnlock} onClose={closeBadgeUnlock} />
-      <BugDexUnlockModal drop={bugDexDrop} busy={bugDexClaiming} onClose={closeBugDexDrop} />
-      <DisplayNameModal user={user} visible={Boolean(user && user.nameSet !== true)} onSave={handleDisplayNameSave} />
-      <HelpTourOverlay visible={helpVisible && user.nameSet === true} onFinish={finishHelpTour} onNavigate={navigateHelp} />
-      <ChangelogModal version={changelogVersion} onClose={closeChangelog} />
-      <BugSplatBonusOverlay visible={splatBonusVisible} onSkip={() => setSplatBonusVisible(false)} />
-      <VersionToast notice={versionNotice} onDismiss={() => setVersionNotice(null)} />
-    </SafeAreaView>
+        />
+        <RankUpModal tier={rankUpTier} onClose={() => setRankUpTier(null)} />
+        <BadgeUnlockModal badge={badgeUnlock} onClose={closeBadgeUnlock} />
+        <BugDexUnlockModal drop={bugDexDrop} busy={bugDexClaiming} onClose={closeBugDexDrop} />
+        <DisplayNameModal user={user} visible={Boolean(user && user.nameSet !== true)} onSave={handleDisplayNameSave} />
+        <HelpTourOverlay visible={helpVisible && user.nameSet === true} onFinish={finishHelpTour} onNavigate={navigateHelp} />
+        <ChangelogModal version={changelogVersion} onClose={closeChangelog} />
+        <BugSplatBonusOverlay visible={splatBonusVisible} onSkip={() => setSplatBonusVisible(false)} />
+        <VersionToast notice={versionNotice} onDismiss={() => setVersionNotice(null)} />
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -1404,15 +1449,29 @@ function radarBugIdFromUrl(url: string | null): BugArtId | null {
 }
 
 const styles = StyleSheet.create({
-  shell: {
+  webStage: {
+    alignItems: "center",
+    backgroundColor: "#dfe9df",
     flex: 1,
-    backgroundColor: "#eef4ed"
+    minHeight: 0,
+    width: "100%"
   },
+  shell: {
+    backgroundColor: "#eef4ed",
+    flex: 1,
+    maxWidth: Platform.OS === "web" ? 460 : undefined,
+    minHeight: 0,
+    overflow: "hidden",
+    width: "100%"
+  },
+  gameShell: { overflow: "hidden" },
   fullScreen: {
-    flex: 1
+    flex: 1,
+    minHeight: 0
   },
   content: {
     flex: 1,
+    minHeight: 0,
     position: "relative",
     zIndex: 1
   },

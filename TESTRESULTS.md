@@ -1,5 +1,68 @@
 # Test Results
 
+## 2026-07-18 web shell and arcade release candidate
+
+- `npm.cmd run typecheck`: geslaagd.
+- `npx expo export --platform web`: geslaagd; 317 assets en webbundle gegenereerd in `dist`.
+- `git diff --check`: geslaagd.
+- Vercel deployment: HTTP 200 op `https://dist-ruddy-ten-52.vercel.app`; Expo HTML en bundle asset zijn bereikbaar.
+- Browser visual smoke: niet uitgevoerd; Browser/Chrome-plugin en lokale Chrome/Edge executable waren niet beschikbaar.
+- Android device-smoke: nog niet uitgevoerd; pas na APK-build opnieuw gecontroleerd met `adb devices -l`.
+- `npm.cmd run apk:fast`: geslaagd (exit 0).
+- APK: `android/app/build/outputs/apk/release/app-release.apk`, 95.034.823 bytes, package `nl.cimpro.bugbaas`, versionCode `187`, versionName `2.10.7`.
+- Kopie voor release: `dist/BugBaas-2.10.7.apk`.
+- `apksigner verify --verbose --print-certs`: v2 geslaagd; certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA-256: `324D5633E398AF57059FC623AB875176C33D766ED0CC34B28B6375EF7DF45F78`.
+- `adb devices -l`: geen aangesloten apparaat; install/control-smoke blijft open.
+
+## 2026-07-18 scheduled ranked rating decay
+
+- Decaybodem verlaagd van 1000 naar de bestaande absolute Duel-ratingbodem van 100; startrating blijft 1000.
+- Zes gerichte checks geslaagd: gisteren gespeeld, een gemiste dag, bestaand checkpoint, gedeeltelijke floor-cap, rating op de floor en Nederlandse zomertijdovergang.
+- `node --check scripts/apply_ranked_decay.mjs`: geslaagd.
+- YAML-parse van de nieuwe en bestaande scheduled workflow: geslaagd.
+- `git diff --check` op script en workflow: geslaagd.
+- Live Firestore dry-run: 31 gebruikers gelezen, 1 gebruiker geraakt, 5 totale rating-decay; geen writes uitgevoerd.
+- De workflow gebruikt de bestaande `FIREBASE_SERVICE_ACCOUNT` secret en schrijft alleen na de dry-run.
+- GitHub Actions push-dry-run op `master`: geslaagd in 33 seconden; service-accountauth en live Firestore-read werken.
+- GitHub meldde alleen dat de gebruikte action-versies intern van Node.js 20 naar Node.js 24 worden geforceerd; dit blokkeerde de run niet.
+- Zes sub-1000-grenschecks geslaagd: 1000 daalt, een rating onder 1000 daalt verder en de absolute bodem 100 wordt niet doorbroken.
+- `npm.cmd run typecheck`: geslaagd na verlaging van de decaybodem.
+- Actuele `master`-rules compileerden en zijn succesvol naar `thomascimpro-6266f` gedeployed.
+- Live inhaalrun: 5 gebruikers bijgewerkt, 495 totale rating verwijderd; aansluitende dry-run vond 0 openstaande gevallen.
+- Live verificatie: Niva-cross 880, Biertje 885, test2 895, Favo B 905 en Thomas Test 926; checkpoint voor alle vijf staat op `2026-07-17`.
+
+## 2026-07-17 Bug Tower hold-release controls
+
+- `npm run typecheck`: geslaagd.
+- `git diff --check` voor `BugTowerGame.tsx`: geslaagd; alleen bestaande LF/CRLF-waarschuwing.
+- Tilt-import, sensorstate en tap-to-jump handler zijn volledig uit Bug Tower verwijderd.
+- Berekende spronggrenzen: korte druk 12,6%, medium 19,1%, spin-threshold 21,9% en maximale aanloop 28,9% schermhoogte.
+- Spin vereist minimaal 72% snelheid en 58% jump charge.
+- Berekende floor pressure zonder extra tijdstap: floor 8 = 0,36%, floor 100 = 1,30%, floor 200 = 2,30%, floor 300 = 3,30% en floor 400 = 4,30% schermhoogte per seconde.
+- Platformrange schaalt van 56-62% breed / 9,8-12,2% gap bij de start naar 28-34% breed / 14,2-16,6% gap rond floor 400.
+- Vier nieuwe imagegen-achtergronden visueel gecontroleerd: jungle/hive, magma/forge, sky temple en cosmic void hebben elk een vrije verticale gameplaybaan.
+- `npm run apk:fast` met `NODE_ENV=production`: geslaagd (`BUILD SUCCESSFUL` in 59 seconden; 317 assets gebundeld).
+- Fast-build APK: `android/app/build/outputs/apk/release/app-release.apk`, 95.124.931 bytes, package `nl.cimpro.bugbaas`, versionCode `180`, versionName `2.10.0`.
+- APK v2-signing: geslaagd; certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA-256: `601CDD975B07E2F241A0192969E6AB804D9755967EB338321C65D341C4BC4F0C`.
+- Metro-generated Android resources bevatten alle vier nieuwe Bug Tower-zoneachtergronden.
+- Device-smoke voor knoprelease, coyote jump, landing, spin en zonewissel is niet uitgevoerd; `adb devices -l` vond geen aangesloten apparaat.
+
+## 2026-07-17 Bubble Swarm
+
+- `npm run typecheck`: geslaagd.
+- `git diff --check` op de Bubble Swarm-code, integratie, vertalingen en Firestore rules: geslaagd; alleen bestaande LF/CRLF-waarschuwingen.
+- Firestore Emulator rules-compile op geisoleerde poort 8183: geslaagd; live Firebase is niet gewijzigd.
+- Imagegen-assets visueel gecontroleerd: verticale vrije gameplaybaan en zes goed onderscheidbare insect-bubbles; de afzonderlijke ronde sprites behouden hun originele kleurdetails.
+- `npm run apk:fast` met `NODE_ENV=production`: geslaagd in 152 seconden.
+- Fast-build APK: `android/app/build/outputs/apk/release/app-release.apk`, 86.681.853 bytes, package `nl.cimpro.bugbaas`, versionCode `180`, versionName `2.10.0`, minSdk `26`, targetSdk `36`.
+- APK v2-signing: geslaagd; certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA-256: `9792FCEF716F567E80AA42992B81239A2F64BD8C80043244AAEDE5A9ECD84018`.
+- Metro-generated Android resources bevatten de Bubble Swarm-achtergrond en alle zes gebruikte bubble-sprites.
+- Device-smoke voor aimgevoel, collisionkeuze, pressure pacing en Firebase-write is niet uitgevoerd; `adb devices -l` vond geen aangesloten apparaat.
+- De eerste emulatorpoging op standaardpoort 8080 werd geblokkeerd door een bestaand proces; de herhaling op 8183 compileerde succesvol.
+
 ## 2026-07-17 release 2.10.0
 
 - Versiebronnen: package/Expo `2.10.0`, Android versionName `2.10.0`, versionCode `180`.

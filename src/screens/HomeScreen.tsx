@@ -57,6 +57,12 @@ const rarityColors: Record<BugDexRarity, string> = {
   Mythisch: "#ef4444"
 };
 
+const buddyStatColors: Record<BuddyStatKind, string> = {
+  care: "#d7bd57",
+  energy: "#38bdf8",
+  happy: "#69c88d"
+};
+
 const buddyFeatureVisible = true;
 const buddyHappyImage = require("../../assets/buddy/kenney/stats/stat_happy.png");
 const buddyEnergyImage = require("../../assets/buddy/kenney/stats/stat_energy.png");
@@ -917,7 +923,10 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
                 </View>
               </View>
               <Text style={styles.buddyName} numberOfLines={1}>{buddyEntry.name}</Text>
-              <Text style={styles.buddyStatus}>{buddyStatus}</Text>
+              <View style={styles.buddyStatusBadge}>
+                <Text style={styles.buddyStatusIcon}>{buddyActiveTask ? "↗" : buddyFinishedTask ? "✓" : buddyReadyCount > 0 ? "!" : "zZ"}</Text>
+                <Text style={styles.buddyStatus}>{buddyStatus}</Text>
+              </View>
               <View style={styles.buddyTrack}>
                 <View style={[styles.buddyFill, { width: `${buddyProgress}%` as DimensionValue }]} />
               </View>
@@ -1292,15 +1301,16 @@ function BuddyStatIcon({ kind, size = 24 }: { kind: BuddyStatKind; size?: number
   return <Image source={buddyStatIconSource(kind)} style={[styles.buddyStatIconImage, { height: size, width: size }]} />;
 }
 
-function BuddyMeter({ kind, value }: { kind: BuddyStatKind; label: string; value: number }) {
+function BuddyMeter({ kind, label, value }: { kind: BuddyStatKind; label: string; value: number }) {
   const safeValue = Math.max(0, Math.min(100, Math.round(value)));
   return (
     <View style={styles.buddyMeterRow}>
       <BuddyStatIcon kind={kind} />
+      <Text style={styles.buddyMeterLabel}>{label}</Text>
       <View style={styles.buddyMeterTrack}>
-        <View style={[styles.buddyMeterFill, { width: `${safeValue}%` as DimensionValue }]} />
+        <View style={[styles.buddyMeterFill, { backgroundColor: buddyStatColors[kind], width: `${safeValue}%` as DimensionValue }]} />
       </View>
-      <Text style={styles.buddyMeterValue}>{safeValue}</Text>
+      <Text style={[styles.buddyMeterValue, { color: buddyStatColors[kind] }]}>{safeValue}/100</Text>
     </View>
   );
 }
@@ -2244,6 +2254,17 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 1
   },
+  buddyStatusBadge: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 1
+  },
+  buddyStatusIcon: {
+    color: "#d7bd57",
+    fontSize: 11,
+    fontWeight: "900"
+  },
   buddyMeterFill: {
     backgroundColor: "#69c88d",
     borderRadius: 999,
@@ -2257,6 +2278,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: 5
+  },
+  buddyMeterLabel: {
+    color: "#dce9df",
+    fontSize: 10,
+    fontWeight: "900",
+    width: 48
   },
   buddyMeterTrack: {
     backgroundColor: "rgba(249,251,247,0.16)",

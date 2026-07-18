@@ -1,5 +1,23 @@
 # Decisions
 
+## 2026-07-18 web shell and arcade release candidate
+
+- De web-shell blijft maximaal 460px breed en gebruikt één interne scrollcontainer; de document-body wordt niet als tweede scrolllaag gebruikt.
+- Fullscreen wordt gestuurd door de actuele game-state en niet door een mount-effect, zodat de navigatie niet kort terugkeert tijdens game-start of gamewissels.
+- Bug Tower-platformbreedte en moving-platform-kans zijn deterministisch aan floor/seed gekoppeld; coins en rockets zijn pickups en beïnvloeden de runscore zonder nieuwe backend-schema's.
+- Bubble Swarm gebruikt alleen React Native views, requestAnimationFrame en transform; power-ups blijven lokaal aan de bestaande solo-resultaatflow gekoppeld.
+- Daily 7-duel target behoudt het oude claim-id zodat bestaande dagelijkse claims idempotent blijven.
+
+- De inactivity-decay gebruikt dezelfde absolute ondergrens van 100 als normale Duel-ratingverliezen; 1000 blijft alleen de startrating.
+- Ranked-inactiviteitsdecay draait dagelijks via GitHub Actions met de bestaande Firebase-service-accountsecret; het script is idempotent, gebruikt Firestore update-time preconditions en houdt de bodem op 1000.
+- Bug Tower gebruikt geen kantelsensor meer: `onPressIn` links/rechts start de aanloop en `onPressOut` zet de opgebouwde afstand en snelheid om in sprongkracht.
+- De minimale sprong blijft bruikbaar voor een nabije trede; maximale aanloop haalt circa 28,9% schermhoogte en spin activeert pas vanaf 72% snelheid plus 58% charge.
+- Backgroundgenres wisselen per blok van 100 floors en worden boven floor 500 als steeds moeilijkere remixes herhaald, zodat een endless run geen onbeperkte set assets nodig heeft.
+- Platformdruk schaalt continu met floor en in extra stappen per zone; time pressure is klein gehouden zodat vaardigheid belangrijker blijft dan alleen speeltijd.
+- Bubble Swarm is uitsluitend solo en wordt niet aan `validDuelMode` of de dagelijkse duelmissie toegevoegd; alleen het bestaande solo Arcade-resultaatpad krijgt de nieuwe mode.
+- De bubble-shooter gebruikt React Native views en `Animated` zonder nieuwe game- of canvasdependency: slepen richt, loslaten schiet, matches van drie verwijderen en niet meer aan het plafond verbonden clusters vallen.
+- De moeilijkheid schaalt op drie assen: drukrijen komen steeds sneller, de misslimiet daalt van zes naar drie en na 28/55 seconden komen een vijfde en zesde bugkleur beschikbaar.
+- Bubble Swarm gebruikt originele imagegen-art; sprites of geluiden uit bestaande commerciële bubble-shooters worden niet gekopieerd. De game hergebruikt de bestaande BugBaas arcade-soundset.
 - Nieuwe BugDex-beelden gebruiken uitsluitend exacte uitsneden uit de aangeleverde bronbladen; onduidelijke exemplaren worden niet toegevoegd en zeldzaamheid volgt de visuele bijzonderheid.
 - Hogere scoretiers schalen na 2.400 punten grofweg exponentieel naar 5.000, 10.000, 20.000 en 40.000; behaalde bestaande tiers blijven daardoor intact, terwijl de nieuwe top langdurig doel blijft.
 - Nest Defense gebruikt absolute touchposities minus de gemeten speelveldoorsprong; lokale `locationX/locationY` van geneste vijand-views zijn hiervoor onbetrouwbaar.

@@ -32,7 +32,7 @@ type DailyMissionContext = {
 };
 
 const dailyMissionXp = 10;
-const allArcadeModes: ArcadeMode[] = ["tap_duel", "web_runner", "nest_defense", "bug_glide", "bug_tower"];
+const allArcadeModes: ArcadeMode[] = ["tap_duel", "web_runner", "nest_defense", "bug_glide", "bug_tower", "bubble_swarm"];
 const demoDailyClaims = new Set<string>();
 
 const dailyMissionTemplates: DailyMissionTemplate[] = [
@@ -59,9 +59,10 @@ const dailyMissionTemplates: DailyMissionTemplate[] = [
     ).size
   },
   {
+    // Keep the legacy id so claims already made today remain idempotent when the target changes.
     id: "duel-play-5",
-    title: "mission.dailyFiveDuels",
-    target: 5,
+    title: "mission.dailySevenDuels",
+    target: 7,
     reward: "mission.rewardXp25",
     rewardSource: "daily_mission_bonus",
     rewardXp: 25,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import argparse
 
 from PIL import Image
 from rembg import new_session, remove
@@ -24,6 +25,7 @@ class CropSpec:
     rows: int
     column: int
     row: int
+    crop_box: tuple[int, int, int, int] | None = None
 
 
 SPECS = (
@@ -35,7 +37,9 @@ SPECS = (
     CropSpec("blauwe-morpho", "33809.png", 3, 4, 3, 2),
     CropSpec("spinnendoder", "33809.png", 3, 4, 1, 3),
     CropSpec("kameelspin", "33809.png", 3, 4, 1, 4),
-    CropSpec("hooiwagen", "33809.png", 3, 4, 2, 4),
+    # The long-legged harvestman reaches the lower edge of the source sheet;
+    # use an explicit box so a future grid rounding change cannot crop its legs.
+    CropSpec("hooiwagen", "33809.png", 3, 4, 2, 4, (490, 825, 962, 1086)),
     CropSpec("zweepspin", "33809.png", 3, 4, 3, 4),
     CropSpec("doorncicade", "33810.png", 4, 3, 4, 1),
     CropSpec("kortschildkever", "33810.png", 4, 3, 2, 2),
@@ -76,6 +80,8 @@ SPECS = (
 
 
 def cell_box(image: Image.Image, spec: CropSpec) -> tuple[int, int, int, int]:
+    if spec.crop_box is not None:
+        return spec.crop_box
     left = round((spec.column - 1) * image.width / spec.columns)
     top = round((spec.row - 1) * image.height / spec.rows)
     right = round(spec.column * image.width / spec.columns)
@@ -112,28 +118,48 @@ def remove_source_artifacts(image: Image.Image, slug: str) -> Image.Image:
     return cleaned
 
 
+def remove_light_sheet_background(image: Image.Image) -> Image.Image:
+    """Keep the harvestman's fine legs that u2net removes against the light sheet."""
+    rgba = image.convert("RGBA")
+    background = rgba.getpixel((0, 0))[:3]
+    pixels = []
+    for red, green, blue, _alpha in rgba.getdata():
+        difference = max(abs(red - background[0]), abs(green - background[1]), abs(blue - background[2]))
+        alpha = 0 if difference <= 12 else min(255, (difference - 12) * 18)
+        pixels.append((red, green, blue, alpha))
+    rgba.putdata(pixels)
+    return rgba
+
+
 def main() -> None:
-    missing = [spec.sheet for spec in SPECS if not (SOURCE_DIR / spec.sheet).is_file()]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--slug", action="append", dest="slugs", help="Extract only the selected slug(s).")
+    parser.add_argument("--overwrite", action="store_true", help="Allow replacing selected output assets.")
+    args = parser.parse_args()
+    specs = tuple(spec for spec in SPECS if not args.slugs or spec.slug in args.slugs)
+    if not specs:
+        raise ValueError("No matching BugDex slugs selected")
+    missing = [spec.sheet for spec in specs if not (SOURCE_DIR / spec.sheet).is_file()]
     if missing:
         raise FileNotFoundError(f"Missing source sheets: {sorted(set(missing))}")
 
     session = new_session("u2net")
     loaded: dict[str, Image.Image] = {}
-    for spec in SPECS:
+    for spec in specs:
         sheet = loaded.get(spec.sheet)
         if sheet is None:
             sheet = Image.open(SOURCE_DIR / spec.sheet).convert("RGB")
             loaded[spec.sheet] = sheet
         exact_crop = sheet.crop(cell_box(sheet, spec))
-        cutout = remove(exact_crop, session=session)
+        cutout = remove_light_sheet_background(exact_crop) if spec.slug == "hooiwagen" else remove(exact_crop, session=session)
         output = remove_source_artifacts(normalize(cutout), spec.slug)
         output_path = OUTPUT_DIR / f"{spec.slug}.png"
-        if output_path.exists():
+        if output_path.exists() and not args.overwrite:
             raise FileExistsError(f"Refusing to overwrite existing asset: {output_path}")
         output.save(output_path, optimize=True)
         print(f"created {output_path.relative_to(ROOT)}")
 
-    print(f"created {len(SPECS)} exact-source BugDex crops")
+    print(f"created {len(specs)} exact-source BugDex crops")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, Alert, Animated, Image, ImageSourcePropType, ImageStyle, Modal, Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
@@ -1590,7 +1590,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const activeDuelScore = retryingActiveDuel ? (runSubmitted ? score + duelBonusScore(score, assist) : score) : ownSubmittedScore ? displayDuelScore(ownSubmittedScore) : (runSubmitted ? score + duelBonusScore(score, assist) : score);
   const incomingPendingDuel = activeDuel?.status === "pending" && activeDuel.toUserId === user.uid;
   const showActiveArcadeGame = Boolean(activeDuel && activeArcadeMode && duelCanRun && activeLocalStartAt && (!activeDuelOwnScore || activeArcadeOwnScoreIsZero) && !awaitingOpponentResult);
-  const fullscreenGame = showActiveArcadeGame || arenaMode === "web_runner" || arenaMode === "nest_defense" || arenaMode === "bug_glide" || arenaMode === "bug_tower" || arenaMode === "bubble_swarm" || Boolean(trainingDuel) || Boolean(duelCanRun && activeLocalStartAt && !playerNeedsManualStart && !awaitingOpponentResult && !runSubmitted);
+  const activeGameFullscreen = showActiveArcadeGame || arenaMode === "web_runner" || arenaMode === "nest_defense" || arenaMode === "bug_glide" || arenaMode === "bug_tower" || arenaMode === "bubble_swarm" || Boolean(trainingDuel) || Boolean(duelCanRun && activeLocalStartAt && !playerNeedsManualStart && !awaitingOpponentResult && !runSubmitted);
   const gameScore = trainingDuel && runSubmitted ? score + duelBonusScore(score, assist) : trainingDuel ? score : activeDuelScore;
   const soloCampaign = soloRun?.mode === "campaign" ? soloRun : null;
   const soloProgress = gameStartAt && gameDuel ? Math.max(0, Math.min(1, (now - Date.parse(gameStartAt)) / gameDuel.durationMs)) : 0;
@@ -1603,10 +1603,11 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const canUseSoloSprayInGame = Boolean(gameDuel && soloCampaign && isRunning(gameDuel, now) && (soloSprayHeld || lampFocusActive || soloPowerups.lampFocusCharges > 0));
   const canUseSoloBugBombInGame = Boolean(gameDuel && soloCampaign && isRunning(gameDuel, now) && (soloBombPrimed || soloPowerups.bugBombCharges > 0));
 
-  useLayoutEffect(() => {
-    onFullscreenChange?.(fullscreenGame);
-    return () => onFullscreenChange?.(false);
-  }, [fullscreenGame, onFullscreenChange]);
+  useEffect(() => {
+    onFullscreenChange?.(activeGameFullscreen);
+  }, [activeGameFullscreen, onFullscreenChange]);
+
+  useEffect(() => () => onFullscreenChange?.(false), [onFullscreenChange]);
 
   useEffect(() => {
     if (!soloCampaign || !trainingDuel || !soloCampaignWon) return;
@@ -1739,7 +1740,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     if (activeArcadeMode === "bug_tower") return <BugTowerGame {...commonProps} />;
   }
 
-  if (fullscreenGame && gameDuel) {
+  if (activeGameFullscreen && gameDuel) {
     return (
       <View style={styles.fullscreenGame}>
         <View style={styles.gameHud}>

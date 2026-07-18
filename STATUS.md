@@ -1,5 +1,24 @@
 # Status
 
+## 2026-07-18 web shell, arcade scaling and release candidate
+
+- De Expo-webshell is op web gecentreerd met een maximale breedte van 460px; html/body/root zijn viewport-locked en scroll blijft binnen de schermcontent.
+- Duel-arcadegames schakelen naar een eigen fullscreen game-shell; BottomNav, WalkingBugs en foreground overlays worden tijdens actieve games niet gerenderd.
+- Bug Tower heeft smallere hoge-floor platforms, oplopende moving-platform-kans, chain taps, coins en tijdelijke rocket flight; Bubble Swarm gebruikt RAF/transform-projectielen, wall-bounce aim paths, bomb en freeze shots.
+- BuddyCareIcon gebruikt transparante state/action PNG-assets; Hooiwagen is opnieuw met volledige poten gecropt.
+- Daily duelmission gebruikt target 7 en behoudt id `duel-play-5` voor bestaande claims.
+- Web export en Vercel production deployment zijn geslaagd; de publieke alias is `https://dist-ruddy-ten-52.vercel.app` als apart project omdat het bestaande `bugbaas.vercel.app`-project niet aan deze checkout kon worden gekoppeld.
+- Browser-plugin en fysieke device-smoke waren in deze run niet beschikbaar; die visuele/control-flow checks blijven expliciet open.
+- Android fast release-build 2.10.7 is geslaagd; APK staat op `dist/BugBaas-2.10.7.apk`, metadata/signing/hash zijn gecontroleerd.
+
+- Ranked-inactiviteitsdecay loopt nu door onder 1000 tot de absolute Duel-ratingbodem van 100.
+- Dagelijkse ranked rating-decay is als GitHub Actions-scheduler voorbereid: ook afwezige spelers worden server-side verwerkt zonder app-login; live dry-run tegen Firestore is geslaagd.
+- Bug Tower gebruikt nu uitsluitend touchbesturing: links/rechts vasthouden bouwt loopsnelheid en sprongkracht op, loslaten springt; snelle geladen sprongen laten het karakter ronddraaien.
+- Alle treden tonen hun floornummer en de achtergrond wisselt iedere 100 floors tussen Ice Citadel, Hive Jungle, Ember Forge, Sky Temple en Cosmic Void.
+- De neerwaartse torendruk begint rustig na floor 8 en schaalt samen met smallere treden, grotere gaten en meer bewegende platforms door tot een onhoudbare late game.
+- Bubble Swarm is lokaal als zesde Arena-game geimplementeerd: solo richten/schieten, match-3, vallende clusters, kettingcombo's, lokale highscore en afzonderlijke Firebase-runrecords.
+- Bubble Swarm wordt door snellere automatische zwermdruk, minder toegestane missers en zes oplopende bubblekleuren uiteindelijk onhoudbaar; elke run eindigt uiterlijk na 90 seconden.
+- Android fast release-build 2.10.0 met Bubble Swarm en alle zeven nieuwe assets is geslaagd; device-smoke en deployment van de gewijzigde Firestore rules staan nog open.
 - Release 2.10.0 is lokaal geminificeerd en gesigneerd gebouwd; metadata, v2-signing en SHA-256 zijn geverifieerd, publicatie op GitHub volgt.
 - BugDex bevat 45 nieuwe, transparant gecropte bugs uit `new17-17-2026`; catalogus-, asset- en Android-releasecontrole zijn geslaagd.
 - De scoreladder loopt nu door tot 40.000 punten met vier nieuwe stretch-tiers boven Goliath BugBaas.

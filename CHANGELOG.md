@@ -1,7 +1,28 @@
 # Changelog
 
+## 2.10.7
+
+- Responsive web mobile shell toegevoegd met gecentreerde 460px-layout, locked document viewport en interne schermscroll.
+- Actieve duelgames gebruiken een fullscreen game-shell zonder BottomNav, walking bugs of foreground reward overlays.
+- Bug Tower uitgebreid met deterministische high-floor scaling, moving platforms, coins, chain jumps en tijdelijke rocket flight.
+- Bubble Swarm uitgebreid met transform-geanimeerde wall-bounce projectielen, aim preview, bomb blast en freeze power-ups.
+- Buddy action/status visuals gebruiken transparante PNG-assets; Hooiwagen-crop is gecorrigeerd.
+- Dagelijkse duelmissie verhoogd van vijf naar zeven duels met behoud van het bestaande claim-id.
+
 ## 2.10.0
 
+- Ranked inactivity-decay kan ratings onder 1000 brengen en stopt pas bij de absolute bodem van 100.
+- Dagelijkse server-side ranked rating-decay toegevoegd via GitHub Actions, zodat gemiste dagen ook zonder app-login worden verwerkt.
+- Bug Tower-kantelbesturing vervangen door vasthouden-om-te-rennen en loslaten-om-te-springen, inclusief zichtbare jump-power meter.
+- Spronghoogte schaalt met aanloopafstand en snelheid; snelle geladen sprongen geven het keverpersonage een volledige spinanimatie.
+- Iedere trede toont een floornummer en elke 100 floors start een nieuw achtergrondgenre met eigen platformkleuren.
+- Vier nieuwe towerzones toegevoegd: Hive Jungle, Ember Forge, Sky Temple en Cosmic Void.
+- Neerwaartse floor pressure, platformgaten, platformbreedtes en bewegende treden schalen vloeiender en worden op hoge floors steeds onhoudbaarder.
+- Bubble Swarm toegevoegd als zesde Arena-game en zelfstandige soloscore-run.
+- Drag-to-aim/release-to-shoot, geanimeerde projectielen, zes bug-bubbles, match-3, chain bonuses en vallende losgeraakte clusters toegevoegd.
+- Oplopende zwermdruk, dalende misslimiet en een harde 90-seconden survivalgrens zorgen dat iedere run eindigt.
+- Lokale highscores en afzonderlijke `arcadeGameResults/bubble_swarm/runs`-records toegevoegd zonder Bubble Swarm als duel/ranked-mode te registreren.
+- Originele verticale tuinachtergrond en zes ronde insect-bubble-assets toegevoegd.
 - 45 nieuwe BugDex-insecten toegevoegd met transparante 512x512-crops, Nederlandse namen, type, zeldzaamheid en oplopende unlocks.
 - Vier nieuwe scoretiers toegevoegd op 5.000, 10.000, 20.000 en 40.000 punten, met eigen insectbeelden en frames.
 - Nest Defense koppelt tap-effecten en vijandselectie exact aan de aangetikte positie binnen het speelveld, ook wanneer de bug zelf het touch-target is.
