@@ -1,5 +1,6 @@
 # Decisions
 
+- Bug Tower bereikt zijn volledige platformkrimp rond verdieping 360 in plaats van 500. De eerste 30 verdiepingen blijven vrij van bewegende treden; daarna nemen zij en de links/rechts-afstanden sneller toe.
 - Bug Tower maakt de bestaande schermhelften zichtbaar met subtiele overlays; de overlays wijzigen geen input- of physicslogica en blijven doorzichtig genoeg om platforms te blijven zien.
 - Een vriendenlink wordt als aparte publieke statische webdeployment behandeld. De bestaande ChatGPT Site blijft de volledige Sites/Strava-variant zolang `public` niet als toegestane access mode beschikbaar is.
 - Bug Tower wisselt iedere 100 verdiepingen tussen vijf originele BugBaas-werelden; de wereldselectie is floor-gebaseerd en cyclisch, zodat lange runs altijd een geldige achtergrond houden.

@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(playwrightPath);
 const baseUrl = process.env.BUGBAAS_PLAYTEST_URL ?? "http://127.0.0.1:4173/game/";
 const sitesBypassToken = process.env.BUGBAAS_SITES_BYPASS_TOKEN;
-const outputDir = path.resolve("dist", "playtest-2.10.3");
+const outputDir = path.resolve("dist", "playtest-2.10.4");
 await mkdir(outputDir, { recursive: true });
 const browserErrors = [];
 

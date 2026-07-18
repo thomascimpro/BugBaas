@@ -12,20 +12,20 @@ export type TowerDifficulty = {
 
 export function towerDifficulty(floor: number, elapsedMs: number): TowerDifficulty {
   const safeFloor = Math.max(0, floor);
-  const heightProgress = clamp(safeFloor / 500, 0, 1);
-  const timeProgress = clamp((elapsedMs - 12000) / 150000, 0, 1);
-  const level = Math.min(8, Math.floor(safeFloor / 65) + Math.floor(timeProgress * 2));
-  const movingEvery = safeFloor < 40 ? 999 : Math.max(3, 12 - Math.floor(safeFloor / 55));
+  const heightProgress = clamp(safeFloor / 360, 0, 1);
+  const timeProgress = clamp((elapsedMs - 10000) / 125000, 0, 1);
+  const level = Math.min(8, Math.floor(safeFloor / 50) + Math.floor(timeProgress * 2));
+  const movingEvery = safeFloor < 30 ? 999 : Math.max(3, 10 - Math.floor(safeFloor / 45));
   return {
-    gapMax: 11.5 + heightProgress * 5.1,
-    gapMin: 9.6 + heightProgress * 3.8,
+    gapMax: 11.5 + heightProgress * 5.8,
+    gapMin: 9.6 + heightProgress * 4.8,
     level,
     movingEvery,
     scrollSpeed: safeFloor < 3 && elapsedMs < 8000
       ? 0
-      : clamp(0.011 + safeFloor * 0.000045 + timeProgress * 0.047, 0.011, 0.082),
-    widthMax: 67 - heightProgress * 33,
-    widthMin: 56 - heightProgress * 29
+      : clamp(0.011 + safeFloor * 0.000055 + timeProgress * 0.055, 0.011, 0.09),
+    widthMax: 67 - heightProgress * 35,
+    widthMin: 56 - heightProgress * 30
   };
 }
 
@@ -37,6 +37,13 @@ export function towerPlatformWidth(floor: number, roll: number): number {
 export function towerPlatformGap(floor: number, roll: number): number {
   const difficulty = towerDifficulty(floor, 0);
   return difficulty.gapMin + clamp(roll, 0, 1) * (difficulty.gapMax - difficulty.gapMin);
+}
+
+export function towerHorizontalOffset(floor: number, roll: number): number {
+  const difficulty = towerDifficulty(floor, 0);
+  const direction = floor % 2 === 0 ? -1 : 1;
+  const reach = 13 + clamp(roll, 0, 1) * Math.min(23, 14 + difficulty.level * 1.25);
+  return direction * reach;
 }
 
 export function towerJumpVelocity(holdMs: number): number {

@@ -1,7 +1,8 @@
 # Changelog
 
-## Next
+## 2.10.4
 
+- Bug Tower bouwt sneller uitdaging op: platforms krimpen en spreiden eerder, wisselen sterker links/rechts en bewegen vanaf verdieping 30 steeds vaker.
 - Bug Tower toont tijdens het klimmen twee halftransparante touchzones met duidelijke links/rechts-pijlen en hold-labels.
 
 ## 2.10.3

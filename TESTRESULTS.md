@@ -1,5 +1,13 @@
 # Test Results
 
+## 2026-07-18 faster Bug Tower difficulty
+
+- Balans: volledige platformkrimp verschuift van verdieping 500 naar 360; horizontale offsets, gaten, scrollpressure en bewegingsfrequentie nemen eerder toe.
+- `npm run test:arcade`: geslaagd, inclusief eerlijke breedte op 100, nauwkeurige landingen op 200, beweging vanaf 30 en sterkere afwisselende offsets.
+- `npm run typecheck`: geslaagd.
+- `npm run site:build`: geslaagd met 317 assets en de nieuwe gameplaybundle.
+- Chromium mobiel 390x844 en desktop 1280x800: volledige Arcade-flow geslaagd; zichtbare touchzones en charge/release-besturing blijven intact.
+
 ## 2026-07-18 Bug Tower touch overlays
 
 - Implementatie: beide bestaande halfbrede touchzones tonen nu een halftransparante cue met `←`/`→` en `HOLD LEFT`/`HOLD RIGHT`; input- en physicsfuncties zijn ongewijzigd.

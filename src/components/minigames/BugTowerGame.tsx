@@ -5,7 +5,7 @@ import { arcadeSquadAssistForUser } from "../../services/bugSquadGameBalance";
 import { playBugSound } from "../../services/soundService";
 import { ArcadeRunResult, User } from "../../types";
 import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
-import { TOWER_MAX_CHARGE_MS, clamp, towerDifficulty, towerHeightScore, towerJumpVelocity, towerPlatformGap, towerPlatformWidth, towerZoneIndex, towerZoneName } from "./bugTowerLogic";
+import { TOWER_MAX_CHARGE_MS, clamp, towerDifficulty, towerHeightScore, towerHorizontalOffset, towerJumpVelocity, towerPlatformGap, towerPlatformWidth, towerZoneIndex, towerZoneName } from "./bugTowerLogic";
 
 type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; ranked?: boolean; seed?: string; user: User };
 type GameState = "ready" | "result" | "running";
@@ -388,11 +388,10 @@ function createPlatform(previous: Platform | null, floor: number, seed: string):
   const width = towerPlatformWidth(floor, seededNumber(seed, floor * 5));
   const gap = towerPlatformGap(floor, seededNumber(seed, floor * 5 + 1));
   const previousCenter = previous ? previous.x + previous.width / 2 : 50;
-  const alternate = floor % 2 === 0 ? -1 : 1;
-  const offset = alternate * (10 + seededNumber(seed, floor * 5 + 2) * Math.min(18, 11 + difficulty.level));
+  const offset = towerHorizontalOffset(floor, seededNumber(seed, floor * 5 + 2));
   const x = clamp(previousCenter + offset - width / 2, 3.5, 96.5 - width);
   const driftRoll = seededNumber(seed, floor * 5 + 3);
-  const drift = floor >= 40 && floor % difficulty.movingEvery === 0 ? (driftRoll > 0.5 ? 1 : -1) * (0.022 + difficulty.level * 0.004) : 0;
+  const drift = floor >= 30 && floor % difficulty.movingEvery === 0 ? (driftRoll > 0.5 ? 1 : -1) * (0.025 + difficulty.level * 0.0045) : 0;
   return { drift, floor, id: `floor-${floor}`, width, x, y: (previous?.y ?? 2) - gap };
 }
 
