@@ -13,6 +13,8 @@
 
 ## 2.10.2
 
+- De webversie gebruikt nu standaard de volledige beschikbare browserviewport zonder vaste websiteheader.
+- Webarchitectuur, releasevolgorde, toegangsbeperkingen, Strava-secrets en fullscreenbeperkingen zijn vastgelegd in een eigen runbook en Codex-skill.
 - Bug Tower gebruikt geen tilt meer: houd de linker- of rechter schermhelft vast om te rennen en laat los om te springen; langer vasthouden geeft een hogere sprong.
 - Bug Tower-platforms wisselen duidelijker links/rechts, worden per moeilijkheidsniveau kleiner, krijgen grotere gaten en gaan eerder bewegen en sneller scrollen.
 - Bubble Swarm is gepolijst tot een klassieke bubble shooter met ronde bugbubbels, match-3 pops, vallende losse clusters, aim/release-besturing en drukrijen.
