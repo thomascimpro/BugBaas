@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-07-19 arcade survival tuning release 2.10.9
+
+- De linker Bug Glide-strook blijft een inputzone, maar de karaktergrens gebruikt strookbreedte plus halve visuele spritebreedte zodat het karakter de lijn nooit kruist.
+- Beide survivalgames gebruiken een harde 120-secondenlimiet; tijdsdruk maakt niet-spelen deterministisch fataal rond 45-60 seconden, terwijl actief vrijspelen de run richting 90 seconden kan rekken.
+- Bug Tower-boosts en Bubble Swarm-power shots volgen seeded onregelmatige intervallen. Daardoor zijn ze testbaar en eerlijk voor gelijke seeds zonder op iedere trede of ieder schot te verschijnen.
+- Bubble Swarm vergroot bubblebeelden en verkleint de verticale gridafstand binnen het bestaande 8-koloms staggered grid; match-, buur- en bankshotlogica blijft daardoor compatibel.
+
 ## 2026-07-18 arcade repair release 2.10.8
 
 - Training is een expliciete practice-mode: het scherm slaat geen Firestore-run op en iedere minigame slaat in practice ook geen lokale highscore op.

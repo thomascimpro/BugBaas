@@ -23,7 +23,7 @@ import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
 type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; practice?: boolean; ranked?: boolean; seed?: string; user: User };
 type GameState = "ready" | "result" | "running";
 type BubbleKind = "bee" | "beetle" | "dragonfly" | "firefly" | "ladybug" | "moth";
-type ShotKind = "normal" | "bomb" | "freeze";
+type ShotKind = "normal" | "bomb" | "freeze" | "rainbow";
 type GridBubble = { col: number; id: string; kind: BubbleKind; row: number };
 type Point = { x: number; y: number };
 type Shot = { bubbleKind: BubbleKind; kind: ShotKind };
@@ -31,7 +31,9 @@ type Projectile = { path: Point[]; shot: Shot; targetCell: { col: number; row: n
 
 const columns = 8;
 const dangerRow = 10;
-const maxDurationMs = 90000;
+const maxDurationMs = 120000;
+const bubbleDiameterPct = 12.4;
+const bubbleRadiusPct = bubbleDiameterPct / 2;
 const shooter = { x: 50, y: 91 };
 const background = require("../../../assets/minigames/bubble-swarm/bubble-swarm-background.png");
 const bubbleImages: Record<BubbleKind, number> = {
@@ -59,7 +61,7 @@ export function BubbleSwarmGame({ onBack, onResult, practice = false, ranked = f
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
   const [misses, setMisses] = useState(0);
-  const [pressureSeconds, setPressureSeconds] = useState(17);
+  const [pressureSeconds, setPressureSeconds] = useState(8);
   const [freezeSeconds, setFreezeSeconds] = useState(0);
   const boardRef = useRef<GridBubble[]>(board);
   const seedRef = useRef(createArcadeSeed("bubble_swarm", user.uid));
@@ -220,9 +222,10 @@ export function BubbleSwarmGame({ onBack, onResult, practice = false, ranked = f
 
   function applyShotResolution(nextProjectile: Projectile) {
     const { shot, targetCell } = nextProjectile;
-    const placed: GridBubble = { ...targetCell, id: `shot-${bubbleIdRef.current++}`, kind: shot.bubbleKind };
+    const placedKind = shot.kind === "rainbow" ? rainbowKindForCell(boardRef.current, targetCell, shot.bubbleKind) : shot.bubbleKind;
+    const placed: GridBubble = { ...targetCell, id: `shot-${bubbleIdRef.current++}`, kind: placedKind };
     let nextBoard = [...boardRef.current, placed];
-    const cluster = connectedCluster(nextBoard, placed, (candidate) => candidate.kind === shot.bubbleKind);
+    const cluster = connectedCluster(nextBoard, placed, (candidate) => candidate.kind === placedKind);
     let removed = 0;
     let dropped = 0;
 
@@ -380,7 +383,7 @@ export function BubbleSwarmGame({ onBack, onResult, practice = false, ranked = f
               {!projectile && samplePath(previewPath, 18).map((point, index) => (
                 <View key={`aim-${index}`} pointerEvents="none" style={[styles.aimDot, { left: `${point.x}%`, top: `${point.y}%` }]} />
               ))}
-              {board.map((bubble) => <Bubble key={bubble.id} bubble={bubble} size={fieldSize.width * 0.11} />)}
+              {board.map((bubble) => <Bubble key={bubble.id} bubble={bubble} size={fieldSize.width * bubbleDiameterPct / 100} />)}
               {impact && <View pointerEvents="none" style={[styles.impactRing, { left: `${impact.x}%`, top: `${impact.y}%` }]} />}
               {projectile && projectileTransform && (
                 <Animated.Image
@@ -388,10 +391,10 @@ export function BubbleSwarmGame({ onBack, onResult, practice = false, ranked = f
                   style={[
                     styles.projectile,
                     {
-                      height: fieldSize.width * 0.11,
-                      left: `${shooter.x - 5.5}%`,
-                      top: `${shooter.y - 4.5}%`,
-                      width: fieldSize.width * 0.11,
+                      height: fieldSize.width * bubbleDiameterPct / 100,
+                      left: `${shooter.x - bubbleRadiusPct}%`,
+                      top: `${shooter.y - bubbleRadiusPct}%`,
+                      width: fieldSize.width * bubbleDiameterPct / 100,
                       transform: projectileTransform
                     }
                   ]}
@@ -405,6 +408,11 @@ export function BubbleSwarmGame({ onBack, onResult, practice = false, ranked = f
                 {!projectile && currentShot.kind !== "normal" && <Text style={styles.currentShotBadge}>{shotKindLabel(currentShot.kind)}</Text>}
                 <View style={styles.launcherBase} />
               </View>
+              {!projectile && currentShot.kind !== "normal" && (
+                <View pointerEvents="none" style={styles.powerReady}>
+                  <Text style={styles.powerReadyText}>{shotKindLabel(currentShot.kind)} READY</Text>
+                </View>
+              )}
               <View pointerEvents="none" style={styles.controlHint}><Text style={styles.controlHintText}>Drag to aim - release to shoot</Text></View>
             </View>
           </ImageBackground>
@@ -430,7 +438,7 @@ function Ready({ onStart }: { onStart: () => void }) {
         <View style={styles.difficultyRow}>
           <Text style={styles.difficultyChip}>Faster pressure</Text>
           <Text style={styles.difficultyChip}>More bug colors</Text>
-          <Text style={styles.difficultyChip}>90-second survival</Text>
+          <Text style={styles.difficultyChip}>120-second peak</Text>
         </View>
         <Pressable accessibilityLabel="Start Bubble Swarm" testID="bubble-swarm-start" style={styles.primaryButton} onPress={onStart}><Text style={styles.primaryText}>Start solo run</Text></Pressable>
       </View>
@@ -455,7 +463,7 @@ function Result({ onBack, onRetry, ranked, result }: { onBack: () => void; onRet
 
 function Bubble({ bubble, size }: { bubble: GridBubble; size: number }) {
   const point = gridPoint(bubble.row, bubble.col);
-  return <Image source={bubbleImages[bubble.kind]} style={[styles.bubble, { height: size, width: size }, percentPosition(point.x - 5.5, point.y - 4.5)]} />;
+  return <Image source={bubbleImages[bubble.kind]} style={[styles.bubble, { height: size, width: size }, percentPosition(point.x - bubbleRadiusPct, point.y - bubbleRadiusPct)]} />;
 }
 
 function HudChip({ active = false, label }: { active?: boolean; label: string }) {
@@ -476,10 +484,22 @@ function buildInitialBoard(seed: string) {
 function nextShotKind(seed: string, shot: number, elapsed: number): Shot {
   const count = activeKindCount(elapsed);
   const bubbleKind = allKinds[Math.floor(seededNumber(seed, 500 + shot * 11) * count)];
-  const powerCycle = 6 + Math.floor(seededNumber(seed, 900 + shot * 17) * 4);
-  const powerShot = shot >= 6 && shot % powerCycle === 0;
-  const kind: ShotKind = powerShot ? seededNumber(seed, 1000 + shot * 19) < 0.5 ? "bomb" : "freeze" : "normal";
+  const kind = scheduledPowerKind(seed, shot);
   return { bubbleKind, kind };
+}
+
+function scheduledPowerKind(seed: string, shot: number): ShotKind {
+  let powerShot = 6 + Math.floor(seededNumber(seed, 900) * 3);
+  let index = 0;
+  while (powerShot <= shot) {
+    if (powerShot === shot) {
+      const roll = seededNumber(seed, 1000 + index * 43);
+      return roll < 0.36 ? "bomb" : roll < 0.7 ? "freeze" : "rainbow";
+    }
+    powerShot += 7 + Math.floor(seededNumber(seed, 940 + index * 37) * 4);
+    index += 1;
+  }
+  return "normal";
 }
 
 function activeKindCount(elapsed: number) {
@@ -489,15 +509,17 @@ function activeKindCount(elapsed: number) {
 }
 
 function pressureDelay(elapsed: number) {
-  return clamp(17000 - Math.floor(elapsed / 15000) * 1800, 6500, 17000);
+  return clamp(8000 - Math.floor(elapsed / 20000) * 700, 4500, 8000);
 }
 
 function missLimit(elapsed: number) {
-  return clamp(6 - Math.floor(elapsed / 25000), 3, 6);
+  if (elapsed >= 80000) return 3;
+  if (elapsed >= 45000) return 4;
+  return 5;
 }
 
 function gridPoint(row: number, col: number): Point {
-  return { x: 6.4 + col * 11.6 + (row % 2 ? 5.8 : 0), y: 5.6 + row * 8.05 };
+  return { x: 6.4 + col * 11.6 + (row % 2 ? 5.8 : 0), y: 6.2 + row * 7.2 };
 }
 
 export function traceShotPath(from: Point, aim: Point, endY = 5): Point[] {
@@ -553,6 +575,18 @@ function pathToTarget(aim: Point, targetCell: { col: number; row: number }) {
   const target = gridPoint(targetCell.row, targetCell.col);
   const traced = traceShotPath(shooter, aim, target.y);
   return [...traced.slice(0, -1), target];
+}
+
+function rainbowKindForCell(board: GridBubble[], target: { col: number; row: number }, fallback: BubbleKind) {
+  const byCell = new Map(board.map((bubble) => [cellKey(bubble), bubble]));
+  let best = { kind: fallback, size: 0 };
+  for (const cell of neighborCells(target.row, target.col)) {
+    const neighbor = byCell.get(cellKey(cell));
+    if (!neighbor) continue;
+    const size = connectedCluster(board, neighbor, (bubble) => bubble.kind === neighbor.kind).length;
+    if (size > best.size) best = { kind: neighbor.kind, size };
+  }
+  return best.kind;
 }
 
 function connectedCluster(board: GridBubble[], start: GridBubble, include: (bubble: GridBubble) => boolean) {
@@ -643,8 +677,9 @@ function animatedPathTransform(path: Point[], progress: Animated.Value, fieldSiz
 }
 
 function shotKindLabel(kind: ShotKind) {
-  if (kind === "bomb") return "💣";
-  if (kind === "freeze") return "❄";
+  if (kind === "bomb") return "BOMB";
+  if (kind === "freeze") return "FREEZE";
+  if (kind === "rainbow") return "RAINBOW";
   return "";
 }
 
@@ -703,6 +738,8 @@ const styles = StyleSheet.create({
   primaryButton: { alignItems: "center", backgroundColor: "#0f8f72", borderRadius: 10, justifyContent: "center", minHeight: 52, paddingHorizontal: 20, width: "100%" },
   primaryText: { color: "#fff", fontSize: 18, fontWeight: "900" },
   projectile: { position: "absolute", zIndex: 7 },
+  powerReady: { alignSelf: "center", backgroundColor: "rgba(88,28,135,0.92)", borderColor: "#e879f9", borderRadius: 999, borderWidth: 2, bottom: 112, paddingHorizontal: 12, paddingVertical: 6, position: "absolute", zIndex: 11 },
+  powerReadyText: { color: "#fae8ff", fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
   readyBackground: { flex: 1, justifyContent: "center" },
   readyShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(2,7,24,0.4)" },
   resultBackground: { flex: 1, justifyContent: "center" },

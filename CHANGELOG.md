@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.10.9
+
+- Bug Glide houdt het karakter weer volledig rechts van de linker lijn; taps links van de lijn blijven de bug naar rechts sturen en visuele lagen onderscheppen geen input.
+- Bug Tower toont een vaste `LAND → TAP → FLIP`-uitleg en een duidelijke 360ms `TAP NOW`-balk voor de extra salto.
+- Bug Tower start survivaldruk ook bij een stilstaande speler, eindigt voor beginners rond 45-60 seconden en begrenst perfecte runs op 120 seconden.
+- Tower-pickups verschijnen op seeded onregelmatige intervallen: coins geven score, rockets geven korte vlucht en springs laden één extra hoge salto.
+- Bubble Swarm gebruikt een strak overlappend hexgrid zonder zichtbare lege ruimtes; projectielen behouden hun vloeiende volledige traject.
+- Bomb, Freeze en Rainbow verschijnen gegarandeerd maar onregelmatig iedere 7-10 schoten; Rainbow neemt de sterkste aangrenzende kleur over.
+- Bubble Swarm-druk is gekalibreerd op circa 52 seconden zonder spel, circa 90 seconden voor goede spelers en maximaal 120 seconden.
+
 ## 2.10.8
 
 - Bug Tower-bediening gebruikt weer de volledige linker- en rechterhelft van het speelveld; moving platforms, vloerdruk, smallere treden en pickups schalen veel sneller op.

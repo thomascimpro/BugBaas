@@ -8,9 +8,9 @@ import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
 
 type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; practice?: boolean; ranked?: boolean; seed?: string; user: User };
 type GameState = "ready" | "result" | "running";
-type Platform = { coin?: boolean; drift: number; floor: number; id: string; rocket?: boolean; width: number; x: number; y: number };
+type Platform = { coin?: boolean; drift: number; floor: number; id: string; rocket?: boolean; spring?: boolean; width: number; x: number; y: number };
 type Player = { grounded: boolean; highJump: boolean; lastGroundAt: number; spinAngle: number; spinning: boolean; vx: number; vy: number; x: number; y: number };
-type RenderState = { chainUntil: number; charge: number; combo: number; floor: number; maxCombo: number; platforms: Platform[]; player: Player; rocketActive: boolean; score: number };
+type RenderState = { chainProgress: number; chainUntil: number; charge: number; combo: number; elapsed: number; floor: number; maxCombo: number; platforms: Platform[]; player: Player; rocketActive: boolean; score: number; springReady: boolean };
 
 const tickMs = 20;
 const gravity = 0.13;
@@ -18,6 +18,8 @@ const horizontalAcceleration = 0.075;
 const maxHorizontalSpeed = 0.92;
 const playerHalfWidth = 6.5;
 const playerHalfHeight = 5.2;
+const maxDurationMs = 120000;
+const landingChainWindowMs = 360;
 const towerBackground = require("../../../assets/minigames/bug-tower/bug-tower-background.png");
 const towerJungleBackground = require("../../../assets/minigames/bug-tower/bug-tower-jungle.png");
 const towerForgeBackground = require("../../../assets/minigames/bug-tower/bug-tower-forge.png");
@@ -50,6 +52,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
   const coinsCollectedRef = useRef(0);
   const rocketUntilRef = useRef(0);
   const rocketCooldownUntilRef = useRef(0);
+  const springReadyRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -88,9 +91,10 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
     coinsCollectedRef.current = 0;
     rocketUntilRef.current = 0;
     rocketCooldownUntilRef.current = 0;
+    springReadyRef.current = false;
     setResult(null);
     setHeldDirection(0);
-    setRenderState({ chainUntil: 0, charge: 0, combo: 0, floor: 0, maxCombo: 0, platforms: initial, player: initialPlayer(), rocketActive: false, score: 0 });
+    setRenderState({ chainProgress: 0, chainUntil: 0, charge: 0, combo: 0, elapsed: 0, floor: 0, maxCombo: 0, platforms: initial, player: initialPlayer(), rocketActive: false, score: 0, springReady: false });
     setState("running");
     playBugSound("arcade_start");
   }
@@ -99,6 +103,10 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
     if (finishedRef.current) return;
     const now = Date.now();
     const elapsed = now - startAtRef.current;
+    if (elapsed >= maxDurationMs) {
+      finish();
+      return;
+    }
     const previous = playerRef.current;
     const input = manualDirectionRef.current;
     const rocketActive = rocketUntilRef.current > now;
@@ -146,7 +154,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
         nextPlayer.lastGroundAt = now;
         nextPlayer.spinAngle = 0;
         nextPlayer.spinning = false;
-        landingChainUntilRef.current = chainLanding ? now + 260 : 0;
+        landingChainUntilRef.current = chainLanding ? now + landingChainWindowMs : 0;
         if (landing.coin) {
           coinsCollectedRef.current += 1;
           scoreRef.current += 45;
@@ -158,6 +166,11 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
           rocketCooldownUntilRef.current = now + 9000;
           platforms = platforms.map((platform) => platform.id === landing.id ? { ...platform, rocket: false } : platform);
           playBugSound("arcade_build");
+        }
+        if (landing.spring) {
+          springReadyRef.current = true;
+          platforms = platforms.map((platform) => platform.id === landing.id ? { ...platform, spring: false } : platform);
+          playBugSound("arcade_pickup");
         }
         if (landing.floor > landedFloorRef.current) landOnFloor(landing.floor, now);
       }
@@ -181,15 +194,18 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
     platformsRef.current = platforms;
     scoreRef.current += 0.08 + Math.max(0, comboRef.current - 1) * 0.012;
     setRenderState({
+      chainProgress: clamp((landingChainUntilRef.current - now) / landingChainWindowMs, 0, 1),
       chainUntil: landingChainUntilRef.current,
       charge: Math.round(clamp(runDistanceRef.current / 32, 0, 1) * 100),
       combo: comboRef.current,
+      elapsed,
       floor: landedFloorRef.current,
       maxCombo: maxComboRef.current,
       platforms,
       player: nextPlayer,
       rocketActive: rocketUntilRef.current > now,
-      score: Math.floor(scoreRef.current)
+      score: Math.floor(scoreRef.current),
+      springReady: springReadyRef.current
     });
 
     if (!rocketActive && nextPlayer.y - playerHalfHeight > 105) finish();
@@ -220,8 +236,10 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
     }
     const speed = clamp(Math.abs(player.vx) / maxHorizontalSpeed, 0, 1);
     const charge = clamp(runDistanceRef.current / 32, 0, 1);
-    const jumpVelocity = -(1.7 + speed * 0.58 + charge * 0.46);
-    const spinning = speed >= 0.72 && charge >= 0.58;
+    const springBoost = springReadyRef.current ? 0.34 : 0;
+    const jumpVelocity = -(1.7 + speed * 0.58 + charge * 0.46 + springBoost);
+    const spinning = springReadyRef.current || (speed >= 0.72 && charge >= 0.58);
+    springReadyRef.current = false;
     playerRef.current = { ...player, grounded: false, highJump: jumpVelocity < -2.15, spinAngle: 0, spinning, vy: jumpVelocity };
     landingChainUntilRef.current = 0;
     runDistanceRef.current = 0;
@@ -251,7 +269,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
   function finish() {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    const durationMs = Math.min(90000, Math.max(0, Date.now() - startAtRef.current));
+    const durationMs = Math.min(maxDurationMs, Math.max(0, Date.now() - startAtRef.current));
     const finalScore = Math.min(50000, Math.max(1, Math.round(scoreRef.current + landedFloorRef.current * 14 + maxComboRef.current * 45)));
     playBugSound("arcade_finish");
     const highScorePromise = practice ? Promise.resolve(bestScore) : saveArcadeHighScore(user.uid, "bug_tower", finalScore);
@@ -307,6 +325,12 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
               <View style={styles.backgroundShade} />
               <View style={styles.squadOverlay}><ArcadeSquadAssist compact label={`Squad ${squadAssist.activeCount}/3`} user={user} /></View>
               <View style={styles.controlHint}><Text style={styles.controlHintText}>Hold a direction to run - release to jump</Text></View>
+              {renderState.elapsed < 12000 && (
+                <View pointerEvents="none" style={styles.chainTutorial}>
+                  <Text style={styles.chainTutorialTitle}>SALTO CHAIN</Text>
+                  <Text style={styles.chainTutorialText}>LAND  →  TAP  →  FLIP</Text>
+                </View>
+              )}
               {renderState.platforms.map((platform) => <TowerPlatform key={platform.id} platform={platform} />)}
               <View style={styles.controlLayer}>
                 <Pressable
@@ -327,7 +351,15 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
               {renderState.chainUntil > Date.now() && (
                 <View pointerEvents="none" style={[styles.chainPrompt, percentPosition(renderState.player.x, renderState.player.y)]}>
                   <View style={styles.chainRing} />
-                  <Text style={styles.chainText}>TAP</Text>
+                  <Text style={styles.chainText}>TAP!</Text>
+                </View>
+              )}
+              {renderState.chainUntil > Date.now() && (
+                <View pointerEvents="none" testID="bug-tower-chain-window" style={styles.chainTiming}>
+                  <Text style={styles.chainTimingText}>TAP NOW  →  EXTRA FLIP</Text>
+                  <View style={styles.chainTimingTrack}>
+                    <View style={[styles.chainTimingFill, { width: `${renderState.chainProgress * 100}%` as DimensionValue }]} />
+                  </View>
                 </View>
               )}
               <View pointerEvents="none" style={[styles.player, percentPosition(renderState.player.x, renderState.player.y), { transform: [{ rotate: `${renderState.player.spinAngle}deg` }] }]}>
@@ -336,7 +368,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
               </View>
               <View pointerEvents="none" style={styles.controls}>
                 <View style={styles.chargeMeter}>
-                  <Text style={styles.chargeLabel}>{renderState.player.spinning ? "SPIN!" : renderState.charge >= 58 ? "SPIN READY" : "JUMP POWER"}</Text>
+                  <Text style={styles.chargeLabel}>{renderState.springReady ? "SPRING READY" : renderState.player.spinning ? "SPIN!" : renderState.charge >= 58 ? "SPIN READY" : "JUMP POWER"}</Text>
                   <View style={styles.chargeTrack}><View style={[styles.chargeFill, { width: `${renderState.charge}%` as DimensionValue }]} /></View>
                   <Text style={styles.chargeValue}>{renderState.charge}%</Text>
                 </View>
@@ -357,11 +389,12 @@ function Ready({ onStart }: { onStart: () => void }) {
       <View style={styles.panel}>
         <BugTowerSprite frame={3} large />
         <Text style={styles.panelTitle}>Climb the endless tower</Text>
-        <Text style={styles.body}>Hold left or right to run. Release to jump: a longer run gives a higher leap, and full speed triggers a spin. Chain multi-floor jumps before the tower catches you.</Text>
+        <Text style={styles.body}>Hold left or right to run. Release to jump: a longer run gives a higher leap. After a spinning landing, tap immediately for an extra flip before the tower catches you.</Text>
         <View style={styles.difficultyRow}>
           <Text style={styles.difficultyChip}>Run-up jumps</Text>
           <Text style={styles.difficultyChip}>100-floor worlds</Text>
           <Text style={styles.difficultyChip}>Rising pressure</Text>
+          <Text style={styles.difficultyChip}>120-second peak</Text>
         </View>
         <Pressable accessibilityLabel="Start Bug Tower" testID="bug-tower-start" style={styles.primaryButton} onPress={onStart}><Text style={styles.primaryText}>Start climb</Text></Pressable>
       </View>
@@ -397,6 +430,7 @@ function TowerPlatform({ platform }: { platform: Platform }) {
       <Text numberOfLines={1} style={styles.floorNumber}>#{platform.floor}</Text>
       {platform.coin && <View pointerEvents="none" style={styles.coin}><View style={styles.coinInset} /></View>}
       {platform.rocket && <View pointerEvents="none" style={styles.rocketPickup}><Text style={styles.rocketPickupText}>▲</Text></View>}
+      {platform.spring && <View pointerEvents="none" style={styles.springPickup}><Text style={styles.springPickupText}>↟</Text></View>}
     </View>
   );
 }
@@ -427,7 +461,7 @@ function BugTowerSprite({ frame, large = false }: { frame: number; large?: boole
 
 function initialRenderState(seed: string): RenderState {
   const platforms = buildInitialPlatforms(seed);
-  return { chainUntil: 0, charge: 0, combo: 0, floor: 0, maxCombo: 0, platforms, player: initialPlayer(), rocketActive: false, score: 0 };
+  return { chainProgress: 0, chainUntil: 0, charge: 0, combo: 0, elapsed: 0, floor: 0, maxCombo: 0, platforms, player: initialPlayer(), rocketActive: false, score: 0, springReady: false };
 }
 
 function initialPlayer(): Player {
@@ -473,10 +507,22 @@ function createPlatform(previous: Platform | null, floor: number, seed: string):
   const driftRoll = seededNumber(seed, floor * 5 + 3);
   const moving = driftRoll < movingPlatformChance(floor);
   const drift = moving ? (seededNumber(seed, floor * 5 + 4) > 0.5 ? 1 : -1) * clamp(0.032 + floor * 0.0002, 0.032, 0.12) : 0;
-  const guaranteedRocket = floor >= 18 && floor % 29 === 0;
-  const rocket = floor > 12 && (guaranteedRocket || seededNumber(seed, floor * 5 + 7) < 0.025);
-  const coin = floor > 0 && !rocket && seededNumber(seed, floor * 5 + 6) > 0.72;
-  return { coin, drift, floor, id: `floor-${floor}`, rocket, width, x, y: (previous?.y ?? 2) - gap };
+  const boost = platformBoostForFloor(seed, floor);
+  const rocket = boost === "rocket";
+  const spring = boost === "spring";
+  const coin = !boost && (floor === 3 || (floor > 0 && seededNumber(seed, floor * 5 + 6) > 0.82));
+  return { coin, drift, floor, id: `floor-${floor}`, rocket, spring, width, x, y: (previous?.y ?? 2) - gap };
+}
+
+function platformBoostForFloor(seed: string, floor: number): "rocket" | "spring" | null {
+  let boostFloor = 8 + Math.floor(seededNumber(seed, 701) * 3);
+  let index = 0;
+  while (boostFloor <= floor) {
+    if (boostFloor === floor) return seededNumber(seed, 730 + index * 43) < 0.44 ? "rocket" : "spring";
+    boostFloor += 8 + Math.floor(seededNumber(seed, 760 + index * 41) * 7);
+    index += 1;
+  }
+  return null;
 }
 
 function movePlatform(platform: Platform, scroll: number): Platform {
@@ -491,11 +537,11 @@ function movePlatform(platform: Platform, scroll: number): Platform {
 }
 
 function towerScrollSpeed(floor: number, elapsed: number) {
-  if (floor < 5) return 0;
-  const timePressure = elapsed * 0.00000016;
-  const floorPressure = floor * 0.00032;
-  const zonePressure = Math.floor(floor / 50) * 0.004;
-  return clamp(0.009 + timePressure + floorPressure + zonePressure, 0.009, 0.16);
+  if (floor < 5 && elapsed < 10000) return 0;
+  const timePressure = Math.max(0, elapsed - 10000) * 0.00000012;
+  const floorPressure = floor * 0.00028;
+  const zonePressure = Math.floor(floor / 50) * 0.003;
+  return clamp(0.012 + timePressure + floorPressure + zonePressure, 0.012, 0.13);
 }
 
 function towerZone(floor: number) {
@@ -538,6 +584,13 @@ const styles = StyleSheet.create({
   chargeValue: { color: "#bae6fd", fontSize: 10, fontWeight: "900" },
   chainPrompt: { alignItems: "center", height: 86, justifyContent: "center", marginLeft: -43, marginTop: -43, position: "absolute", width: 86, zIndex: 10 },
   chainRing: { borderColor: "#facc15", borderRadius: 999, borderWidth: 3, height: 66, position: "absolute", width: 66 },
+  chainTiming: { alignSelf: "center", backgroundColor: "rgba(5,46,22,0.94)", borderColor: "#4ade80", borderRadius: 12, borderWidth: 2, bottom: 104, gap: 5, paddingHorizontal: 12, paddingVertical: 8, position: "absolute", width: 210, zIndex: 12 },
+  chainTimingFill: { backgroundColor: "#4ade80", borderRadius: 999, height: "100%" },
+  chainTimingText: { color: "#dcfce7", fontSize: 11, fontWeight: "900", textAlign: "center" },
+  chainTimingTrack: { backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 999, height: 8, overflow: "hidden" },
+  chainTutorial: { alignItems: "center", alignSelf: "center", backgroundColor: "rgba(4,12,38,0.86)", borderColor: "rgba(250,204,21,0.78)", borderRadius: 10, borderWidth: 1, gap: 2, paddingHorizontal: 12, paddingVertical: 6, position: "absolute", top: 44, zIndex: 10 },
+  chainTutorialText: { color: "#fff7b2", fontSize: 11, fontWeight: "900", letterSpacing: 0.6 },
+  chainTutorialTitle: { color: "#f8fbff", fontSize: 9, fontWeight: "900" },
   chainText: { color: "#fff7b2", fontSize: 12, fontWeight: "900" },
   coin: { alignItems: "center", backgroundColor: "#facc15", borderColor: "#fff7ae", borderRadius: 999, borderWidth: 2, height: 18, justifyContent: "center", left: "50%", marginLeft: -9, position: "absolute", top: -24, width: 18 },
   coinInset: { borderColor: "#b45309", borderRadius: 999, borderWidth: 2, height: 8, width: 8 },
@@ -580,6 +633,8 @@ const styles = StyleSheet.create({
   rocketPickup: { alignItems: "center", backgroundColor: "#f97316", borderColor: "#ffedd5", borderRadius: 8, borderWidth: 2, height: 24, justifyContent: "center", left: "50%", marginLeft: -10, position: "absolute", top: -30, width: 20 },
   rocketPickupText: { color: "#fff", fontSize: 13, fontWeight: "900" },
   shell: { backgroundColor: "#050d24", flex: 1 },
+  springPickup: { alignItems: "center", backgroundColor: "#22c55e", borderColor: "#dcfce7", borderRadius: 999, borderWidth: 2, height: 24, justifyContent: "center", left: "50%", marginLeft: -12, position: "absolute", top: -30, width: 24 },
+  springPickupText: { color: "#fff", fontSize: 16, fontWeight: "900", lineHeight: 18 },
   spriteFrame: { overflow: "hidden" },
   squadOverlay: { position: "absolute", right: 8, top: 42, zIndex: 9 },
   title: { color: "#f8fbff", fontSize: 24, fontWeight: "900" }

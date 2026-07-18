@@ -1,5 +1,23 @@
 # Test Results
 
+## 2026-07-19 arcade survival release 2.10.9
+
+- `npx tsc --noEmit`: geslaagd.
+- `git diff --check`: geslaagd; alleen bestaande LF/CRLF-waarschuwingen.
+- Expo web export: geslaagd; definitieve bundle `AppEntry-17609851333759e41258b7620158b6cf.js`.
+- Vercel productie `dpl_FJntL59LsTuVeQK5nJ91SDsWG94p`: `READY` en gekoppeld aan `https://bugbaas.vercel.app`.
+- Productie-root en lokale export hebben dezelfde SHA-256 `1F70B10CE139E0CA7E93E6470D5D6C5CF1C082200F6AEFEFD89DE2D8D032ECAA`; productie- en lokale JS-bundle zijn beide 2.512.954 bytes met SHA-256 `18C353FB2A17DDDC08A47F9230FC9F430D7E20E3B75E948F0344475132E1335D`.
+- In-app Browser met hidden account `Luna Review`: Bug Glide accepteert taps links van de lijn terwijl het karakter rechts van de lijn stopt.
+- Browser Bug Tower: vaste salto-uitleg, coin op floor 3 en eerste zeldzame boost rond floor 8 zichtbaar; idle run eindigde live na circa 50 seconden.
+- Browser Bubble Swarm: bubbles sluiten zonder lege gridruimte aan; projectile is halverwege het veld zichtbaar en landt daarna in het grid; idle run eindigde live na circa 55 seconden.
+- Deterministische powerupchecks: Bubble Swarm-intervallen 7-10 schoten; Bug Tower-boostintervallen 8-14 floors.
+- `NODE_ENV=production npm run apk:release`: geslaagd na het stoppen van een achtergebleven Gradle-daemon die de eerste Windows-resource-optimalisatie lockte.
+- APK: `dist/BugBaas-2.10.9.apk`, 83.882.237 bytes, package `nl.cimpro.bugbaas`, versionCode `189`, versionName `2.10.9`, ABI arm64-v8a.
+- `apksigner verify --verbose --print-certs`: APK Signature Scheme v2 geslaagd; certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c` (bestaand Android debugcertificaat).
+- APK SHA-256: `91DB42ABE5C39F601BE5E61EA103C6A5E79806BE698A358B37A175392923E54D`.
+- `adb devices -l`: geen aangesloten toestel; fysieke install-, performance- en touch-feeltest niet uitgevoerd.
+- De circa 90-secondenervaring voor een goede speler is als balance-doel gekalibreerd, maar vereist spelers-telemetrie of een fysieke playtest om statistisch te bevestigen.
+
 ## 2026-07-19 arcade repair release 2.10.8
 
 - `npm.cmd run typecheck`: geslaagd na alle gameplay- en practice-wijzigingen.

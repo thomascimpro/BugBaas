@@ -25,6 +25,7 @@ const tailwindScoreBoostMs = 4200;
 const maxHorizontalSpeed = 2.35;
 const maxVerticalSpeed = 5.15;
 const playerHitboxPx = 66;
+const playerVisualPx = 78;
 const leftControlStripWidth = 32;
 const referenceSkyWidth = 390;
 const phoneSkyWidthCutoff = 410;
@@ -66,6 +67,8 @@ export function BugGlideGame({ onBack, onResult, practice = false, ranked = fals
   const vxRef = useRef(0);
   const vyRef = useRef(0);
   const skySizeRef = useRef({ height: 1, width: 1 });
+  const skyOriginRef = useRef({ measured: false, x: 0, y: 0 });
+  const skyRef = useRef<View>(null);
   const gameScaleRef = useRef(1);
   const shieldUntilRef = useRef(0);
   const windUntilRef = useRef(0);
@@ -152,9 +155,11 @@ export function BugGlideGame({ onBack, onResult, practice = false, ranked = fals
   function movePlayer(now: number) {
     vxRef.current = clamp(vxRef.current * 0.91, -maxHorizontalSpeed, maxHorizontalSpeed);
     vyRef.current = clamp(vyRef.current * 0.94 + gravity, -maxVerticalSpeed, maxVerticalSpeed);
-    xRef.current = Math.max(5, Math.min(maxPlayerX, xRef.current + vxRef.current));
+    const skyWidth = skySizeRef.current.width > 1 ? skySizeRef.current.width : referenceSkyWidth;
+    const leftCharacterBoundary = ((leftControlStripWidth + (playerVisualPx * gameScaleRef.current) / 2) / skyWidth) * 100;
+    xRef.current = Math.max(leftCharacterBoundary, Math.min(maxPlayerX, xRef.current + vxRef.current));
     yRef.current = Math.max(10, Math.min(82, yRef.current + vyRef.current));
-    if (xRef.current <= 5 || xRef.current >= maxPlayerX) vxRef.current *= -0.3;
+    if (xRef.current <= leftCharacterBoundary || xRef.current >= maxPlayerX) vxRef.current *= -0.3;
     if (yRef.current <= 10) vyRef.current = Math.max(0.8, vyRef.current * -0.2);
     if (yRef.current >= 82) vyRef.current = Math.min(0, vyRef.current * -0.35);
     setX(xRef.current);
@@ -167,6 +172,9 @@ export function BugGlideGame({ onBack, onResult, practice = false, ranked = fals
     const nextScale = gameScaleForSkyWidth(width);
     gameScaleRef.current = nextScale;
     setGameScale((current) => Math.abs(current - nextScale) < 0.01 ? current : nextScale);
+    skyRef.current?.measure((_x, _y, _width, _height, pageX, pageY) => {
+      skyOriginRef.current = { measured: true, x: pageX, y: pageY };
+    });
   }
 
   function tapSky(event: GestureResponderEvent) {
@@ -174,8 +182,11 @@ export function BugGlideGame({ onBack, onResult, practice = false, ranked = fals
     const pointerButton = (event.nativeEvent as GestureResponderEvent["nativeEvent"] & { button?: number }).button;
     if (pointerButton !== undefined && pointerButton !== 0) return;
     const { height, width } = skySizeRef.current;
-    const tapX = (event.nativeEvent.locationX / Math.max(1, width)) * 100;
-    const tapY = (event.nativeEvent.locationY / Math.max(1, height)) * 100;
+    const origin = skyOriginRef.current;
+    const localX = origin.measured ? event.nativeEvent.pageX - origin.x : event.nativeEvent.locationX;
+    const localY = origin.measured ? event.nativeEvent.pageY - origin.y : event.nativeEvent.locationY;
+    const tapX = (localX / Math.max(1, width)) * 100;
+    const tapY = (localY / Math.max(1, height)) * 100;
     const distanceFromBug = clamp((xRef.current - tapX) / 62, -1, 1);
     const lift = liftImpulse - squadAssist.bugGlide.liftAssist * 0.85;
     vxRef.current = clamp(vxRef.current + distanceFromBug * horizontalImpulse, -maxHorizontalSpeed, maxHorizontalSpeed);
@@ -349,10 +360,10 @@ export function BugGlideGame({ onBack, onResult, practice = false, ranked = fals
             <HudChip active={shield} icon={shield ? "🛡" : "♥"} label={shield ? "Shield" : `${hearts}/${maxHearts}`} />
             <HudChip active={tailwind} icon={tailwind ? "↯" : "🔥"} label={tailwind ? "Wind" : `${streak}x`} />
           </View>
-          <Pressable
+          <View
+            ref={skyRef}
             style={styles.sky}
             onLayout={updateSkyLayout}
-            onPress={tapSky}
           >
             <View style={styles.glideBackdrop}>
               <View style={styles.moonGlow} />
@@ -379,7 +390,8 @@ export function BugGlideGame({ onBack, onResult, practice = false, ranked = fals
               <BeeSprite direction={beeDirection} frame={beeFrame} />
               {shield && <Image accessibilityIgnoresInvertColors resizeMode="contain" source={shieldEffectImage} style={styles.playerShield} />}
             </View>
-          </Pressable>
+            <Pressable accessibilityLabel="Steer Bug Glide" testID="bug-glide-sky-control" style={styles.skyTouchLayer} onPress={tapSky} />
+          </View>
         </View>
       )}
       {state === "result" && result && <Result ranked={ranked} result={result} onBack={onBack} onRetry={start} />}
@@ -538,6 +550,7 @@ const styles = StyleSheet.create({
   secondaryText: { color: "#f9fbf7", fontSize: 16, fontWeight: "900" },
   shell: { backgroundColor: "#071d12", flex: 1 },
   sky: { flex: 1, overflow: "hidden" },
+  skyTouchLayer: { ...StyleSheet.absoluteFillObject, zIndex: 20 },
   skyShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(3,12,18,0.18)" },
   squadOverlay: { position: "absolute", right: 10, top: 10, zIndex: 8 },
   tapPulse: { backgroundColor: "rgba(215,189,87,0.28)", borderColor: "rgba(249,251,247,0.75)", borderRadius: 999, borderWidth: 2, height: 44, marginLeft: -22, marginTop: -22, position: "absolute", width: 44, zIndex: 3 },

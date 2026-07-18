@@ -1,5 +1,17 @@
 # Status
 
+## 2026-07-19 arcade survival release 2.10.9
+
+- Bug Glide ontvangt taps over het volledige speelveld, inclusief links van de stuurgrens; de sprite stopt volledig rechts van de lijn.
+- Bug Tower toont een vaste salto-chain uitleg en een actieve `TAP NOW`-timingbalk; coins, rockets en springs verschijnen op onregelmatige seeded intervallen.
+- Bug Tower eindigt zonder input live rond 50 seconden en heeft een harde bovengrens van 120 seconden.
+- Bubble Swarm gebruikt aaneengesloten staggered bubbles en een zichtbaar vloeiend projectieltraject; Bomb, Freeze en Rainbow verschijnen onregelmatig iedere 7-10 schoten.
+- Bubble Swarm eindigt zonder input live rond 55 seconden en heeft een harde bovengrens van 120 seconden.
+- Webversie 2.10.9 staat productie op `https://bugbaas.vercel.app`, deployment `dpl_FJntL59LsTuVeQK5nJ91SDsWG94p` (`READY`).
+- Android 2.10.9 is gebouwd als `dist/BugBaas-2.10.9.apk`; metadata, ARM64-inhoud, v2-signing en SHA-256 zijn gecontroleerd.
+- GitHub Release `v2.10.9` wordt na de definitieve commit/tag gepubliceerd.
+- Geen Android-toestel aangesloten; fysieke install-, performance- en touch-feeltest blijft open.
+
 ## 2026-07-19 arcade repair release 2.10.8
 
 - Bug Tower gebruikt twee volledige touchhelften, snellere floor pressure, exact 1/2-, 1/3- en 1/4-brede mijlpalen, eerdere moving platforms en betrouwbare coin/rocket-pickups.

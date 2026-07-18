@@ -113,6 +113,11 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.10.9": [
+    { key: "changelog.2.10.9.glide", image: require("./assets/bugdex/honingbij.png"), tone: "gold" },
+    { key: "changelog.2.10.9.tower", image: require("./assets/minigames/bug-tower/bug-tower-background.png"), tone: "purple" },
+    { key: "changelog.2.10.9.bubbles", image: require("./assets/minigames/bubble-swarm/bubble-swarm-background.png"), tone: "green" }
+  ],
   "2.10.8": [
     { key: "changelog.2.10.8.tower", image: require("./assets/minigames/bug-tower/bug-tower-background.png"), tone: "purple" },
     { key: "changelog.2.10.8.bubbles", image: require("./assets/minigames/bubble-swarm/bubble-swarm-background.png"), tone: "green" },
