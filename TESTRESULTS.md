@@ -1,5 +1,14 @@
 # Test Results
 
+## 2026-07-18 Bug Tower touch overlays
+
+- Implementatie: beide bestaande halfbrede touchzones tonen nu een halftransparante cue met `←`/`→` en `HOLD LEFT`/`HOLD RIGHT`; input- en physicsfuncties zijn ongewijzigd.
+- `npm run test:arcade`: geslaagd; Tower- en Bubble-logica blijven groen.
+- `npm run typecheck`: geslaagd.
+- `npm run site:build`: geslaagd met 317 assets.
+- Chromium 390x844: beide pijlen en hold-labels zichtbaar; beide zones blijven ieder minimaal een halve mobiele speelveldbreedte en charge/release-jump blijft werken.
+- Screenshot `dist/playtest-2.10.3/bug-tower-charged-mobile.png` visueel gecontroleerd: cues zijn duidelijk maar platforms en character blijven zichtbaar.
+
 ## 2026-07-18 release 2.10.3 arcade balance
 
 - `npm run test:arcade`: geslaagd voor geleidelijke Tower-breedte/gaten, latere bewegende platforms, tijdsversnelling, vijf zones, hoogtegebaseerde score, alleen aanwezige Bubble-kleuren en begrensde muurbounce.

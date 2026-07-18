@@ -99,6 +99,8 @@ try {
   assert.ok(!towerText.includes("JUMP"), "Bug Tower must not render a separate jump button");
   assert.ok(towerText.includes("Ice Citadel"), "Tower must show the active 100-floor background zone");
   assert.ok(towerText.includes("#1"), "Tower platforms must display floor numbers");
+  assert.ok(towerText.includes("←") && towerText.includes("→"), "Tower must visibly mark both touch directions");
+  assert.ok(towerText.includes("HOLD LEFT") && towerText.includes("HOLD RIGHT"), "Tower touch zones must explain their hold action");
   const rightControl = towerPage.getByLabel("Run right and charge jump");
   const rightBox = await rightControl.boundingBox();
   assert.ok(rightBox && rightBox.width >= 180, "right input must cover half the mobile playfield");

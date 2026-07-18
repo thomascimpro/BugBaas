@@ -1,5 +1,9 @@
 # Changelog
 
+## Next
+
+- Bug Tower toont tijdens het klimmen twee halftransparante touchzones met duidelijke links/rechts-pijlen en hold-labels.
+
 ## 2.10.3
 
 - Bug Tower toont nu een nieuwe originele achtergrondwereld per 100 verdiepingen en nummert iedere trede zichtbaar.

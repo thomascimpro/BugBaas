@@ -1,5 +1,7 @@
 # Status
 
+- Bug Tower heeft lokaal duidelijk zichtbare, halftransparante links/rechts-touchzones; logica-, type-, productiebuild- en mobiele browsertests zijn geslaagd.
+- De huidige ChatGPT Site blijft door workspacebeleid owner-only. Voor een gratis publieke vriendenlink is een losse statische deployment op Vercel, Netlify of Cloudflare Pages nodig.
 - BugBaas 2.10.3 is lokaal releaseklaar met vijf zichtbare Bug Tower-werelden, geleidelijkere platformdruk, hoogtegebaseerde score en originele Tower-audio.
 - Bubble Swarm schiet alleen nog bordkleuren, gebruikt een zichtbare stippellijn met muurbounce, een vloeiende projectielvlucht, kleinere bubbels en originele spelgeluiden.
 - Gerichte logica-, type-, productie-export- en Chromium-tests voor 2.10.3 zijn geslaagd; de productie-Sites-flow is live geslaagd op mobiel en desktop.

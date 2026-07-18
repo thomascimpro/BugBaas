@@ -263,16 +263,28 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
               <View style={styles.controls}>
                 <Pressable
                   accessibilityLabel="Run left and charge jump"
+                  accessibilityHint="Hold to run left, then release to jump"
                   style={({ pressed }) => [styles.controlHalf, styles.controlHalfLeft, pressed && styles.controlHalfPressed]}
                   onPressIn={() => beginRun(-1)}
                   onPressOut={() => releaseJump(-1)}
-                ><Text pointerEvents="none" style={styles.controlSideText}>LEFT</Text></Pressable>
+                >
+                  <View pointerEvents="none" style={styles.controlCue}>
+                    <Text style={styles.controlArrow}>←</Text>
+                    <Text style={styles.controlSideText}>HOLD LEFT</Text>
+                  </View>
+                </Pressable>
                 <Pressable
                   accessibilityLabel="Run right and charge jump"
+                  accessibilityHint="Hold to run right, then release to jump"
                   style={({ pressed }) => [styles.controlHalf, styles.controlHalfRight, pressed && styles.controlHalfPressed]}
                   onPressIn={() => beginRun(1)}
                   onPressOut={() => releaseJump(1)}
-                ><Text pointerEvents="none" style={styles.controlSideText}>RIGHT</Text></Pressable>
+                >
+                  <View pointerEvents="none" style={styles.controlCue}>
+                    <Text style={styles.controlArrow}>→</Text>
+                    <Text style={styles.controlSideText}>HOLD RIGHT</Text>
+                  </View>
+                </Pressable>
               </View>
             </ImageBackground>
           </View>
@@ -417,11 +429,13 @@ const styles = StyleSheet.create({
   chargeTrack: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 999, bottom: 18, height: 7, left: "30%", overflow: "hidden", position: "absolute", width: "40%", zIndex: 22 },
   controlHint: { alignSelf: "center", backgroundColor: "rgba(4,12,38,0.72)", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, position: "absolute", top: 8, zIndex: 8 },
   controlHintText: { color: "#dce9ff", fontSize: 11, fontWeight: "900" },
-  controlHalf: { bottom: 0, justifyContent: "flex-end", paddingBottom: 32, position: "absolute", top: 0, width: "50%", zIndex: 20 },
-  controlHalfLeft: { alignItems: "flex-start", left: 0, paddingLeft: 18 },
-  controlHalfPressed: { backgroundColor: "rgba(93,217,255,0.09)" },
-  controlHalfRight: { alignItems: "flex-end", paddingRight: 18, right: 0 },
-  controlSideText: { color: "rgba(239,248,255,0.64)", fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
+  controlArrow: { color: "rgba(239,248,255,0.78)", fontSize: 46, fontWeight: "900", lineHeight: 48, textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { height: 2, width: 0 }, textShadowRadius: 4 },
+  controlCue: { alignItems: "center", backgroundColor: "rgba(4,12,38,0.24)", borderColor: "rgba(220,233,255,0.24)", borderRadius: 16, borderWidth: 1, minWidth: 92, paddingHorizontal: 12, paddingVertical: 8 },
+  controlHalf: { alignItems: "center", backgroundColor: "rgba(7,20,52,0.04)", bottom: 0, justifyContent: "center", position: "absolute", top: 0, width: "50%", zIndex: 20 },
+  controlHalfLeft: { borderRightColor: "rgba(220,233,255,0.12)", borderRightWidth: 1, left: 0 },
+  controlHalfPressed: { backgroundColor: "rgba(93,217,255,0.14)" },
+  controlHalfRight: { right: 0 },
+  controlSideText: { color: "rgba(239,248,255,0.72)", fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
   controls: { ...StyleSheet.absoluteFillObject, zIndex: 20 },
   difficultyChip: { backgroundColor: "rgba(103,65,217,0.28)", borderColor: "rgba(167,139,250,0.8)", borderRadius: 999, borderWidth: 1, color: "#ede9fe", fontSize: 11, fontWeight: "900", paddingHorizontal: 9, paddingVertical: 6 },
   difficultyRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "center" },

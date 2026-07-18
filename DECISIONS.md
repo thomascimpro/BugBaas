@@ -1,5 +1,7 @@
 # Decisions
 
+- Bug Tower maakt de bestaande schermhelften zichtbaar met subtiele overlays; de overlays wijzigen geen input- of physicslogica en blijven doorzichtig genoeg om platforms te blijven zien.
+- Een vriendenlink wordt als aparte publieke statische webdeployment behandeld. De bestaande ChatGPT Site blijft de volledige Sites/Strava-variant zolang `public` niet als toegestane access mode beschikbaar is.
 - Bug Tower wisselt iedere 100 verdiepingen tussen vijf originele BugBaas-werelden; de wereldselectie is floor-gebaseerd en cyclisch, zodat lange runs altijd een geldige achtergrond houden.
 - Tower-platformbreedte en -afstand schalen continu tot ongeveer verdieping 500; verdieping 100 blijft bewust ruim. Tijd versnelt de scroll onafhankelijk van score, terwijl bewegende platforms vanaf verdieping 40 steeds vaker voorkomen.
 - Bug Tower-score gebruikt alleen bereikte verdieping en beste combo. Overlevingstijd blijft resultaatmetadata maar levert geen scorepunten op.
