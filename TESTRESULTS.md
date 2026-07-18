@@ -11,6 +11,7 @@
 - APK-config: echt Firebase-project, alle vijf Firebasevelden en beide Google-clientvelden aanwezig in `assets/app.config`.
 - APK-signing: v2-verified, 1 signer, certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
 - Definitieve APK: `dist/BugBaas-2.10.6.apk`, 83.395.437 bytes; SHA-256 `5FFC2F6194947D6F1D5955150A5C6E57023DAE2CF593B0A0540597F21C6C956F`.
+- GitHub Release `v2.10.6`: openbaar teruggelezen als draft `false`, prerelease `false`; online APK-grootte en SHA-256 zijn exact gelijk aan het lokale bestand.
 - `adb devices -l`: geen aangesloten apparaat; fysieke install/login/feeltest blijft open.
 
 ## 2026-07-18 Tower challenge and Bubble power-ups
