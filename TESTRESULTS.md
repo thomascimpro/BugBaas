@@ -13,6 +13,7 @@
 - APK-metadata: package `nl.cimpro.bugbaas`, versionCode `185`, versionName `2.10.5`, minSdk `26`, targetSdk `36`.
 - APK-signing: v2-verified met certificaat `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
 - Definitieve APK: `dist/BugBaas-2.10.5.apk`, 83.392.677 bytes; SHA-256 `7FD9F1251224684E7B9E4EF4428D01A33EEB87B4232F3ABB7F27B4CE25C7EE1D`.
+- GitHub Release `v2.10.5`: openbaar teruggelezen als draft `false`, prerelease `false`; APK-asset 83.392.677 bytes met dezelfde SHA-256 digest.
 - `adb devices -l`: geen aangesloten apparaat; fysieke feeltest blijft open.
 
 ## 2026-07-18 faster Bug Tower difficulty
