@@ -26,7 +26,14 @@ function watchPage(page, label) {
 
 async function newTestPage(browser, viewport, label) {
   const page = await browser.newPage({ viewport });
-  if (sitesBypassToken) await page.setExtraHTTPHeaders({ "OAI-Sites-Authorization": `Bearer ${sitesBypassToken}` });
+  if (sitesBypassToken) {
+    const sitesOrigin = new URL(baseUrl).origin;
+    await page.route("**/*", (route) => {
+      const request = route.request();
+      if (new URL(request.url()).origin !== sitesOrigin) return route.continue();
+      return route.continue({ headers: { ...request.headers(), "OAI-Sites-Authorization": `Bearer ${sitesBypassToken}` } });
+    });
+  }
   return watchPage(page, label);
 }
 

@@ -9,7 +9,15 @@
 - Headless Chromium mobiel: Bubble toont een contrastrijke 15-dot bouncepreview, minimaal 34 ronde 9.7%-bubbles en een projectiel dat tijdens de 440-720 ms vlucht zichtbaar blijft.
 - Headless Chromium desktop 1280x800: Bubble-playfield schaalt mee; bestaande Bug Glide-linkerstrookregressie blijft groen.
 - Screenshots staan lokaal onder `dist/playtest-2.10.3` en worden niet gecommit.
-- Productie-Sites-build, live Sites-test en Android APK-build worden na de definitieve versiecommit opnieuw uitgevoerd.
+- Productie-Sites-build: geslaagd; Sites-versie 5 is succesvol gedeployed op `https://bugbaas-web.werkruimte-v-5909.chatgpt.site/`.
+- Live Chromium-flow op de productie-URL: geslaagd voor Tower controls/zone/floor labels, Bubble dotted bounce/smooth shot/smaller grid, Bug Glide en mobiele plus desktop-layout.
+- De Sites-testheader wordt alleen naar de Sites-origin gestuurd; Firebase-verzoeken ontvangen hem niet.
+- Normale Android `assembleRelease` met R8, lint en resource-optimalisatie: geslaagd vanaf de finale bronbasis.
+- APK-metadata: package `nl.cimpro.bugbaas`, versionCode `183`, versionName `2.10.3`, minSdk `26`, targetSdk `36`.
+- APK-signing: v2-verified, 1 signer, certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`, gelijk aan eerdere BugBaas-releases.
+- Definitieve APK: `dist/BugBaas-2.10.3.apk`, 83.392.093 bytes, gebouwd vanaf commit `79f9071a35b89d6d1cac8bc9d2e3061c836950b1`.
+- Definitieve APK SHA-256: `591D6C948D508FCDD54C2FDAC005E48B00AAED593FDEE3CA92D15EDCAC963EEB`.
+- `adb devices -l`: geen aangesloten apparaat; fysieke controle van geluid en besturingsgevoel blijft open.
 
 ## 2026-07-18 fullscreen web shell
 

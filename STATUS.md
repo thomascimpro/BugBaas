@@ -2,7 +2,8 @@
 
 - BugBaas 2.10.3 is lokaal releaseklaar met vijf zichtbare Bug Tower-werelden, geleidelijkere platformdruk, hoogtegebaseerde score en originele Tower-audio.
 - Bubble Swarm schiet alleen nog bordkleuren, gebruikt een zichtbare stippellijn met muurbounce, een vloeiende projectielvlucht, kleinere bubbels en originele spelgeluiden.
-- Gerichte logica-, type-, productie-export- en Chromium-tests voor 2.10.3 zijn geslaagd; Sites-livevalidatie en de definitieve Android/GitHub-release volgen nog.
+- Gerichte logica-, type-, productie-export- en Chromium-tests voor 2.10.3 zijn geslaagd; de productie-Sites-flow is live geslaagd op mobiel en desktop.
+- De Android 2.10.3-releasebuild is geslaagd en metadata, v2-signing en SHA-256 zijn geverifieerd; publicatie als GitHub Release is de laatste stap.
 - BugBaas Web gebruikt de volledige browserviewport zonder vaste websiteheader; echte browser-fullscreen blijft vanwege browserbeveiliging afhankelijk van een gebruikersactie.
 - De huidige Sites-toegang is eigenaar-only en biedt in deze workspace alleen `custom` of `workspace_all`; extern publiek delen is daarom nog niet beschikbaar.
 - BugBaas 2.10.2 bevat de vernieuwde Bug Tower-besturing, de klassieke Bubble Swarm-shooter, Bubble Swarm Ranked/Train en de herstelde Bug Glide-linkerstrook.

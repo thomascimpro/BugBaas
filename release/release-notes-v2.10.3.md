@@ -25,5 +25,7 @@
 - Package: `nl.cimpro.bugbaas`
 - VersionCode: `183`
 - VersionName: `2.10.3`
-
-Final APK size, signing verification and SHA-256 are added after the web release has passed its live test.
+- Size: `83,392,093 bytes`
+- File SHA-256: `591D6C948D508FCDD54C2FDAC005E48B00AAED593FDEE3CA92D15EDCAC963EEB`
+- Signing: APK Signature Scheme v2 verified; signer certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`
+- Live web validation: passed at `https://bugbaas-web.werkruimte-v-5909.chatgpt.site/`
