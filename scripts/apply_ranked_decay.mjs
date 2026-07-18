@@ -6,7 +6,8 @@ import { pathToFileURL } from "node:url";
 
 const databaseId = "(default)";
 const timeZone = "Europe/Amsterdam";
-const ratingFloor = 1000;
+const defaultRating = 1000;
+const ratingFloor = 100;
 const decayPerMissedDay = 5;
 const args = new Set(process.argv.slice(2));
 const dryRun = !args.has("--confirm-write");
@@ -173,7 +174,7 @@ function decayForDocument(document, todayDayId) {
   if (fieldBool(document, "testAccount") || document.fields?.active?.booleanValue === false) return null;
   return calculateRankedDecay({
     checkpointDay: fieldString(document, "duelRatingDecayThroughDay"),
-    rating: fieldNumber(document, "duelRating", ratingFloor),
+    rating: fieldNumber(document, "duelRating", defaultRating),
     ratingUpdatedAt: fieldString(document, "duelRatingUpdatedAt")
   }, todayDayId);
 }
