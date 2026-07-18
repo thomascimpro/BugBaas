@@ -14,6 +14,7 @@
 - `apksigner verify --verbose --print-certs`: v2 geslaagd; certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
 - APK SHA-256: `324D5633E398AF57059FC623AB875176C33D766ED0CC34B28B6375EF7DF45F78`.
 - `adb devices -l`: geen aangesloten apparaat; install/control-smoke blijft open.
+- GitHub Release `v2.10.7` en APK-downloadasset: geslaagd.
 
 ## 2026-07-18 scheduled ranked rating decay
 

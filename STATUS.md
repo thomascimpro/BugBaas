@@ -10,6 +10,7 @@
 - Web export en Vercel production deployment zijn geslaagd; de publieke alias is `https://dist-ruddy-ten-52.vercel.app` als apart project omdat het bestaande `bugbaas.vercel.app`-project niet aan deze checkout kon worden gekoppeld.
 - Browser-plugin en fysieke device-smoke waren in deze run niet beschikbaar; die visuele/control-flow checks blijven expliciet open.
 - Android fast release-build 2.10.7 is geslaagd; APK staat op `dist/BugBaas-2.10.7.apk`, metadata/signing/hash zijn gecontroleerd.
+- GitHub Release `v2.10.7` is gepubliceerd met APK-asset.
 
 - Ranked-inactiviteitsdecay loopt nu door onder 1000 tot de absolute Duel-ratingbodem van 100.
 - Dagelijkse ranked rating-decay is als GitHub Actions-scheduler voorbereid: ook afwezige spelers worden server-side verwerkt zonder app-login; live dry-run tegen Firestore is geslaagd.
