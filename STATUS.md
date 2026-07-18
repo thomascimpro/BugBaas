@@ -9,7 +9,7 @@
 - Bubble Swarm eindigt zonder input live rond 55 seconden en heeft een harde bovengrens van 120 seconden.
 - Webversie 2.10.9 staat productie op `https://bugbaas.vercel.app`, deployment `dpl_FJntL59LsTuVeQK5nJ91SDsWG94p` (`READY`).
 - Android 2.10.9 is gebouwd als `dist/BugBaas-2.10.9.apk`; metadata, ARM64-inhoud, v2-signing en SHA-256 zijn gecontroleerd.
-- GitHub Release `v2.10.9` wordt na de definitieve commit/tag gepubliceerd.
+- GitHub Release `v2.10.9` is gepubliceerd met de geverifieerde APK en expliciet als latest gemarkeerd, zodat de native updatechecker 2.10.9 ziet.
 - Geen Android-toestel aangesloten; fysieke install-, performance- en touch-feeltest blijft open.
 
 ## 2026-07-19 arcade repair release 2.10.8

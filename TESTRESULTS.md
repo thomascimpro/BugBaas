@@ -15,6 +15,7 @@
 - APK: `dist/BugBaas-2.10.9.apk`, 83.882.237 bytes, package `nl.cimpro.bugbaas`, versionCode `189`, versionName `2.10.9`, ABI arm64-v8a.
 - `apksigner verify --verbose --print-certs`: APK Signature Scheme v2 geslaagd; certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c` (bestaand Android debugcertificaat).
 - APK SHA-256: `91DB42ABE5C39F601BE5E61EA103C6A5E79806BE698A358B37A175392923E54D`.
+- GitHub latest-release API: `v2.10.9`, naam `BugBaas 2.10.9`, APK-asset aanwezig met exact 83.882.237 bytes en download-URL voor `BugBaas-2.10.9.apk`.
 - `adb devices -l`: geen aangesloten toestel; fysieke install-, performance- en touch-feeltest niet uitgevoerd.
 - De circa 90-secondenervaring voor een goede speler is als balance-doel gekalibreerd, maar vereist spelers-telemetrie of een fysieke playtest om statistisch te bevestigen.
 
