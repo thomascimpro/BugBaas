@@ -1,5 +1,15 @@
 # Status
 
+## 2026-07-19 regression repair release 2.10.10
+
+- Het nieuwe-meldingsformulier toont Bug, Tip, Trick en Idee altijd direct; de gekozen categorie blijft bepalend voor de velden.
+- Nest Defense gebruikt een volledige, voorgrondvrije taplaag en vertaalt web- en native taps naar het gemeten speelveld.
+- Medaillecriteria voor BugDex-aantallen en zeldzaamheden worden rechtstreeks uit historische unlocks berekend, inclusief niet-meer-bezette bugs.
+- Alleen oefenruns tonen en accepteren voortijdig afsluiten; actieve ranked minigames blokkeren de UI- en Android-terugroute tot het resultaat.
+- Webversie 2.10.10 staat productie op `https://bugbaas.vercel.app`, deployment `dpl_DQfZuBFLVCeVwbHicBKEXaaVCFRp` (`READY`).
+- Android 2.10.10 is gebouwd en gecontroleerd als `dist/BugBaas-2.10.10.apk`; GitHub-publicatie volgt na commit/tag.
+- Geen Android-toestel aangesloten; fysieke installatie en native touch-feel blijven open.
+
 ## 2026-07-19 arcade survival release 2.10.9
 
 - Bug Glide ontvangt taps over het volledige speelveld, inclusief links van de stuurgrens; de sprite stopt volledig rechts van de lijn.

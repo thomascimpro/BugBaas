@@ -91,10 +91,10 @@ export function BugGlideGame({ onBack, onResult, practice = false, ranked = fals
   }, [state, squadAssist.bugGlide.liftAssist, squadAssist.bugGlide.pickupRadiusBonus, squadAssist.bugGlide.shieldBonusMs]);
 
   useEffect(() => {
-    if (!ranked || state === "result") return;
+    if (practice || state === "result") return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => subscription.remove();
-  }, [ranked, state]);
+  }, [practice, state]);
 
   function start() {
     const startingHearts = 3 + squadAssist.bugGlide.extraHeart;
@@ -339,7 +339,7 @@ export function BugGlideGame({ onBack, onResult, practice = false, ranked = fals
   }
 
   function back() {
-    if (ranked && state !== "result") return;
+    if (!practice && state !== "result") return;
     if (state === "running") {
       Alert.alert("Leave Bug Glide?", "Your run stops if you go back now.", [{ text: "Stay", style: "cancel" }, { text: "Leave", style: "destructive", onPress: onBack }]);
       return;
@@ -351,7 +351,7 @@ export function BugGlideGame({ onBack, onResult, practice = false, ranked = fals
 
   return (
     <View style={styles.shell}>
-      <View style={styles.header}><View><Text style={styles.title}>Bug Glide</Text><Text style={styles.meta}>Best score: {bestScore}</Text></View>{(!ranked || state === "result") && <Pressable style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}</View>
+      <View style={styles.header}><View><Text style={styles.title}>Bug Glide</Text><Text style={styles.meta}>Best score: {bestScore}</Text></View>{(practice || state === "result") && <Pressable style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}</View>
       {state === "ready" && <Ready onStart={start} />}
       {state === "running" && (
         <View style={styles.game}>

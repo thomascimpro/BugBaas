@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.10.10
+
+- Het nieuwe-meldingsformulier toont Bug, Tip, Trick en Idee permanent als categorieknoppen in plaats van achter een verborgen dropdown.
+- Nest Defense gebruikt een afzonderlijke volledige taplaag; torenknoppen blijven interactief en spelvisuals kunnen handmatige aanvallen niet meer onderscheppen.
+- BugDex-aantal-, legendary-, mythic- en setmedailles worden rechtstreeks uit de historische unlocklijst berekend.
+- Alleen Train/practice toont een stopknop en accepteert Android-back tijdens een actieve run; ranked runs blijven gesloten tot het resultaat.
+
 ## 2.10.9
 
 - Bug Glide houdt het karakter weer volledig rechts van de linker lijn; taps links van de lijn blijven de bug naar rechts sturen en visuele lagen onderscheppen geen input.

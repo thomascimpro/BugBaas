@@ -71,10 +71,10 @@ export function WebRunnerGame({ onBack, onResult, practice = false, ranked = fal
   }, [state, squadAssist.webRunner.collisionWindowBonus, squadAssist.webRunner.magnetBonusMs]);
 
   useEffect(() => {
-    if (!ranked || state === "result") return;
+    if (practice || state === "result") return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => subscription.remove();
-  }, [ranked, state]);
+  }, [practice, state]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
@@ -244,7 +244,7 @@ export function WebRunnerGame({ onBack, onResult, practice = false, ranked = fal
   }
 
   function back() {
-    if (ranked && state !== "result") return;
+    if (!practice && state !== "result") return;
     if (state === "running") {
       Alert.alert(t("arcade.exitTitle"), t("arcade.exitBody"), [{ text: t("common.close"), style: "cancel" }, { text: t("arcade.backToArcade"), style: "destructive", onPress: onBack }]);
       return;
@@ -261,7 +261,7 @@ export function WebRunnerGame({ onBack, onResult, practice = false, ranked = fal
     <View style={styles.shell}>
       <View style={styles.header}>
         <View><Text style={styles.title}>{t("arcade.webRunner.title")}</Text><Text style={styles.meta}>Best score: {bestScore}</Text></View>
-        {(!ranked || state === "result") && <Pressable style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}
+        {(practice || state === "result") && <Pressable style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}
       </View>
       {state === "ready" && <Ready onStart={startRun} />}
       {state === "running" && (

@@ -114,13 +114,10 @@ export function BubbleSwarmGame({ onBack, onResult, practice = false, ranked = f
   }, []);
 
   useEffect(() => {
-    if (state === "result") return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      back();
-      return true;
-    });
+    if (practice || state === "result") return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => subscription.remove();
-  }, [state]);
+  }, [practice, state]);
 
   function start() {
     const runSeed = seed ?? createArcadeSeed("bubble_swarm", `${user.uid}:${Date.now()}`);
@@ -328,7 +325,7 @@ export function BubbleSwarmGame({ onBack, onResult, practice = false, ranked = f
   }
 
   function back() {
-    if (ranked && state !== "result") return;
+    if (!practice && state !== "result") return;
     if (state === "running") {
       Alert.alert("Leave Bubble Swarm?", "Your solo score is only saved after game over.", [
         { text: "Keep playing", style: "cancel" },
@@ -356,7 +353,7 @@ export function BubbleSwarmGame({ onBack, onResult, practice = false, ranked = f
     <View style={styles.shell}>
       <View style={styles.header}>
         <View><Text style={styles.title}>Bubble Swarm</Text><Text style={styles.meta}>Best score: {bestScore}</Text></View>
-        {(!ranked || state === "result") && <Pressable accessibilityLabel="Close Bubble Swarm" testID="bubble-swarm-close" style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}
+        {(practice || state === "result") && <Pressable accessibilityLabel="Close Bubble Swarm" testID="bubble-swarm-close" style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}
       </View>
       {state === "ready" && <Ready onStart={start} />}
       {state === "running" && (

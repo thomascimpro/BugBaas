@@ -67,10 +67,10 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
   }, [state]);
 
   useEffect(() => {
-    if (!ranked || state === "result") return;
+    if (practice || state === "result") return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => subscription.remove();
-  }, [ranked, state]);
+  }, [practice, state]);
 
   function start() {
     seedRef.current = seed ?? createArcadeSeed("bug_tower", `${user.uid}:${Date.now()}`);
@@ -293,7 +293,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
   }
 
   function back() {
-    if (ranked && state !== "result") return;
+    if (!practice && state !== "result") return;
     if (state === "running") {
       Alert.alert("Leave Bug Tower?", "Your climb ends if you leave now.", [
         { text: "Keep climbing", style: "cancel" },
@@ -310,7 +310,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
     <View style={styles.shell}>
       <View style={styles.header}>
         <View><Text style={styles.title}>Bug Tower</Text><Text style={styles.meta}>Best score: {bestScore}</Text></View>
-        {(!ranked || state === "result") && <Pressable style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}
+        {(practice || state === "result") && <Pressable style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}
       </View>
       {state === "ready" && <Ready onStart={start} />}
       {state === "running" && (

@@ -105,12 +105,18 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   const selectedInviteUser = inviteCandidates.find((candidate) => candidate.uid === selectedInviteUserId) ?? null;
   const ownedBugDexIds = new Set(inventory.filter((item) => item.count > 0).map((item) => item.bugId));
   const unlockedBugDexIds = new Set([...ownedBugDexIds, ...unlockHistory.map((item) => item.bugId)]);
+  const unlockedBugDexEntries = [...unlockedBugDexIds].map(entryByBugId).filter((entry): entry is BugDexEntry => Boolean(entry));
+  const unlockedBugDexStats = {
+    count: unlockedBugDexIds.size,
+    legendary: unlockedBugDexEntries.filter((entry) => entry.rarity === "Legendarisch").length,
+    mythic: unlockedBugDexEntries.filter((entry) => entry.rarity === "Mythisch").length
+  };
   const characterUnlockContext: CharacterUnlockContext = { unlockedBugDexIds, user };
   const selectedCharacterUnlockContext: CharacterUnlockContext = { allowUnknownSetBadges: loadingBugDex, unlockedBugDexIds: loadingBugDex ? undefined : unlockedBugDexIds, user };
   const storedCharacterId = safeCharacterId(user.characterId);
   const selectedCharacterId = isCharacterUnlocked(storedCharacterId, user.totalPoints, selectedCharacterUnlockContext) ? storedCharacterId : bestUnlockedCharacterId(user.totalPoints, characterUnlockContext);
   const selectedCharacter = characterOptions.find((item) => item.id === selectedCharacterId) ?? characterOptions[0];
-  const unlockedBadges = badgeDefinitions.filter((badge) => badgeUnlocked(user, badge, unlockedBugDexIds));
+  const unlockedBadges = badgeDefinitions.filter((badge) => badgeUnlocked(user, badge, unlockedBugDexIds, unlockedBugDexStats));
   const bugDexItems = inventory
     .map((item) => {
       const entry = entryByBugId(item.bugId);
@@ -119,7 +125,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
     })
     .filter((item): item is { entry: BugDexEntry; index: number; item: BugDexInventoryItem } => Boolean(item))
     .sort((a, b) => a.index - b.index);
-  const visibleBugDexCount = Math.max(user.bugDexCount ?? 0, bugDexItems.length);
+  const visibleBugDexCount = unlockedBugDexStats.count;
   const activeSquadIds = sanitizeActiveBugSquad(user.activeBugSquad);
   const activeSquadEntries = activeSquadIds
     .map((bugId) => entryByBugId(bugId))
@@ -350,7 +356,7 @@ export function ProfileScreen({ user, isOwnProfile = true, onBack, onLogout, onU
   }
 
   const renderBadge = (badge: BadgeDefinition) => {
-    const unlocked = badgeUnlocked(user, badge, unlockedBugDexIds);
+    const unlocked = badgeUnlocked(user, badge, unlockedBugDexIds, unlockedBugDexStats);
     const badgeArt = getBadgeArtSource(badge.id);
     return (
       <View key={badge.id} style={[styles.badge, !unlocked && styles.badgeLocked]}>
@@ -869,17 +875,22 @@ function rarityStars(rarity: BugDexRarity): number[] {
   return Array.from({ length: counts[rarity] });
 }
 
-function badgeUnlocked(user: User, badge: BadgeDefinition, unlockedBugDexIds: Set<string>): boolean {
+function badgeUnlocked(
+  user: User,
+  badge: BadgeDefinition,
+  unlockedBugDexIds: Set<string>,
+  unlockedBugDexStats: { count: number; legendary: number; mythic: number }
+): boolean {
   if (badge.bugDexSetId) {
     const set = bugDexSetById(badge.bugDexSetId);
     return Boolean(set && set.bugIds.every((bugId) => unlockedBugDexIds.has(bugId)));
   }
   return (badge.minBugReports === undefined || user.bugCount >= badge.minBugReports) &&
-    (badge.minBugDexCaught === undefined || (user.bugDexCount ?? 0) >= badge.minBugDexCaught) &&
+    (badge.minBugDexCaught === undefined || unlockedBugDexStats.count >= badge.minBugDexCaught) &&
     (badge.minComments === undefined || (user.commentPointCount ?? 0) >= badge.minComments) &&
-    (badge.minLegendaryBugDex === undefined || (user.legendaryBugDexCount ?? 0) >= badge.minLegendaryBugDex) &&
+    (badge.minLegendaryBugDex === undefined || unlockedBugDexStats.legendary >= badge.minLegendaryBugDex) &&
     (badge.minMovementKm === undefined || (user.movementKmTotal ?? 0) >= badge.minMovementKm) &&
-    (badge.minMythicBugDex === undefined || (user.mythicBugDexCount ?? 0) >= badge.minMythicBugDex) &&
+    (badge.minMythicBugDex === undefined || unlockedBugDexStats.mythic >= badge.minMythicBugDex) &&
     (badge.minPoints === undefined || user.totalPoints >= badge.minPoints) &&
     (badge.minSplats === undefined || (user.splatCount ?? 0) >= badge.minSplats) &&
     (badge.minTradedBugDex === undefined || (user.tradedBugDexCount ?? 0) >= badge.minTradedBugDex) &&

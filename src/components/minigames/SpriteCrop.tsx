@@ -1,8 +1,9 @@
 import React from "react";
-import { Image, ImageSourcePropType, StyleProp, View, ViewStyle } from "react-native";
+import { Image, ImageSourcePropType, StyleProp, View, ViewProps, ViewStyle } from "react-native";
 import { SpriteRect } from "../../services/minigameAssets";
 
 type Props = {
+  pointerEvents?: ViewProps["pointerEvents"];
   rect: SpriteRect;
   sheetHeight: number;
   sheetWidth: number;
@@ -10,9 +11,9 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
-export function SpriteCrop({ rect, sheetHeight, sheetWidth, source, style }: Props) {
+export function SpriteCrop({ pointerEvents, rect, sheetHeight, sheetWidth, source, style }: Props) {
   return (
-    <View style={[{ height: rect.height, overflow: "hidden", width: rect.width }, style]}>
+    <View pointerEvents={pointerEvents} style={[{ height: rect.height, overflow: "hidden", width: rect.width }, style]}>
       <Image
         accessibilityIgnoresInvertColors
         resizeMode="stretch"

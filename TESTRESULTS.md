@@ -1,5 +1,20 @@
 # Test Results
 
+## 2026-07-19 regression repair release 2.10.10
+
+- `npx tsc --noEmit`: geslaagd.
+- Broninvarianten: alle vier categorieen permanent aanwezig; historische unlockstatistieken gebruikt; alle vijf ranked minigames blokkeren voortijdig afsluiten.
+- Expo web export: geslaagd; definitieve bundle `AppEntry-65440d3d21c2f7ce965bce03065e4fe5.js`.
+- Vercel productie `dpl_DQfZuBFLVCeVwbHicBKEXaaVCFRp`: `READY`; root HTTP 200 en alias `https://bugbaas.vercel.app` actief.
+- Lokale en productie-bundle hebben dezelfde SHA-256 `14138FC36D7B8360130FB304D7AAB9364B2950EBC86342D269A90E3D97001D19`.
+- In-app Browser met hidden account `Luna Review`: 2.10.10-changelog zichtbaar; Bug, Tip, Trick en Idee gelijktijdig zichtbaar; Trick-selectie past formulierlabels en urgentieveld correct aan.
+- Browser Nest Defense: oefenen toont afsluiten; taplaag is exact 460 x 618,8 px en vult het speelveld; handmatige vijandtap activeert aanvalscooldown en `HIT`-feedback. Productieconsole: nul errors.
+- `NODE_ENV=production npm run apk:release`: geslaagd na het stoppen van twee achtergebleven Gradle-daemons; eerste resource-cleanup-poging was daardoor geblokkeerd.
+- APK: `dist/BugBaas-2.10.10.apk`, 83.883.289 bytes, package `nl.cimpro.bugbaas`, versionCode `190`, versionName `2.10.10`, ABI arm64-v8a.
+- `apksigner verify --verbose --print-certs`: APK Signature Scheme v2 geslaagd; bestaand Android debugcertificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA-256: `E0640C65811A59462BB83D7EF9E660C16817ADC8EB05878D494CF513BB272A56`.
+- `adb devices`: geen aangesloten toestel; fysieke install-, performance- en touch-feeltest niet uitgevoerd.
+
 ## 2026-07-19 arcade survival release 2.10.9
 
 - `npx tsc --noEmit`: geslaagd.

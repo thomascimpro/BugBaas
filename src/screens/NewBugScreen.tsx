@@ -42,7 +42,6 @@ type Props = {
 export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
   const { t, tr } = useI18n();
   const [reportType, setReportType] = useState<ReportType>("bug");
-  const [typeOpen, setTypeOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [project, setProject] = useState(defaultReportProject);
   const userOrganizationIds = organizationIdsForUser(user);
@@ -59,7 +58,6 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
   const [draftReady, setDraftReady] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<BugDraft | null>(null);
 
-  const selectedReportType = reportTypes.find((item) => item.value === reportType) ?? reportTypes[0];
   const isBug = reportType === "bug";
   const hasOrganization = userOrganizationIds.length > 0;
   const selectedOrganizationId = organizationId === defaultOrganizationId || !hasOrganization
@@ -111,7 +109,6 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
 
   function clearForm() {
     setReportType("bug");
-    setTypeOpen(false);
     setTitle("");
     setProject(defaultReportProject);
     setOrganizationId(hasOrganization ? defaultSelectedOrganizationId : defaultOrganizationId);
@@ -192,29 +189,19 @@ export function NewBugScreen({ user, onBack: _onBack, onSaved }: Props) {
         </View>
       )}
       <Text style={sharedStyles.label}>{t("new.type")}</Text>
-      <Pressable style={styles.selectButton} onPress={() => setTypeOpen((current) => !current)}>
-        <View>
-          <Text style={styles.selectText}>{t(selectedReportType.labelKey)}</Text>
-          <Text style={styles.selectDescription}>{t(selectedReportType.descriptionKey)}</Text>
-        </View>
-      </Pressable>
-      {typeOpen && (
-        <View style={styles.selectMenu}>
-          {reportTypes.map((item) => (
-            <Pressable
-              key={item.value}
-              style={[styles.selectOption, reportType === item.value && styles.selectOptionActive]}
-              onPress={() => {
-                setReportType(item.value);
-                setTypeOpen(false);
-              }}
-            >
-              <Text style={[styles.selectOptionText, reportType === item.value && styles.selectOptionTextActive]}>{t(item.labelKey)}</Text>
-              <Text style={[styles.selectOptionMeta, reportType === item.value && styles.selectOptionTextActive]}>{t(item.descriptionKey)}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      <View style={styles.typeGrid}>
+        {reportTypes.map((item) => (
+          <Pressable
+            accessibilityState={{ selected: reportType === item.value }}
+            key={item.value}
+            style={[styles.typeOption, reportType === item.value && styles.typeOptionActive]}
+            onPress={() => setReportType(item.value)}
+          >
+            <Text style={[styles.typeOptionText, reportType === item.value && styles.typeOptionTextActive]}>{t(item.labelKey)}</Text>
+            <Text style={[styles.typeOptionMeta, reportType === item.value && styles.typeOptionTextActive]}>{t(item.descriptionKey)}</Text>
+          </Pressable>
+        ))}
+      </View>
       <Text style={sharedStyles.label}>{t("new.reportTitle")}</Text>
       <TextInput style={sharedStyles.input} value={title} onChangeText={setTitle} />
       <Text style={sharedStyles.label}>{t("new.visibility")}</Text>
@@ -324,59 +311,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900"
   },
-  selectButton: {
-    alignItems: "center",
-    backgroundColor: "#fdfefb",
-    borderColor: "#c8d5ce",
-    borderRadius: 8,
-    borderWidth: 1,
+  typeGrid: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
-    minHeight: 52,
-    paddingHorizontal: 12
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 10
   },
-  selectText: {
-    color: "#17211c",
-    fontWeight: "900"
-  },
-  selectDescription: {
-    color: "#53645d",
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 2
-  },
-  selectPlaceholder: {
-    color: "#77847f"
-  },
-  selectMenu: {
+  typeOption: {
     backgroundColor: "#fdfefb",
     borderColor: "#c8d5ce",
     borderRadius: 8,
     borderWidth: 1,
-    gap: 6,
-    marginBottom: 10,
-    padding: 8
-  },
-  selectOption: {
-    borderRadius: 8,
+    flexBasis: "48%",
+    flexGrow: 1,
+    minHeight: 68,
     paddingHorizontal: 10,
     paddingVertical: 10
   },
-  selectOptionActive: {
-    backgroundColor: "#15724f"
+  typeOptionActive: {
+    backgroundColor: "#15724f",
+    borderColor: "#15724f"
   },
-  selectOptionText: {
+  typeOptionText: {
     color: "#17211c",
     fontWeight: "900"
   },
-  selectOptionMeta: {
+  typeOptionMeta: {
     color: "#53645d",
     fontSize: 12,
     fontWeight: "800",
     marginTop: 2
   },
-  selectOptionTextActive: {
+  typeOptionTextActive: {
     color: "#ffffff"
   },
   visibilityRow: {

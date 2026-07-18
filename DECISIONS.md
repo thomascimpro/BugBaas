@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-07-19 regression restoration release 2.10.10
+
+- Reporttypes zijn primaire categorieën en blijven daarom zonder extra tap zichtbaar op het nieuwe-meldingsformulier.
+- Nest Defense scheidt handmatige aanvalinput van de visuele en torenlagen; de lege taplaag meet uitsluitend zijn eigen veldcoördinaten.
+- BugDex-medailles gebruiken de geladen `bugdexUnlocks` als directe bron voor totalen en rarity-aantallen, zodat ruilen of verbruiken nooit voortgang verwijdert.
+- Vroegtijdig verlaten wordt bepaald door `practice`, niet door een afgeleide `ranked`-flag: alleen Train mag voor een resultaat stoppen.
+
 ## 2026-07-19 arcade survival tuning release 2.10.9
 
 - De linker Bug Glide-strook blijft een inputzone, maar de karaktergrens gebruikt strookbreedte plus halve visuele spritebreedte zodat het karakter de lijn nooit kruist.

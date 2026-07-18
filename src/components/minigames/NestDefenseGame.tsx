@@ -117,10 +117,10 @@ export function NestDefenseGame({ onBack, onResult, practice = false, ranked = f
   }, [state, squadAssist.nestDefense.slowMultiplier]);
 
   useEffect(() => {
-    if (!ranked || state === "result") return;
+    if (practice || state === "result") return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => subscription.remove();
-  }, [ranked, state]);
+  }, [practice, state]);
 
   function start() {
     const startingHp = 13 + squadAssist.nestDefense.startingHpBonus;
@@ -298,13 +298,13 @@ export function NestDefenseGame({ onBack, onResult, practice = false, ranked = f
 
   function manualTapAttack(event: GestureResponderEvent) {
     if (state !== "running") return;
-    const { pageX, pageY } = event.nativeEvent;
+    const { locationX, locationY, pageX, pageY } = event.nativeEvent;
     fieldRef.current?.measure((_x, _y, width, height, fieldPageX, fieldPageY) => {
       const now = Date.now();
       if (now - lastControlTapAtRef.current < 120) return;
       if (now < manualCooldownUntilRef.current) return;
-      const tapX = pageX - fieldPageX;
-      const tapY = pageY - fieldPageY;
+      const tapX = Number.isFinite(pageX) ? pageX - fieldPageX : locationX;
+      const tapY = Number.isFinite(pageY) ? pageY - fieldPageY : locationY;
       const target = targetFromFieldPoint(tapX, tapY, width, height);
       if (!target) return;
       manualCooldownUntilRef.current = now + manualCooldownForLevel(tapSpeedLevelRef.current);
@@ -436,7 +436,7 @@ export function NestDefenseGame({ onBack, onResult, practice = false, ranked = f
   }
 
   function back() {
-    if (ranked && state !== "result") return;
+    if (!practice && state !== "result") return;
     if (state === "running") {
       Alert.alert("Leave Nest Defense?", "Your run stops if you go back now.", [{ text: "Stay", style: "cancel" }, { text: "Leave", style: "destructive", onPress: onBack }]);
       return;
@@ -451,33 +451,32 @@ export function NestDefenseGame({ onBack, onResult, practice = false, ranked = f
 
   return (
     <View style={styles.shell}>
-      <View style={styles.header}><View><Text style={styles.title}>Nest Defense</Text><Text style={styles.meta}>Best score: {bestScore}</Text></View>{(!ranked || state === "result") && <Pressable style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}</View>
+      <View style={styles.header}><View><Text style={styles.title}>Nest Defense</Text><Text style={styles.meta}>Best score: {bestScore}</Text></View>{(practice || state === "result") && <Pressable style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}</View>
       {state === "ready" && <Ready onStart={start} />}
       {state === "running" && (
         <View style={styles.game}>
           <View style={styles.hud}><Text style={styles.hudText}>{Math.ceil(remainingMs / 1000)}s</Text><Text style={styles.hudText}>{score}</Text><Text style={styles.hudText}>Nest {hp}/{maxNestHp}</Text><Text style={styles.hudText}>Coins {coins}</Text><Text style={styles.hudText}>Wave {wave}{isBossWave(wave) ? " Boss" : ""}</Text></View>
-          <Pressable
-            ref={fieldRef}
+          <View
             style={styles.field}
             onLayout={updateFieldLayout}
-            onPress={manualTapAttack}
           >
-            <SpriteCrop rect={{ x: 768, y: 20, width: 744, height: 724 }} sheetHeight={1536} sheetWidth={1536} source={arcadeShowcaseImage} style={styles.backgroundArt} />
-            <View style={styles.fieldShade} />
-            <View style={styles.squadOverlay}><ArcadeSquadAssist compact label={`Squad ${squadAssist.activeCount}/3`} user={user} /></View>
-            {pathDots().map((dot, index) => <View key={index} style={[styles.pathDot, { left: `${dot.x}%`, top: `${dot.y}%`, transform: [{ scale: fieldScale }] }]} />)}
+            <SpriteCrop pointerEvents="none" rect={{ x: 768, y: 20, width: 744, height: 724 }} sheetHeight={1536} sheetWidth={1536} source={arcadeShowcaseImage} style={styles.backgroundArt} />
+            <View pointerEvents="none" style={styles.fieldShade} />
+            <View pointerEvents="none" style={styles.squadOverlay}><ArcadeSquadAssist compact label={`Squad ${squadAssist.activeCount}/3`} user={user} /></View>
+            {pathDots().map((dot, index) => <View key={index} pointerEvents="none" style={[styles.pathDot, { left: `${dot.x}%`, top: `${dot.y}%`, transform: [{ scale: fieldScale }] }]} />)}
+            <Pressable accessibilityLabel="Manual tap attack" ref={fieldRef} testID="nest-defense-tap-layer" style={styles.tapLayer} onPress={manualTapAttack} />
             {slowZones.map((zone) => {
               const pos = pointOnPath(zone.progress);
               return <View key={zone.id} pointerEvents="none" style={[styles.slowZone, { left: `${pos.x}%`, top: `${pos.y}%`, transform: [{ scale: fieldScale }] }]} />;
             })}
             {towers.map((tower) => <TowerSlot key={tower.id} scale={fieldScale} selectedTower={selectedTower} tower={tower} onPress={() => buyOrUpgrade(tower.id)} />)}
-            <View style={[styles.nest, { transform: [{ scale: fieldScale }] }]}>
+            <View pointerEvents="none" style={[styles.nest, { transform: [{ scale: fieldScale }] }]}>
               <LifePips current={hp} max={maxNestHp} />
               <Image accessibilityIgnoresInvertColors resizeMode="contain" source={nestImage} style={styles.nestImage} />
             </View>
             {enemies.map((enemy) => <EnemyView key={enemy.id} enemy={enemy} scale={fieldScale} />)}
             {impacts.map((impact) => <View key={impact.id} pointerEvents="none" style={[styles.manualImpact, { left: `${impact.x}%`, top: `${impact.y}%`, transform: [{ scale: fieldScale }] }]}><Text style={styles.manualImpactText}>HIT</Text></View>)}
-          </Pressable>
+          </View>
           <View style={styles.abilityBar}>
             <AbilityButton disabled={now < manualCooldownUntil} label={now < manualCooldownUntil ? `Tap ${Math.ceil((manualCooldownUntil - now) / 1000)}s` : `Tap ${manualDamageForLevel(tapDamageLevel, wave)}` } />
             <Pressable disabled={now < sprayCooldownUntil} style={[styles.abilityButton, now < sprayCooldownUntil && styles.abilityDisabled]} onPress={useBugSpray}><Text style={styles.abilityText}>{now < sprayCooldownUntil ? `Spray ${Math.ceil((sprayCooldownUntil - now) / 1000)}s` : "Bug spray"}</Text></Pressable>
@@ -751,6 +750,7 @@ const styles = StyleSheet.create({
   tapUpgradeCost: { color: "#d7bd57", fontSize: 10, fontWeight: "900" },
   tapUpgradeDisabled: { opacity: 0.52 },
   tapUpgradeTitle: { color: "#f9fbf7", fontSize: 11, fontWeight: "900" },
+  tapLayer: { ...StyleSheet.absoluteFillObject, zIndex: 3 },
   towerBar: { bottom: 8, flexDirection: "row", gap: 8, left: 10, position: "absolute", right: 10, zIndex: 10 },
   towerButton: { alignItems: "center", backgroundColor: "rgba(249,251,247,0.9)", borderColor: "rgba(215,189,87,0.55)", borderRadius: 8, borderWidth: 1, flex: 1, justifyContent: "center", minHeight: 54 },
   towerButtonActive: { backgroundColor: "#d7bd57", borderColor: "#f9fbf7" },
