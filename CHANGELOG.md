@@ -1,9 +1,12 @@
 # Changelog
 
-## 2.10.5
+## 2.10.6
 
 - Bug Tower start direct rond de voormalige floor-150-moeilijkheid; platforms bewegen eerder en de stijgende map versnelt meer dan tweemaal tijdens een lange run.
 - Bubble Swarm toont de volledige native projectielvlucht via vloeiende pixeltransforms, voert sneller druk op en voegt verdienbare Bomb- en Freeze-power-ups toe.
+
+## 2.10.5
+
 - Android-auth is hersteld: de release-APK bevat weer de echte Firebase- en Google-configuratie in plaats van demo-auth.
 - Web Google-login gebruikt de afzonderlijke browser-popupflow; `bugbaas.vercel.app` is als Firebase-webdomein toegestaan.
 - Bug Tower vertaalt vasthouden nu veel sterker naar spronghoogte: een tik haalt ongeveer één trede en volledige charge ongeveer vijf openingstreden.
