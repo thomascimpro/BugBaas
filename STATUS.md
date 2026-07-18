@@ -1,6 +1,6 @@
 # Status
 
-- BugBaas 2.10.4 scherpt Bug Tower aan met snellere platformkrimp, sterkere links/rechts-wissels, eerdere bewegende treden en zichtbare touchzones; releasevalidatie is in uitvoering.
+- BugBaas 2.10.4 scherpt Bug Tower aan met snellere platformkrimp, sterkere links/rechts-wissels, eerdere bewegende treden en zichtbare touchzones; web- en Android-releasevalidatie zijn geslaagd, publicatie volgt.
 - Bug Tower heeft lokaal duidelijk zichtbare, halftransparante links/rechts-touchzones; logica-, type-, productiebuild- en mobiele browsertests zijn geslaagd.
 - De huidige ChatGPT Site blijft door workspacebeleid owner-only. Voor een gratis publieke vriendenlink is een losse statische deployment op Vercel, Netlify of Cloudflare Pages nodig.
 - BugBaas 2.10.3 is lokaal releaseklaar met vijf zichtbare Bug Tower-werelden, geleidelijkere platformdruk, hoogtegebaseerde score en originele Tower-audio.

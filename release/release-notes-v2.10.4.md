@@ -22,5 +22,6 @@
 - Package: `nl.cimpro.bugbaas`
 - VersionCode: `184`
 - VersionName: `2.10.4`
-
-Final APK size, signing verification and SHA-256 are recorded after the release build.
+- Size: `83,392,789 bytes`
+- File SHA-256: `775C04E8AE18CA51590550E1913756D8406390222A97CF75CEC69ACD84FBAD21`
+- Signing: APK Signature Scheme v2 verified; signer certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`

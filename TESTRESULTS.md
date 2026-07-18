@@ -7,6 +7,11 @@
 - `npm run typecheck`: geslaagd.
 - `npm run site:build`: geslaagd met 317 assets en de nieuwe gameplaybundle.
 - Chromium mobiel 390x844 en desktop 1280x800: volledige Arcade-flow geslaagd; zichtbare touchzones en charge/release-besturing blijven intact.
+- Android `assembleRelease` met lint, R8 en resource-optimalisatie: geslaagd.
+- APK-metadata: package `nl.cimpro.bugbaas`, versionCode `184`, versionName `2.10.4`, minSdk `26`, targetSdk `36`.
+- APK-signing: v2-verified met het bestaande BugBaas-certificaat `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- Definitieve APK: `dist/BugBaas-2.10.4.apk`, 83.392.789 bytes; SHA-256 `775C04E8AE18CA51590550E1913756D8406390222A97CF75CEC69ACD84FBAD21`.
+- `adb devices -l`: geen aangesloten apparaat; fysieke feeltest blijft open.
 
 ## 2026-07-18 Bug Tower touch overlays
 
