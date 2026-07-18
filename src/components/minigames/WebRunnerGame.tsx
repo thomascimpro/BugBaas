@@ -9,7 +9,7 @@ import { BugArtImage } from "../BugArtImage";
 import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
 import { SpriteCrop } from "./SpriteCrop";
 
-type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; ranked?: boolean; seed?: string; user: User };
+type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; practice?: boolean; ranked?: boolean; seed?: string; user: User };
 type RunnerState = "ready" | "result" | "running";
 type EntityKind = "boost" | "flyer" | "magnet" | "nectar" | "shield" | "web";
 type RunnerEntity = { id: string; kind: EntityKind; lane: 0 | 1 | 2; y: number };
@@ -33,7 +33,7 @@ const gemPickupImage = require("../../../assets/minigames/extracted/web_gem.png"
 
 const emptyStats = (): RunnerStats => ({ combo: 0, hitCount: 0, maxCombo: 0, pickups: 0, scoreBonus: 0, startAt: 0 });
 
-export function WebRunnerGame({ onBack, onResult, ranked = false, seed, user }: Props) {
+export function WebRunnerGame({ onBack, onResult, practice = false, ranked = false, seed, user }: Props) {
   const { t } = useI18n();
   const squadAssist = useMemo(() => arcadeSquadAssistForUser(user), [user.activeBugSquad]);
   const [state, setState] = useState<RunnerState>("ready");
@@ -233,8 +233,9 @@ export function WebRunnerGame({ onBack, onResult, ranked = false, seed, user }: 
     const resultDurationMs = Math.min(90000, elapsed);
     const finalScore = liveScore(elapsed, statsRef.current);
     playBugSound("arcade_finish");
-    void saveArcadeHighScore(user.uid, "web_runner", finalScore).then((highScore) => {
-      setBestScore(highScore);
+    const highScorePromise = practice ? Promise.resolve(bestScore) : saveArcadeHighScore(user.uid, "web_runner", finalScore);
+    void highScorePromise.then((highScore) => {
+      if (!practice) setBestScore(highScore);
       const nextResult = { combo: statsRef.current.maxCombo, durationMs: resultDurationMs, hits: statsRef.current.hitCount, localHighScore: highScore, mode: "web_runner" as const, pickups: statsRef.current.pickups, score: finalScore, streak: statsRef.current.maxCombo, timestamp: new Date().toISOString() };
       setResult(nextResult);
       onResult?.(nextResult);

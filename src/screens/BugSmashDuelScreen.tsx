@@ -1710,20 +1710,20 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   }
 
   if (!activeDuel && arenaMode === "web_runner") {
-    return <WebRunnerGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
+    return <WebRunnerGame practice={arcadeTrainingMode} user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
   }
 
   if (!activeDuel && arenaMode === "nest_defense") {
-    return <NestDefenseGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
+    return <NestDefenseGame practice={arcadeTrainingMode} user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
   }
   if (!activeDuel && arenaMode === "bug_glide") {
-    return <BugGlideGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
+    return <BugGlideGame practice={arcadeTrainingMode} user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
   }
   if (!activeDuel && arenaMode === "bug_tower") {
-    return <BugTowerGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
+    return <BugTowerGame practice={arcadeTrainingMode} user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
   }
   if (!activeDuel && arenaMode === "bubble_swarm") {
-    return <BubbleSwarmGame user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
+    return <BubbleSwarmGame practice={arcadeTrainingMode} user={user} onBack={returnToArenaHome} onResult={recordArcadeRunResult} />;
   }
 
   if (showActiveArcadeGame && activeDuel && activeArcadeMode) {
@@ -1738,6 +1738,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
     if (activeArcadeMode === "nest_defense") return <NestDefenseGame {...commonProps} />;
     if (activeArcadeMode === "bug_glide") return <BugGlideGame {...commonProps} />;
     if (activeArcadeMode === "bug_tower") return <BugTowerGame {...commonProps} />;
+    if (activeArcadeMode === "bubble_swarm") return <BubbleSwarmGame {...commonProps} />;
   }
 
   if (activeGameFullscreen && gameDuel) {
@@ -1902,7 +1903,8 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
                 active={false}
                 image={bubbleSwarmImage}
                 title={t("arcade.bubbleSwarm.title")}
-                onPress={() => { setArcadeTrainingMode(false); setArenaMode("bubble_swarm"); }}
+                onPress={() => confirmRankedStart(() => { void startRandomChallenge("bubble_swarm"); })}
+                onTrain={() => { setArcadeTrainingMode(true); setArenaMode("bubble_swarm"); }}
               />
             </View>
             <View style={styles.arenaUtilityRow}>

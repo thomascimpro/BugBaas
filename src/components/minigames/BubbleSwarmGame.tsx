@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   BackHandler,
   DimensionValue,
+  Easing,
   Image,
   ImageBackground,
   LayoutChangeEvent,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -17,7 +20,7 @@ import { playBugSound } from "../../services/soundService";
 import { ArcadeRunResult, User } from "../../types";
 import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
 
-type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; user: User };
+type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; practice?: boolean; ranked?: boolean; seed?: string; user: User };
 type GameState = "ready" | "result" | "running";
 type BubbleKind = "bee" | "beetle" | "dragonfly" | "firefly" | "ladybug" | "moth";
 type ShotKind = "normal" | "bomb" | "freeze";
@@ -41,7 +44,7 @@ const bubbleImages: Record<BubbleKind, number> = {
 };
 const allKinds = Object.keys(bubbleImages) as BubbleKind[];
 
-export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
+export function BubbleSwarmGame({ onBack, onResult, practice = false, ranked = false, seed, user }: Props) {
   const squadAssist = useMemo(() => arcadeSquadAssistForUser(user), [user.activeBugSquad]);
   const [state, setState] = useState<GameState>("ready");
   const [bestScore, setBestScore] = useState(0);
@@ -50,7 +53,6 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
   const [currentShot, setCurrentShot] = useState<Shot>({ bubbleKind: "ladybug", kind: "normal" });
   const [nextShot, setNextShot] = useState<Shot>({ bubbleKind: "bee", kind: "normal" });
   const [projectile, setProjectile] = useState<Projectile | null>(null);
-  const [projectilePosition, setProjectilePosition] = useState<Point | null>(null);
   const [impact, setImpact] = useState<Point | null>(null);
   const [aim, setAim] = useState<Point>({ x: 50, y: 32 });
   const [fieldSize, setFieldSize] = useState({ height: 1, width: 1 });
@@ -74,6 +76,7 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
   const resolutionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finishedRef = useRef(false);
   const shootingRef = useRef(false);
+  const projectileProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let active = true;
@@ -89,22 +92,19 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
 
   useEffect(() => {
     if (!projectile) {
-      setProjectilePosition(null);
+      projectileProgress.stopAnimation();
+      projectileProgress.setValue(0);
       return;
     }
-    const startedAt = performance.now();
-    let frame = 0;
-    const animate = (now: number) => {
-      const progress = clamp((now - startedAt) / projectile.durationMs, 0, 1);
-      setProjectilePosition(pointAtPathDistance(projectile.path, progress));
-      if (progress >= 1) {
-        resolveShot(projectile);
-        return;
-      }
-      frame = requestAnimationFrame(animate);
-    };
-    frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
+    projectileProgress.setValue(0);
+    const animation = Animated.timing(projectileProgress, {
+      duration: projectile.durationMs,
+      easing: Easing.linear,
+      toValue: 1,
+      useNativeDriver: Platform.OS !== "web"
+    });
+    animation.start(({ finished }) => { if (finished) resolveShot(projectile); });
+    return () => animation.stop();
   }, [projectile]);
 
   useEffect(() => () => {
@@ -121,9 +121,9 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
   }, [state]);
 
   function start() {
-    const seed = createArcadeSeed("bubble_swarm", `${user.uid}:${Date.now()}`);
-    const initial = buildInitialBoard(seed);
-    seedRef.current = seed;
+    const runSeed = seed ?? createArcadeSeed("bubble_swarm", `${user.uid}:${Date.now()}`);
+    const initial = buildInitialBoard(runSeed);
+    seedRef.current = runSeed;
     boardRef.current = initial;
     shotRef.current = 0;
     bubbleIdRef.current = 100;
@@ -137,13 +137,12 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
     finishedRef.current = false;
     shootingRef.current = false;
     freezeUntilRef.current = 0;
-    const first = nextShotKind(seed, 0, 0);
-    const second = nextShotKind(seed, 1, 0);
+    const first = nextShotKind(runSeed, 0, 0);
+    const second = nextShotKind(runSeed, 1, 0);
     setBoard(initial);
     setCurrentShot(first);
     setNextShot(second);
     setProjectile(null);
-    setProjectilePosition(null);
     setImpact(null);
     setAim({ x: 50, y: 32 });
     setScore(0);
@@ -205,10 +204,11 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
     if (state !== "running" || shootingRef.current || finishedRef.current) return;
     const targetCell = selectTargetCell(boardRef.current, aim);
     if (!targetCell) return;
-    const path = traceShotPath(shooter, aim, gridPoint(targetCell.row, targetCell.col).y);
+    const target = gridPoint(targetCell.row, targetCell.col);
+    const tracedPath = traceShotPath(shooter, aim, target.y);
+    const path = [...tracedPath.slice(0, -1), target];
     shootingRef.current = true;
     setProjectile({ durationMs: Math.max(450, Math.round(pathLength(path) * 9)), path, shot: currentShot, targetCell });
-    setProjectilePosition(shooter);
     playBugSound("arcade_tap");
   }
 
@@ -287,7 +287,6 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
     setCurrentShot(nextShot);
     setNextShot(following);
     setProjectile(null);
-    setProjectilePosition(null);
     setImpact(null);
     shootingRef.current = false;
 
@@ -305,7 +304,8 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
     const durationMs = Math.min(maxDurationMs, Math.max(0, Date.now() - startAtRef.current));
     const finalScore = Math.min(50000, Math.max(1, Math.round(scoreRef.current + poppedRef.current * 4 + maxComboRef.current * 30)));
     playBugSound("arcade_finish");
-    void saveArcadeHighScore(user.uid, "bubble_swarm", finalScore).then((highScore) => {
+    const highScorePromise = practice ? Promise.resolve(bestScore) : saveArcadeHighScore(user.uid, "bubble_swarm", finalScore);
+    void highScorePromise.then((highScore) => {
       const nextResult: ArcadeRunResult = {
         combo: maxComboRef.current,
         durationMs,
@@ -317,7 +317,7 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
         streak: maxComboRef.current,
         timestamp: new Date().toISOString()
       };
-      setBestScore(highScore);
+      if (!practice) setBestScore(highScore);
       setResult(nextResult);
       setState("result");
       onResult?.(nextResult);
@@ -325,6 +325,7 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
   }
 
   function back() {
+    if (ranked && state !== "result") return;
     if (state === "running") {
       Alert.alert("Leave Bubble Swarm?", "Your solo score is only saved after game over.", [
         { text: "Keep playing", style: "cancel" },
@@ -344,14 +345,15 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
   const remainingMisses = Math.max(0, missLimit(elapsed) - misses);
   const previewTargetCell = selectTargetCell(board, aim);
   const previewPath = previewTargetCell
-    ? traceShotPath(shooter, aim, gridPoint(previewTargetCell.row, previewTargetCell.col).y)
+    ? pathToTarget(aim, previewTargetCell)
     : [shooter, aim];
+  const projectileTransform = projectile ? animatedPathTransform(projectile.path, projectileProgress, fieldSize) : null;
 
   return (
     <View style={styles.shell}>
       <View style={styles.header}>
         <View><Text style={styles.title}>Bubble Swarm</Text><Text style={styles.meta}>Best score: {bestScore}</Text></View>
-        <Pressable accessibilityLabel="Close Bubble Swarm" testID="bubble-swarm-close" style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>
+        {(!ranked || state === "result") && <Pressable accessibilityLabel="Close Bubble Swarm" testID="bubble-swarm-close" style={styles.closeButton} onPress={back}><Text style={styles.closeText}>x</Text></Pressable>}
       </View>
       {state === "ready" && <Ready onStart={start} />}
       {state === "running" && (
@@ -375,23 +377,22 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
               style={styles.playfield}
             >
               <View style={styles.dangerLine}><Text style={styles.dangerText}>DANGER</Text></View>
-              {!projectile && previewPath.map((point, index) => (
+              {!projectile && samplePath(previewPath, 18).map((point, index) => (
                 <View key={`aim-${index}`} pointerEvents="none" style={[styles.aimDot, { left: `${point.x}%`, top: `${point.y}%` }]} />
               ))}
-              {board.map((bubble) => <Bubble key={bubble.id} bubble={bubble} />)}
+              {board.map((bubble) => <Bubble key={bubble.id} bubble={bubble} size={fieldSize.width * 0.11} />)}
               {impact && <View pointerEvents="none" style={[styles.impactRing, { left: `${impact.x}%`, top: `${impact.y}%` }]} />}
-              {projectile && projectilePosition && (
-                <Image
+              {projectile && projectileTransform && (
+                <Animated.Image
                   source={bubbleImages[projectile.shot.bubbleKind]}
                   style={[
                     styles.projectile,
                     {
+                      height: fieldSize.width * 0.11,
                       left: `${shooter.x - 5.5}%`,
                       top: `${shooter.y - 4.5}%`,
-                      transform: [
-                        { translateX: ((projectilePosition.x - shooter.x) / 100) * fieldSize.width },
-                        { translateY: ((projectilePosition.y - shooter.y) / 100) * fieldSize.height }
-                      ]
+                      width: fieldSize.width * 0.11,
+                      transform: projectileTransform
                     }
                   ]}
                 />
@@ -409,7 +410,7 @@ export function BubbleSwarmGame({ onBack, onResult, user }: Props) {
           </ImageBackground>
         </View>
       )}
-      {state === "result" && result && <Result onBack={onBack} onRetry={start} result={result} />}
+      {state === "result" && result && <Result onBack={onBack} onRetry={start} ranked={ranked} result={result} />}
     </View>
   );
 }
@@ -437,7 +438,7 @@ function Ready({ onStart }: { onStart: () => void }) {
   );
 }
 
-function Result({ onBack, onRetry, result }: { onBack: () => void; onRetry: () => void; result: ArcadeRunResult }) {
+function Result({ onBack, onRetry, ranked, result }: { onBack: () => void; onRetry: () => void; ranked: boolean; result: ArcadeRunResult }) {
   return (
     <ImageBackground resizeMode="cover" source={background} style={styles.resultBackground}>
       <View style={styles.readyShade} />
@@ -445,16 +446,16 @@ function Result({ onBack, onRetry, result }: { onBack: () => void; onRetry: () =
         <Text style={styles.panelTitle}>The swarm broke through</Text>
         <Text style={styles.score}>{result.score}</Text>
         <Text style={styles.body}>{result.pickups} bubbles cleared - Best chain x{result.combo} - Best score {result.localHighScore}</Text>
-        <Pressable style={styles.primaryButton} onPress={onRetry}><Text style={styles.primaryText}>Play again</Text></Pressable>
-        <Pressable style={styles.secondaryButton} onPress={onBack}><Text style={styles.secondaryText}>Back to Arena</Text></Pressable>
+        {!ranked && <Pressable style={styles.primaryButton} onPress={onRetry}><Text style={styles.primaryText}>Play again</Text></Pressable>}
+        <Pressable style={ranked ? styles.primaryButton : styles.secondaryButton} onPress={onBack}><Text style={ranked ? styles.primaryText : styles.secondaryText}>Back to Arena</Text></Pressable>
       </View>
     </ImageBackground>
   );
 }
 
-function Bubble({ bubble }: { bubble: GridBubble }) {
+function Bubble({ bubble, size }: { bubble: GridBubble; size: number }) {
   const point = gridPoint(bubble.row, bubble.col);
-  return <Image source={bubbleImages[bubble.kind]} style={[styles.bubble, percentPosition(point.x - 5.5, point.y - 4.5)]} />;
+  return <Image source={bubbleImages[bubble.kind]} style={[styles.bubble, { height: size, width: size }, percentPosition(point.x - 5.5, point.y - 4.5)]} />;
 }
 
 function HudChip({ active = false, label }: { active?: boolean; label: string }) {
@@ -475,8 +476,8 @@ function buildInitialBoard(seed: string) {
 function nextShotKind(seed: string, shot: number, elapsed: number): Shot {
   const count = activeKindCount(elapsed);
   const bubbleKind = allKinds[Math.floor(seededNumber(seed, 500 + shot * 11) * count)];
-  const powerCycle = 8 + Math.floor(seededNumber(seed, 900 + shot * 17) * 5);
-  const powerShot = shot >= 8 && shot % powerCycle === 0;
+  const powerCycle = 6 + Math.floor(seededNumber(seed, 900 + shot * 17) * 4);
+  const powerShot = shot >= 6 && shot % powerCycle === 0;
   const kind: ShotKind = powerShot ? seededNumber(seed, 1000 + shot * 19) < 0.5 ? "bomb" : "freeze" : "normal";
   return { bubbleKind, kind };
 }
@@ -535,16 +536,23 @@ function selectTargetCell(board: GridBubble[], aim: Point) {
       if (!occupied.has(key)) candidates.set(key, neighbor);
     }
   }
-  const aimPath = traceShotPath(shooter, aim, clamp(aim.y, 7, 80));
-  const impact = aimPath[aimPath.length - 1] ?? aim;
   let best: { cell: { col: number; row: number }; score: number } | null = null;
   for (const cell of candidates.values()) {
     if (occupied.has(cellKey(cell))) continue;
     const point = gridPoint(cell.row, cell.col);
-    const candidateScore = distance(point, impact) + Math.abs(point.y - impact.y) * 0.8;
+    const ray = traceShotPath(shooter, aim, point.y);
+    const impact = ray[ray.length - 1] ?? aim;
+    const exposedNeighbors = neighborCells(cell.row, cell.col).filter((neighbor) => occupied.has(cellKey(neighbor))).length;
+    const candidateScore = distance(point, impact) - exposedNeighbors * 0.12;
     if (!best || candidateScore < best.score) best = { cell, score: candidateScore };
   }
   return best?.cell ?? null;
+}
+
+function pathToTarget(aim: Point, targetCell: { col: number; row: number }) {
+  const target = gridPoint(targetCell.row, targetCell.col);
+  const traced = traceShotPath(shooter, aim, target.y);
+  return [...traced.slice(0, -1), target];
 }
 
 function connectedCluster(board: GridBubble[], start: GridBubble, include: (bubble: GridBubble) => boolean) {
@@ -614,6 +622,26 @@ function pointAtPathDistance(path: Point[], progress: number): Point {
   return path[path.length - 1] ?? { x: 50, y: 91 };
 }
 
+function samplePath(path: Point[], count: number) {
+  return Array.from({ length: count }, (_, index) => pointAtPathDistance(path, index / Math.max(1, count - 1)));
+}
+
+function animatedPathTransform(path: Point[], progress: Animated.Value, fieldSize: { height: number; width: number }) {
+  const lengths = path.slice(1).map((point, index) => distance(path[index], point));
+  const total = Math.max(0.001, lengths.reduce((sum, value) => sum + value, 0));
+  const inputRange = [0];
+  let travelled = 0;
+  for (const length of lengths) {
+    travelled += length;
+    inputRange.push(travelled / total);
+  }
+  const points = path.length > 1 ? path : [shooter, shooter];
+  return [
+    { translateX: progress.interpolate({ inputRange, outputRange: points.map((point) => ((point.x - shooter.x) / 100) * fieldSize.width) }) },
+    { translateY: progress.interpolate({ inputRange, outputRange: points.map((point) => ((point.y - shooter.y) / 100) * fieldSize.height) }) }
+  ];
+}
+
 function shotKindLabel(kind: ShotKind) {
   if (kind === "bomb") return "💣";
   if (kind === "freeze") return "❄";
@@ -643,7 +671,7 @@ const styles = StyleSheet.create({
   background: { flex: 1 },
   backgroundShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(2,9,28,0.12)" },
   body: { color: "#dce9ff", fontSize: 15, fontWeight: "700", lineHeight: 22, textAlign: "center" },
-  bubble: { aspectRatio: 1, position: "absolute", width: "11%", zIndex: 5 },
+  bubble: { position: "absolute", zIndex: 5 },
   closeButton: { alignItems: "center", backgroundColor: "#f8fbff", borderRadius: 10, height: 44, justifyContent: "center", width: 44 },
   closeText: { color: "#0b1638", fontSize: 24, fontWeight: "900" },
   controlHint: { alignSelf: "center", backgroundColor: "rgba(4,12,38,0.78)", borderRadius: 999, bottom: 4, paddingHorizontal: 12, paddingVertical: 5, position: "absolute", zIndex: 12 },
@@ -674,7 +702,7 @@ const styles = StyleSheet.create({
   playfield: { flex: 1, overflow: "hidden" },
   primaryButton: { alignItems: "center", backgroundColor: "#0f8f72", borderRadius: 10, justifyContent: "center", minHeight: 52, paddingHorizontal: 20, width: "100%" },
   primaryText: { color: "#fff", fontSize: 18, fontWeight: "900" },
-  projectile: { aspectRatio: 1, position: "absolute", width: "11%", zIndex: 7 },
+  projectile: { position: "absolute", zIndex: 7 },
   readyBackground: { flex: 1, justifyContent: "center" },
   readyShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(2,7,24,0.4)" },
   resultBackground: { flex: 1, justifyContent: "center" },

@@ -6,7 +6,7 @@ import { playBugSound } from "../../services/soundService";
 import { ArcadeRunResult, User } from "../../types";
 import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
 
-type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; ranked?: boolean; seed?: string; user: User };
+type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; practice?: boolean; ranked?: boolean; seed?: string; user: User };
 type GameState = "ready" | "result" | "running";
 type Platform = { coin?: boolean; drift: number; floor: number; id: string; rocket?: boolean; width: number; x: number; y: number };
 type Player = { grounded: boolean; highJump: boolean; lastGroundAt: number; spinAngle: number; spinning: boolean; vx: number; vy: number; x: number; y: number };
@@ -26,7 +26,7 @@ const towerVoidBackground = require("../../../assets/minigames/bug-tower/bug-tow
 const towerBackgrounds = [towerBackground, towerJungleBackground, towerForgeBackground, towerSkyBackground, towerVoidBackground];
 const beetleSpriteSheet = require("../../../assets/minigames/bug-tower/bug-tower-beetle.png");
 
-export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: Props) {
+export function BugTowerGame({ onBack, onResult, practice = false, ranked = false, seed, user }: Props) {
   const squadAssist = useMemo(() => arcadeSquadAssistForUser(user), [user.activeBugSquad]);
   const [state, setState] = useState<GameState>("ready");
   const [bestScore, setBestScore] = useState(0);
@@ -146,7 +146,7 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
         nextPlayer.lastGroundAt = now;
         nextPlayer.spinAngle = 0;
         nextPlayer.spinning = false;
-        landingChainUntilRef.current = chainLanding ? now + 200 : 0;
+        landingChainUntilRef.current = chainLanding ? now + 260 : 0;
         if (landing.coin) {
           coinsCollectedRef.current += 1;
           scoreRef.current += 45;
@@ -254,7 +254,8 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
     const durationMs = Math.min(90000, Math.max(0, Date.now() - startAtRef.current));
     const finalScore = Math.min(50000, Math.max(1, Math.round(scoreRef.current + landedFloorRef.current * 14 + maxComboRef.current * 45)));
     playBugSound("arcade_finish");
-    void saveArcadeHighScore(user.uid, "bug_tower", finalScore).then((highScore) => {
+    const highScorePromise = practice ? Promise.resolve(bestScore) : saveArcadeHighScore(user.uid, "bug_tower", finalScore);
+    void highScorePromise.then((highScore) => {
       const nextResult: ArcadeRunResult = {
         combo: maxComboRef.current,
         durationMs,
@@ -266,7 +267,7 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
         streak: landedFloorRef.current,
         timestamp: new Date().toISOString()
       };
-      setBestScore(highScore);
+      if (!practice) setBestScore(highScore);
       setResult(nextResult);
       setState("result");
       onResult?.(nextResult);
@@ -301,16 +302,28 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
             <HudChip label={`${renderState.score} pt`} />
             <HudChip active={renderState.combo > 0} label={renderState.combo > 0 ? `Combo ${renderState.combo}` : towerZone(renderState.floor)} />
           </View>
-          <View
-            style={styles.playfield}
-            onStartShouldSetResponder={() => renderState.chainUntil > Date.now()}
-            onResponderRelease={() => { tryLandingChain(); }}
-          >
+          <View style={styles.playfield}>
             <ImageBackground resizeMode="cover" source={towerBackgroundForFloor(renderState.floor)} style={styles.background}>
               <View style={styles.backgroundShade} />
               <View style={styles.squadOverlay}><ArcadeSquadAssist compact label={`Squad ${squadAssist.activeCount}/3`} user={user} /></View>
               <View style={styles.controlHint}><Text style={styles.controlHintText}>Hold a direction to run - release to jump</Text></View>
               {renderState.platforms.map((platform) => <TowerPlatform key={platform.id} platform={platform} />)}
+              <View style={styles.controlLayer}>
+                <Pressable
+                  accessibilityLabel="Run left and release to jump"
+                  testID="bug-tower-left-control"
+                  style={[styles.controlHalf, heldDirection === -1 && styles.controlHalfActive]}
+                  onPressIn={() => beginRun(-1)}
+                  onPressOut={() => releaseRun(-1)}
+                ><Text style={styles.controlArrow}>‹</Text><Text style={styles.controlSideLabel}>LEFT</Text></Pressable>
+                <Pressable
+                  accessibilityLabel="Run right and release to jump"
+                  testID="bug-tower-right-control"
+                  style={[styles.controlHalf, heldDirection === 1 && styles.controlHalfActive]}
+                  onPressIn={() => beginRun(1)}
+                  onPressOut={() => releaseRun(1)}
+                ><Text style={styles.controlArrow}>›</Text><Text style={styles.controlSideLabel}>RIGHT</Text></Pressable>
+              </View>
               {renderState.chainUntil > Date.now() && (
                 <View pointerEvents="none" style={[styles.chainPrompt, percentPosition(renderState.player.x, renderState.player.y)]}>
                   <View style={styles.chainRing} />
@@ -321,26 +334,12 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
                 <BugTowerSprite frame={animationFrame} />
                 {renderState.rocketActive && <View style={styles.rocketFlame} />}
               </View>
-              <View style={styles.controls}>
-                <Pressable
-                  accessibilityLabel="Run left and release to jump"
-                  testID="bug-tower-left-control"
-                  style={[styles.controlButton, heldDirection === -1 && styles.controlButtonActive]}
-                  onPressIn={() => beginRun(-1)}
-                  onPressOut={() => releaseRun(-1)}
-                ><Text style={styles.controlButtonText}>LEFT</Text><Text style={styles.controlButtonArrow}>‹</Text></Pressable>
+              <View pointerEvents="none" style={styles.controls}>
                 <View style={styles.chargeMeter}>
                   <Text style={styles.chargeLabel}>{renderState.player.spinning ? "SPIN!" : renderState.charge >= 58 ? "SPIN READY" : "JUMP POWER"}</Text>
                   <View style={styles.chargeTrack}><View style={[styles.chargeFill, { width: `${renderState.charge}%` as DimensionValue }]} /></View>
                   <Text style={styles.chargeValue}>{renderState.charge}%</Text>
                 </View>
-                <Pressable
-                  accessibilityLabel="Run right and release to jump"
-                  testID="bug-tower-right-control"
-                  style={[styles.controlButton, heldDirection === 1 && styles.controlButtonActive]}
-                  onPressIn={() => beginRun(1)}
-                  onPressOut={() => releaseRun(1)}
-                ><Text style={styles.controlButtonText}>RIGHT</Text><Text style={styles.controlButtonArrow}>›</Text></Pressable>
               </View>
             </ImageBackground>
           </View>
@@ -396,8 +395,8 @@ function TowerPlatform({ platform }: { platform: Platform }) {
     }]}>
       <View style={styles.platformShine} />
       <Text numberOfLines={1} style={styles.floorNumber}>#{platform.floor}</Text>
-      {platform.coin && <Text style={styles.coin}>●</Text>}
-      {platform.rocket && <Text style={styles.rocketPickup}>⚡</Text>}
+      {platform.coin && <View pointerEvents="none" style={styles.coin}><View style={styles.coinInset} /></View>}
+      {platform.rocket && <View pointerEvents="none" style={styles.rocketPickup}><Text style={styles.rocketPickupText}>▲</Text></View>}
     </View>
   );
 }
@@ -447,33 +446,36 @@ export function platformWidthForFloor(floor: number, seed = "balance") {
 }
 
 export function platformWidthMultiplierForFloor(floor: number) {
-  if (floor < 50) return 1;
-  if (floor <= 100) return 1 - ((floor - 50) / 50) * 0.5;
-  if (floor <= 200) return 0.5 - ((floor - 100) / 100) * (1 / 6);
-  return Math.max(0.12, 1 / 3 - ((floor - 200) / 600) * (1 / 3 - 0.12));
+  if (floor < 20) return 1;
+  if (floor <= 50) return 1 - ((floor - 20) / 30) * 0.5;
+  if (floor <= 100) return 0.5 - ((floor - 50) / 50) * (1 / 6);
+  if (floor <= 200) return (1 / 3) - ((floor - 100) / 100) * (1 / 12);
+  return Math.max(0.18, 0.25 - ((floor - 200) / 400) * 0.07);
 }
 
 export function movingPlatformChance(floor: number) {
-  if (floor < 25) return 0;
-  if (floor <= 50) return ((floor - 25) / 25) * 0.15;
-  if (floor <= 100) return 0.15 + ((floor - 50) / 50) * 0.2;
-  if (floor <= 200) return 0.35 + ((floor - 100) / 100) * 0.25;
-  return Math.min(0.74, 0.6 + ((floor - 200) / 100) * 0.14);
+  if (floor < 8) return 0;
+  if (floor <= 25) return 0.1 + ((floor - 8) / 17) * 0.15;
+  if (floor <= 50) return 0.25 + ((floor - 25) / 25) * 0.2;
+  if (floor <= 100) return 0.45 + ((floor - 50) / 50) * 0.2;
+  if (floor <= 200) return 0.65 + ((floor - 100) / 100) * 0.17;
+  return Math.min(0.9, 0.82 + ((floor - 200) / 100) * 0.08);
 }
 
 function createPlatform(previous: Platform | null, floor: number, seed: string): Platform {
-  const stage = Math.floor(floor / 20);
+  const stage = Math.floor(floor / 15);
   const width = platformWidthForFloor(floor, seed);
-  const gap = clamp(9.8 + stage * 0.22 + seededNumber(seed, floor * 5 + 1) * 2.4, 9.8, floor >= 200 ? 15.2 : 17.8);
+  const gap = clamp(9.8 + stage * 0.2 + seededNumber(seed, floor * 5 + 1) * 2.8, 9.8, floor >= 200 ? 16.4 : 17.2);
   const previousCenter = previous ? previous.x + previous.width / 2 : 50;
   const reach = clamp(18 + width * 0.2, 21, 30);
   const offset = (seededNumber(seed, floor * 5 + 2) - 0.5) * reach * 2;
   const x = clamp(previousCenter + offset - width / 2, 3.5, 96.5 - width);
   const driftRoll = seededNumber(seed, floor * 5 + 3);
   const moving = driftRoll < movingPlatformChance(floor);
-  const drift = moving ? (seededNumber(seed, floor * 5 + 4) > 0.5 ? 1 : -1) * clamp(0.022 + floor * 0.00012, 0.022, 0.07) : 0;
-  const coin = floor > 0 && seededNumber(seed, floor * 5 + 6) > 0.42;
-  const rocket = floor > 15 && !coin && seededNumber(seed, floor * 5 + 7) < 0.035;
+  const drift = moving ? (seededNumber(seed, floor * 5 + 4) > 0.5 ? 1 : -1) * clamp(0.032 + floor * 0.0002, 0.032, 0.12) : 0;
+  const guaranteedRocket = floor >= 18 && floor % 29 === 0;
+  const rocket = floor > 12 && (guaranteedRocket || seededNumber(seed, floor * 5 + 7) < 0.025);
+  const coin = floor > 0 && !rocket && seededNumber(seed, floor * 5 + 6) > 0.72;
   return { coin, drift, floor, id: `floor-${floor}`, rocket, width, x, y: (previous?.y ?? 2) - gap };
 }
 
@@ -489,11 +491,11 @@ function movePlatform(platform: Platform, scroll: number): Platform {
 }
 
 function towerScrollSpeed(floor: number, elapsed: number) {
-  if (floor < 8) return 0;
-  const timePressure = Math.floor(elapsed / 45000) * 0.002;
-  const floorPressure = floor * 0.00016;
-  const zonePressure = Math.floor(floor / 100) * 0.004;
-  return clamp(0.006 + timePressure + floorPressure + zonePressure, 0.006, 0.12);
+  if (floor < 5) return 0;
+  const timePressure = elapsed * 0.00000016;
+  const floorPressure = floor * 0.00032;
+  const zonePressure = Math.floor(floor / 50) * 0.004;
+  return clamp(0.009 + timePressure + floorPressure + zonePressure, 0.009, 0.16);
 }
 
 function towerZone(floor: number) {
@@ -537,14 +539,16 @@ const styles = StyleSheet.create({
   chainPrompt: { alignItems: "center", height: 86, justifyContent: "center", marginLeft: -43, marginTop: -43, position: "absolute", width: 86, zIndex: 10 },
   chainRing: { borderColor: "#facc15", borderRadius: 999, borderWidth: 3, height: 66, position: "absolute", width: 66 },
   chainText: { color: "#fff7b2", fontSize: 12, fontWeight: "900" },
-  coin: { color: "#fde047", fontSize: 20, fontWeight: "900", left: "50%", marginLeft: -7, marginTop: -24, position: "absolute", top: 0 },
-  controlButton: { alignItems: "center", backgroundColor: "rgba(7,17,50,0.82)", borderColor: "rgba(125,211,252,0.78)", borderRadius: 18, borderWidth: 2, height: 68, justifyContent: "center", width: 82 },
-  controlButtonActive: { backgroundColor: "rgba(14,116,144,0.94)", borderColor: "#facc15", transform: [{ scale: 1.04 }] },
-  controlButtonArrow: { color: "#eff8ff", fontSize: 30, fontWeight: "900", lineHeight: 30 },
-  controlButtonText: { color: "#bae6fd", fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
+  coin: { alignItems: "center", backgroundColor: "#facc15", borderColor: "#fff7ae", borderRadius: 999, borderWidth: 2, height: 18, justifyContent: "center", left: "50%", marginLeft: -9, position: "absolute", top: -24, width: 18 },
+  coinInset: { borderColor: "#b45309", borderRadius: 999, borderWidth: 2, height: 8, width: 8 },
+  controlArrow: { color: "rgba(255,255,255,0.7)", fontSize: 48, fontWeight: "900", lineHeight: 50 },
+  controlHalf: { alignItems: "center", flex: 1, justifyContent: "flex-end", paddingBottom: 18 },
+  controlHalfActive: { backgroundColor: "rgba(14,116,144,0.2)" },
+  controlLayer: { ...StyleSheet.absoluteFillObject, flexDirection: "row", zIndex: 6 },
+  controlSideLabel: { color: "rgba(220,233,255,0.75)", fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
   controlHint: { alignSelf: "center", backgroundColor: "rgba(4,12,38,0.72)", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, position: "absolute", top: 8, zIndex: 8 },
   controlHintText: { color: "#dce9ff", fontSize: 11, fontWeight: "900" },
-  controls: { alignItems: "center", bottom: 12, flexDirection: "row", justifyContent: "space-between", left: 12, position: "absolute", right: 12, zIndex: 12 },
+  controls: { alignItems: "center", bottom: 14, left: "50%", marginLeft: -52, position: "absolute", zIndex: 12 },
   difficultyChip: { backgroundColor: "rgba(103,65,217,0.28)", borderColor: "rgba(167,139,250,0.8)", borderRadius: 999, borderWidth: 1, color: "#ede9fe", fontSize: 11, fontWeight: "900", paddingHorizontal: 9, paddingVertical: 6 },
   difficultyRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "center" },
   game: { flex: 1 },
@@ -573,7 +577,8 @@ const styles = StyleSheet.create({
   secondaryButton: { alignItems: "center", borderColor: "#dce9ff", borderRadius: 10, borderWidth: 1, justifyContent: "center", minHeight: 48, paddingHorizontal: 20, width: "100%" },
   secondaryText: { color: "#f8fbff", fontSize: 16, fontWeight: "900" },
   rocketFlame: { backgroundColor: "#facc15", borderColor: "#fb923c", borderRadius: 999, borderWidth: 2, bottom: -14, height: 22, position: "absolute", width: 12 },
-  rocketPickup: { color: "#f97316", fontSize: 20, fontWeight: "900", left: "50%", marginLeft: -7, marginTop: -24, position: "absolute", top: 0 },
+  rocketPickup: { alignItems: "center", backgroundColor: "#f97316", borderColor: "#ffedd5", borderRadius: 8, borderWidth: 2, height: 24, justifyContent: "center", left: "50%", marginLeft: -10, position: "absolute", top: -30, width: 20 },
+  rocketPickupText: { color: "#fff", fontSize: 13, fontWeight: "900" },
   shell: { backgroundColor: "#050d24", flex: 1 },
   spriteFrame: { overflow: "hidden" },
   squadOverlay: { position: "absolute", right: 8, top: 42, zIndex: 9 },

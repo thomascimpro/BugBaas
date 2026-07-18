@@ -1,5 +1,15 @@
 # Status
 
+## 2026-07-19 arcade repair release 2.10.8
+
+- Bug Tower gebruikt twee volledige touchhelften, snellere floor pressure, exact 1/2-, 1/3- en 1/4-brede mijlpalen, eerdere moving platforms en betrouwbare coin/rocket-pickups.
+- Bubble Swarm gebruikt een vloeiend Animated-pad met exact grid-eindpunt; de live gevonden web-stretchbug in bubble-afmetingen is hersteld en opnieuw visueel getest.
+- Train staat bij alle arcadegames, inclusief Bubble Swarm. Practice schrijft geen ranked run, Firestore-resultaat of lokaal highscore-record.
+- Herculeskever is vervangen door een transparante 1254x1254 HD-versie waarin hoorn, lijf en poten volledig zichtbaar zijn; Hooiwagen en Buddy-assets zijn gecontroleerd en bleken al correct.
+- Webversie 2.10.8 staat productie op `https://bugbaas.vercel.app`, deployment `dpl_2Zz1LbmkbBig1V5piHiVR2ocrzvj` (`READY`).
+- Android 2.10.8 is gebouwd en gecontroleerd als `dist/BugBaas-2.10.8.apk`; GitHub-publicatie wacht alleen nog op de releasecommit/tag.
+- Geen Android-toestel aangesloten; de fysieke install- en touch-feeltest blijft daarom expliciet open.
+
 ## 2026-07-18 web shell, arcade scaling and release candidate
 
 - De Expo-webshell is op web gecentreerd met een maximale breedte van 460px; html/body/root zijn viewport-locked en scroll blijft binnen de schermcontent.
@@ -7,7 +17,7 @@
 - Bug Tower heeft smallere hoge-floor platforms, oplopende moving-platform-kans, chain taps, coins en tijdelijke rocket flight; Bubble Swarm gebruikt RAF/transform-projectielen, wall-bounce aim paths, bomb en freeze shots.
 - BuddyCareIcon gebruikt transparante state/action PNG-assets; Hooiwagen is opnieuw met volledige poten gecropt.
 - Daily duelmission gebruikt target 7 en behoudt id `duel-play-5` voor bestaande claims.
-- Web export en Vercel production deployment zijn geslaagd; de publieke alias is `https://dist-ruddy-ten-52.vercel.app` als apart project omdat het bestaande `bugbaas.vercel.app`-project niet aan deze checkout kon worden gekoppeld.
+- Web export en Vercel production deployment zijn geslaagd op het bestaande project `bugbaas`; productie-deployment `dpl_2xQH3VU5RYbdncywnQEM6LeN53jH` is `READY` op `https://bugbaas.vercel.app`.
 - Browser-plugin en fysieke device-smoke waren in deze run niet beschikbaar; die visuele/control-flow checks blijven expliciet open.
 - Android fast release-build 2.10.7 is geslaagd; APK staat op `dist/BugBaas-2.10.7.apk`, metadata/signing/hash zijn gecontroleerd.
 - GitHub Release `v2.10.7` is gepubliceerd met APK-asset.

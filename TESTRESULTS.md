@@ -1,11 +1,27 @@
 # Test Results
 
+## 2026-07-19 arcade repair release 2.10.8
+
+- `npm.cmd run typecheck`: geslaagd na alle gameplay- en practice-wijzigingen.
+- `npx.cmd expo export --platform web`: geslaagd; definitieve bundle `AppEntry-6ace068ca0fd86bc2d369230b456105e.js`.
+- Vercel preview `dpl_96ZF2PCNxesvAmLGaHqGC2AssDpT`: root en exacte bundle HTTP 200; bundlelengte 2.507.091 bytes en ETag komt overeen met de exporthash.
+- Vercel productie `dpl_2Zz1LbmkbBig1V5piHiVR2ocrzvj`: `READY`; `bugbaas.vercel.app` serveert de definitieve bundle met HTTP 200.
+- Chrome hidden-account smoke: Arena toont Start en Train voor alle zes modes; Bug Tower toont twee volledige touchzones, trede-pickups en fullscreen mobiele shell.
+- Chrome Bubble Swarm smoke: Luna-stretchbug gereproduceerd, hersteld, herdeployd en opnieuw getest; ronde bubbles, volledige richtlijn, zichtbaar tussenpunt en aansluitende gridlanding bevestigd.
+- In-app Browser smoke op 390x844 met hidden account `Luna Review`: 2.10.8-changelogpopup, mobiele shell en Start/Train voor alle modes bevestigd.
+- `./android/gradlew.bat -p android :app:assembleRelease`: geslaagd na de definitieve Bubble Swarm-fix.
+- APK: `dist/BugBaas-2.10.8.apk`, 83.876.785 bytes, package `nl.cimpro.bugbaas`, versionCode `188`, versionName `2.10.8`, targetSdk 36, ABI arm64-v8a.
+- APK-certificaat SHA-256: `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`; gelijk aan de bestaande install-base.
+- APK SHA-256: `D4D73C51F02E487BFDB59C1C7D744025897592ED4E6743D581ED51C66156D14A`.
+- `adb devices`: geen aangesloten toestel; fysieke install- en touch-feeltest niet uitgevoerd.
+
 ## 2026-07-18 web shell and arcade release candidate
 
 - `npm.cmd run typecheck`: geslaagd.
 - `npx expo export --platform web`: geslaagd; 317 assets en webbundle gegenereerd in `dist`.
 - `git diff --check`: geslaagd.
-- Vercel deployment: HTTP 200 op `https://dist-ruddy-ten-52.vercel.app`; Expo HTML en bundle asset zijn bereikbaar.
+- Vercel preview `dpl_7NTp9fwjhzvDN6mMP7fsg4betyiC`: `READY`; root en de exacte hashed webbundle zijn via de protection-bypass gecontroleerd met HTTP 200.
+- Vercel productie `dpl_2xQH3VU5RYbdncywnQEM6LeN53jH`: `READY` op `https://bugbaas.vercel.app`; root en `AppEntry-33a36722fe5e807a104036435bda6d87.js` geven HTTP 200 en de bundle-ETag komt overeen met de exporthash.
 - Browser visual smoke: niet uitgevoerd; Browser/Chrome-plugin en lokale Chrome/Edge executable waren niet beschikbaar.
 - Android device-smoke: nog niet uitgevoerd; pas na APK-build opnieuw gecontroleerd met `adb devices -l`.
 - `npm.cmd run apk:fast`: geslaagd (exit 0).

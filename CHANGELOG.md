@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.10.8
+
+- Bug Tower-bediening gebruikt weer de volledige linker- en rechterhelft van het speelveld; moving platforms, vloerdruk, smallere treden en pickups schalen veel sneller op.
+- Tredebreedte is vanaf floor 50 gehalveerd, vanaf 100 een derde en vanaf 200 een kwart, met vloeiende extra moeilijkheid tussen de mijlpalen.
+- Coin- en rocket-pickups staan betrouwbaar op een trede; een getimede tap na een salto start direct een nieuwe salto.
+- Bubble Swarm-projectielen volgen één vloeiend traject en eindigen exact op de gekozen gridcel, met een volledige richtlijn en vaker beschikbare bomb/freeze-power-ups.
+- Train is hersteld voor alle arcadegames, inclusief Bubble Swarm, en oefenruns wijzigen geen ranked resultaat, Firestore-run of lokaal highscore-record.
+- Herculeskever-afbeelding vervangen door een volledig zichtbare, transparante HD-versie zonder afgekapte hoorn of poten.
+
 ## 2.10.7
 
 - Responsive web mobile shell toegevoegd met gecentreerde 460px-layout, locked document viewport en interne schermscroll.

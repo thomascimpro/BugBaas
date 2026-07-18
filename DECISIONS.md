@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-07-18 arcade repair release 2.10.8
+
+- Training is een expliciete practice-mode: het scherm slaat geen Firestore-run op en iedere minigame slaat in practice ook geen lokale highscore op.
+- Bubble Swarm is voortaan zowel ranked via een willekeurige uitdaging als los te oefenen; dezelfde seed/resultaatflow als de andere arcadegames wordt gebruikt.
+- Bubble-projectielen gebruiken één `Animated.Value` over het volledige pad. De laatste animatiepositie en de geplaatste gridcel zijn exact hetzelfde punt.
+- Bug Tower gebruikt twee transparante touchhelften over het hele speelveld. De zichtbare pijlen en powermeter zijn feedback en geen losse kleine knoppen.
+- Platformbreedte en moving-platform-kans schalen deterministisch per floor; rockets krijgen naast een zeldzame kans vaste intervallen zodat lange runs niet zonder power-up blijven.
+
 ## 2026-07-18 web shell and arcade release candidate
 
 - De web-shell blijft maximaal 460px breed en gebruikt één interne scrollcontainer; de document-body wordt niet als tweede scrolllaag gebruikt.

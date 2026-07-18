@@ -8,7 +8,7 @@ import { BugArtImage } from "../BugArtImage";
 import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
 import { SpriteCrop } from "./SpriteCrop";
 
-type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; ranked?: boolean; seed?: string; user: User };
+type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; practice?: boolean; ranked?: boolean; seed?: string; user: User };
 type State = "ready" | "result" | "running";
 type TowerKind = "heavy" | "rapid" | "slow";
 type TapUpgradeKind = "damage" | "speed";
@@ -55,7 +55,7 @@ const path = [
   { x: 104, y: 88 }
 ];
 
-export function NestDefenseGame({ onBack, onResult, ranked = false, seed, user }: Props) {
+export function NestDefenseGame({ onBack, onResult, practice = false, ranked = false, seed, user }: Props) {
   const squadAssist = useMemo(() => arcadeSquadAssistForUser(user), [user.activeBugSquad]);
   const [state, setState] = useState<State>("ready");
   const [bestScore, setBestScore] = useState(0);
@@ -425,8 +425,9 @@ export function NestDefenseGame({ onBack, onResult, ranked = false, seed, user }
     const elapsed = Math.min(durationMs, Date.now() - statsRef.current.startAt);
     const finalScore = Math.max(0, scoreRef.current + waveRef.current * 45 + hpRef.current * 55 + killsRef.current * 7 + manualKillsRef.current * 22 + maxManualComboRef.current * 28 - leakRef.current * 30 + (won ? 180 : 0));
     playBugSound("arcade_finish");
-    void saveArcadeHighScore(user.uid, "nest_defense", finalScore).then((highScore) => {
-      setBestScore(highScore);
+    const highScorePromise = practice ? Promise.resolve(bestScore) : saveArcadeHighScore(user.uid, "nest_defense", finalScore);
+    void highScorePromise.then((highScore) => {
+      if (!practice) setBestScore(highScore);
       const nextResult = { combo: waveRef.current, durationMs: elapsed, hits: leakRef.current, localHighScore: highScore, mode: "nest_defense" as const, pickups: killsRef.current, score: finalScore, streak: hpRef.current, timestamp: new Date().toISOString() };
       setResult(nextResult);
       onResult?.(nextResult);

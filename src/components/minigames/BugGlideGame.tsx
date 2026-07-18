@@ -7,7 +7,7 @@ import { ArcadeRunResult, User } from "../../types";
 import { BugArtImage } from "../BugArtImage";
 import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
 
-type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; ranked?: boolean; seed?: string; user: User };
+type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; practice?: boolean; ranked?: boolean; seed?: string; user: User };
 type State = "ready" | "result" | "running";
 type EntityKind = "bird" | "heart" | "nectar" | "pollen" | "rain" | "shield" | "thorn" | "wind";
 type Entity = { expiresAt?: number; id: string; kind: EntityKind; stationary?: boolean; x: number; y: number; vy: number };
@@ -39,7 +39,7 @@ const pollenImage = require("../../../assets/minigames/extracted/glide_pollen.pn
 const rainImage = require("../../../assets/minigames/extracted/glide_rain.png");
 const thornImage = require("../../../assets/minigames/extracted/glide_thorn.png");
 
-export function BugGlideGame({ onBack, onResult, ranked = false, seed, user }: Props) {
+export function BugGlideGame({ onBack, onResult, practice = false, ranked = false, seed, user }: Props) {
   const squadAssist = useMemo(() => arcadeSquadAssistForUser(user), [user.activeBugSquad]);
   const [state, setState] = useState<State>("ready");
   const [bestScore, setBestScore] = useState(0);
@@ -317,8 +317,9 @@ export function BugGlideGame({ onBack, onResult, ranked = false, seed, user }: P
     const resultDurationMs = Math.min(90000, elapsed);
     const finalScore = Math.max(0, Math.round(scoreRef.current) + Math.round(elapsed / 1000) * 2 + statsRef.current.pickups * 18 + maxStreakRef.current * 9 + heartsRef.current * 35 - statsRef.current.hits * 45);
     playBugSound("arcade_finish");
-    void saveArcadeHighScore(user.uid, "bug_glide", finalScore).then((highScore) => {
-      setBestScore(highScore);
+    const highScorePromise = practice ? Promise.resolve(bestScore) : saveArcadeHighScore(user.uid, "bug_glide", finalScore);
+    void highScorePromise.then((highScore) => {
+      if (!practice) setBestScore(highScore);
       const nextResult = { combo: maxStreakRef.current, durationMs: resultDurationMs, hits: statsRef.current.hits, localHighScore: highScore, mode: "bug_glide" as const, pickups: statsRef.current.pickups, score: finalScore, streak: heartsRef.current, timestamp: new Date().toISOString() };
       setResult(nextResult);
       onResult?.(nextResult);
