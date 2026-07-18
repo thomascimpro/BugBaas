@@ -1,5 +1,18 @@
 # Test Results
 
+## 2026-07-18 release 2.10.6
+
+- `npm run typecheck`, `npm run test:arcade` en `git diff --check`: geslaagd.
+- Expo-webexport: geslaagd met 317 assets en bundle `AppEntry-22b7f5df8d5bf4e4e4fc2ca13a476efd.js`.
+- Vercel production deployment `dpl_6ko8d3zV32z2E5ow1HjbsQneQexS`: `READY`, alias `https://bugbaas.vercel.app`, root HTTP 200 en geen runtime-errors in het laatste uur.
+- Live Chromium-flow mobiel en desktop: Firebase e-maillogin, Bug Tower, Bubble Swarm en Bug Glide geslaagd; Google-popup opent `accounts.google.com` zonder demo-auth of `auth/unauthorized-domain`.
+- Android `assembleRelease` met lint, R8 en resource-optimalisatie: geslaagd vanaf releasecommit `ea37b56` met `BUGBAAS_REQUIRE_ENV=1`.
+- APK-metadata: package `nl.cimpro.bugbaas`, versionCode `186`, versionName `2.10.6`, minSdk `26`, targetSdk `36`.
+- APK-config: echt Firebase-project, alle vijf Firebasevelden en beide Google-clientvelden aanwezig in `assets/app.config`.
+- APK-signing: v2-verified, 1 signer, certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- Definitieve APK: `dist/BugBaas-2.10.6.apk`, 83.395.437 bytes; SHA-256 `5FFC2F6194947D6F1D5955150A5C6E57023DAE2CF593B0A0540597F21C6C956F`.
+- `adb devices -l`: geen aangesloten apparaat; fysieke install/login/feeltest blijft open.
+
 ## 2026-07-18 Tower challenge and Bubble power-ups
 
 - `npm run test:arcade`: geslaagd; Tower floor 1 is smaller dan 43% breed, scroll start direct op minimaal `0.03` per tick en is na 90 seconden meer dan tweemaal zo snel.

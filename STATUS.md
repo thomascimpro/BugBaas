@@ -1,6 +1,6 @@
 # Status
 
-- BugBaas 2.10.6 release wordt opgebouwd voor Vercel en Android vanuit de groen geteste Tower/Bubble-gameplaybron.
+- BugBaas 2.10.6 staat publiek op `https://bugbaas.vercel.app`; de productie-APK is volledig gebouwd en geverifieerd voor publicatie op GitHub.
 - Bug Tower slaat de overlange warm-up over en Bubble Swarm heeft een aantoonbaar reizend projectiel, versnellende druk en twee power-ups; logica-, type-, productiebuild- en mobiele/desktop-browsertests zijn geslaagd.
 - Android 2.10.5 is opnieuw uitgebracht met echte native Firebase-/Google-config; de eerdere APK bevatte door een ontbrekende release-`.env` demo-auth. De gecorrigeerde APK staat op GitHub met SHA-256 `91ABCF8663425C9752BC32EBBFABE3C5F30AE17907AAB53323609058798251F2`.
 - Webauth staat los van de APK: `https://bugbaas.vercel.app` opent live `accounts.google.com` zonder demo-auth of `auth/unauthorized-domain`.
