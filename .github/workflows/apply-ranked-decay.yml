@@ -1,6 +1,12 @@
 name: Apply ranked rating decay
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/apply-ranked-decay.yml"
+      - "scripts/apply_ranked_decay.mjs"
   schedule:
     - cron: "10 0 * * *"
   workflow_dispatch:
