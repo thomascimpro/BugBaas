@@ -12,6 +12,8 @@
 - APK-signing: v2-verified met het bestaande BugBaas-certificaat `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
 - Definitieve APK: `dist/BugBaas-2.10.4.apk`, 83.392.789 bytes; SHA-256 `775C04E8AE18CA51590550E1913756D8406390222A97CF75CEC69ACD84FBAD21`.
 - `adb devices -l`: geen aangesloten apparaat; fysieke feeltest blijft open.
+- Sites-versie 7: productie-deployment geslaagd; live mobiele/desktop Chromium-flow daarna opnieuw geslaagd.
+- GitHub Release `v2.10.4`: openbaar teruggelezen als draft `false`, prerelease `false`, met APK-asset van 83.392.789 bytes.
 
 ## 2026-07-18 Bug Tower touch overlays
 
