@@ -17,6 +17,7 @@
 - APK-signing: v2-verified, 1 signer, certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`, gelijk aan eerdere BugBaas-releases.
 - Definitieve APK: `dist/BugBaas-2.10.3.apk`, 83.392.093 bytes, gebouwd vanaf commit `79f9071a35b89d6d1cac8bc9d2e3061c836950b1`.
 - Definitieve APK SHA-256: `591D6C948D508FCDD54C2FDAC005E48B00AAED593FDEE3CA92D15EDCAC963EEB`.
+- GitHub Release `v2.10.3`: openbaar gepubliceerd en via de authenticated release-API teruggelezen; draft `false`, prerelease `false`, APK-asset 83.392.093 bytes.
 - `adb devices -l`: geen aangesloten apparaat; fysieke controle van geluid en besturingsgevoel blijft open.
 
 ## 2026-07-18 fullscreen web shell
