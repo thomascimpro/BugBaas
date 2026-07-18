@@ -2,18 +2,21 @@
 
 ## 2026-07-18 release 2.10.5 movement and animation
 
+- Root cause authregressie: de eerder gepubliceerde 2.10.5-APK bevatte in `assets/app.config` geen release-env en viel daardoor terug op demo-auth; authbroncode en certificaat waren niet gewijzigd.
+- Gecorrigeerde APK opnieuw gebouwd vanaf releasecommit `f6234b7` in een korte fysieke worktree met `BUGBAAS_REQUIRE_ENV=1`; `assets/app.config` bevat aantoonbaar het echte Firebase-project, alle vijf Firebasevelden en beide Google-clientconfigvelden.
+- Web apart geverifieerd: bundle `AppEntry-8e44eb855aedf5d494813253aa8a0001.js`; Firebase Authorized Domains bevat `bugbaas.vercel.app`; Chromium opent `accounts.google.com` zonder demo-authmelding of `auth/unauthorized-domain`.
 - Icy Tower-bronnen gecontroleerd: het kerngevoel komt uit opgebouwd momentum, multi-floor jumps, muurbehoud van snelheid, smallere vloeren en periodiek versnellende scrollpressure.
 - `npm run test:arcade`: geslaagd; tikhoogte 12,05% van het speelveld, volledige charge 63,08%, platformbreedte onder 49% op verdieping 100 en onder 35% op verdieping 200.
 - `npm run typecheck` en `git diff --check`: geslaagd.
 - `npm run site:build`: geslaagd met 317 assets en bundle `AppEntry-ea9ce32892e82c50828fa9067ab14d92.js`.
 - Lokale Chromium-flow mobiel 390x844 en desktop 1280x800: geslaagd; Bubble-projectiel bereikt zijn doel en toont minstens vier stabiele impactframes vóór bordresolutie.
 - Vercel production deployment `dpl_2rkr3QriUMbADrHab6Ye7U3oCvJj`: `READY`, alias `https://bugbaas.vercel.app`, root en nieuwe JavaScriptbundle HTTP 200.
-- Live Chromium-flow op `https://bugbaas.vercel.app`: Firebase-login, Bug Tower, Bubble Swarm, Bug Glide, mobiel en desktop volledig geslaagd zonder consolefouten.
+- Live Chromium-flow op `https://bugbaas.vercel.app`: Google-popup, Bug Tower, Bubble Swarm, Bug Glide, mobiel en desktop geslaagd zonder auth-domeinfout.
 - Android `assembleRelease` met lint, R8 en resource-optimalisatie: geslaagd vanuit een korte fysieke Windows-worktree om CMake-padlimieten te vermijden.
 - APK-metadata: package `nl.cimpro.bugbaas`, versionCode `185`, versionName `2.10.5`, minSdk `26`, targetSdk `36`.
 - APK-signing: v2-verified met certificaat `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
-- Definitieve APK: `dist/BugBaas-2.10.5.apk`, 83.392.677 bytes; SHA-256 `7FD9F1251224684E7B9E4EF4428D01A33EEB87B4232F3ABB7F27B4CE25C7EE1D`.
-- GitHub Release `v2.10.5`: openbaar teruggelezen als draft `false`, prerelease `false`; APK-asset 83.392.677 bytes met dezelfde SHA-256 digest.
+- Definitieve gecorrigeerde APK: `dist/BugBaas-2.10.5.apk`, 83.392.853 bytes; SHA-256 `91ABCF8663425C9752BC32EBBFABE3C5F30AE17907AAB53323609058798251F2`.
+- GitHub Release `test2` (titel `BugBaas 2.10.5`): APK-asset 83.392.853 bytes met dezelfde SHA-256 digest teruggelezen via de release-API.
 - `adb devices -l`: geen aangesloten apparaat; fysieke feeltest blijft open.
 
 ## 2026-07-18 faster Bug Tower difficulty

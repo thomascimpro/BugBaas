@@ -1,7 +1,9 @@
 # Status
 
+- Android 2.10.5 is opnieuw uitgebracht met echte native Firebase-/Google-config; de eerdere APK bevatte door een ontbrekende release-`.env` demo-auth. De gecorrigeerde APK staat op GitHub met SHA-256 `91ABCF8663425C9752BC32EBBFABE3C5F30AE17907AAB53323609058798251F2`.
+- Webauth staat los van de APK: `https://bugbaas.vercel.app` opent live `accounts.google.com` zonder demo-auth of `auth/unauthorized-domain`.
 - BugBaas 2.10.5 heeft een veel grotere Tower-chargebandbreedte, behouden luchtmomentum, snellere platformkrimp en volledig zichtbare Bubble-impactframes; mechanische, type-, webbuild- en mobiele browsertests zijn geslaagd.
-- De publieke 2.10.5-webbuild staat op `https://bugbaas.vercel.app` en is daar end-to-end getest; GitHub Release `v2.10.5` is openbaar met de definitief geverifieerde APK.
+- De publieke 2.10.5-webbuild staat op `https://bugbaas.vercel.app`; de Google-popupflow is live getest en het gecorrigeerde APK-asset staat op GitHub Release `test2`.
 - BugBaas 2.10.4 scherpt Bug Tower aan met snellere platformkrimp, sterkere links/rechts-wissels, eerdere bewegende treden en zichtbare touchzones; Sites-versie 7 en GitHub Release `v2.10.4` zijn gepubliceerd en geverifieerd.
 - Bug Tower heeft lokaal duidelijk zichtbare, halftransparante links/rechts-touchzones; logica-, type-, productiebuild- en mobiele browsertests zijn geslaagd.
 - De huidige ChatGPT Site blijft door workspacebeleid owner-only. Voor een gratis publieke vriendenlink is een losse statische deployment op Vercel, Netlify of Cloudflare Pages nodig.

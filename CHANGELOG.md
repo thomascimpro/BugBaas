@@ -2,6 +2,8 @@
 
 ## 2.10.5
 
+- Android-auth is hersteld: de release-APK bevat weer de echte Firebase- en Google-configuratie in plaats van demo-auth.
+- Web Google-login gebruikt de afzonderlijke browser-popupflow; `bugbaas.vercel.app` is als Firebase-webdomein toegestaan.
 - Bug Tower vertaalt vasthouden nu veel sterker naar spronghoogte: een tik haalt ongeveer één trede en volledige charge ongeveer vijf openingstreden.
 - Horizontaal momentum blijft tijdens sprongen en muurkaatsen vrijwel behouden, terwijl platforms al rond verdieping 100 en 200 veel smaller zijn.
 - Bubble Swarm animeert ieder schot met constante baanvaart tot de exacte doelpositie en toont het impactframe vóór match-resolutie.
