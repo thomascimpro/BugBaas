@@ -5,7 +5,7 @@ import { arcadeSquadAssistForUser } from "../../services/bugSquadGameBalance";
 import { playBugSound } from "../../services/soundService";
 import { ArcadeRunResult, User } from "../../types";
 import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
-import { TOWER_MAX_CHARGE_MS, clamp, towerDifficulty, towerHeightScore, towerHorizontalOffset, towerJumpVelocity, towerPlatformGap, towerPlatformWidth, towerZoneIndex, towerZoneName } from "./bugTowerLogic";
+import { TOWER_GRAVITY, TOWER_MAX_CHARGE_MS, clamp, towerDifficulty, towerHeightScore, towerHorizontalOffset, towerJumpVelocity, towerPlatformGap, towerPlatformWidth, towerZoneIndex, towerZoneName } from "./bugTowerLogic";
 
 type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; ranked?: boolean; seed?: string; user: User };
 type GameState = "ready" | "result" | "running";
@@ -14,7 +14,6 @@ type Player = { grounded: boolean; lastGroundAt: number; spinAngle: number; spin
 type RenderState = { charge: number; combo: number; difficulty: number; floor: number; maxCombo: number; platforms: Platform[]; player: Player; score: number };
 
 const tickMs = 20;
-const gravity = 0.13;
 const horizontalAcceleration = 0.105;
 const maxHorizontalSpeed = 1.08;
 const playerHalfWidth = 6.5;
@@ -92,23 +91,24 @@ export function BugTowerGame({ onBack, onResult, ranked = false, seed, user }: P
     const elapsed = now - startAtRef.current;
     const previous = playerRef.current;
     const input = manualDirectionRef.current;
-    const vx = clamp(previous.vx * (Math.abs(input) < 0.08 ? 0.9 : 0.96) + input * horizontalAcceleration, -maxHorizontalSpeed, maxHorizontalSpeed);
+    const momentum = Math.abs(input) >= 0.08 ? 0.96 : previous.grounded ? 0.84 : 0.992;
+    const vx = clamp(previous.vx * momentum + input * horizontalAcceleration, -maxHorizontalSpeed, maxHorizontalSpeed);
     let nextPlayer: Player = {
       ...previous,
       grounded: false,
       spinAngle: previous.spinning ? previous.spinAngle + Math.sign(previous.vx || input || 1) * 18 : 0,
       vx,
-      vy: Math.min(2.25, previous.vy + gravity),
+      vy: Math.min(2.25, previous.vy + TOWER_GRAVITY),
       x: previous.x + vx,
-      y: previous.y + previous.vy + gravity
+      y: previous.y + previous.vy + TOWER_GRAVITY
     };
 
     if (nextPlayer.x <= playerHalfWidth) {
       nextPlayer.x = playerHalfWidth;
-      nextPlayer.vx = Math.abs(nextPlayer.vx) * 0.9;
+      nextPlayer.vx = Math.abs(nextPlayer.vx) * 0.96;
     } else if (nextPlayer.x >= 100 - playerHalfWidth) {
       nextPlayer.x = 100 - playerHalfWidth;
-      nextPlayer.vx = -Math.abs(nextPlayer.vx) * 0.9;
+      nextPlayer.vx = -Math.abs(nextPlayer.vx) * 0.96;
     }
 
     const difficulty = towerDifficulty(landedFloorRef.current, elapsed);

@@ -1,5 +1,8 @@
 # Decisions
 
+- Bug Tower gebruikt een convex chargecurve: korte aanrakingen blijven beheersbare één-tredesprongen, terwijl volledige charge ruim vijfmaal zoveel verticale hoogte geeft. Luchtmomentum en muurkaatsen behouden 96% of meer snelheid om ritmische combo-runs mogelijk te maken.
+- Platformkrimp bereikt zijn minimum rond verdieping 240. De gemiddelde breedte ligt rond 47% op verdieping 100 en 33% op verdieping 200; extra moeilijkheid komt daarna uit beweging, gaten en scrollpressure.
+- Bubble Swarm houdt het projectiel na een lineaire vlucht 90 ms zichtbaar op de exacte doelpositie voordat bord- en matchlogica starten, zodat het laatste animatiestuk niet wordt afgekapt.
 - Bug Tower bereikt zijn volledige platformkrimp rond verdieping 360 in plaats van 500. De eerste 30 verdiepingen blijven vrij van bewegende treden; daarna nemen zij en de links/rechts-afstanden sneller toe.
 - Bug Tower maakt de bestaande schermhelften zichtbaar met subtiele overlays; de overlays wijzigen geen input- of physicslogica en blijven doorzichtig genoeg om platforms te blijven zien.
 - Een vriendenlink wordt als aparte publieke statische webdeployment behandeld. De bestaande ChatGPT Site blijft de volledige Sites/Strava-variant zolang `public` niet als toegestane access mode beschikbaar is.

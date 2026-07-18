@@ -16,10 +16,14 @@ const tower = await importTypeScript("src/components/minigames/bugTowerLogic.ts"
 const bubbles = await importTypeScript("src/components/minigames/bubbleSwarmLogic.ts");
 
 assert.ok(tower.towerJumpVelocity(720) < tower.towerJumpVelocity(80), "long holds must jump higher");
-assert.ok(tower.towerJumpVelocity(80) < -1.8, "short taps must still produce a useful jump");
+const tapHeight = tower.towerJumpVelocity(0) ** 2 / (2 * tower.TOWER_GRAVITY);
+const fullHoldHeight = tower.towerJumpVelocity(tower.TOWER_MAX_CHARGE_MS) ** 2 / (2 * tower.TOWER_GRAVITY);
+assert.ok(tapHeight >= 11 && tapHeight < 15, "a tap must jump roughly one opening stair");
+assert.ok(fullHoldHeight >= 61, "a full hold must clear roughly five opening stairs");
+assert.ok(fullHoldHeight > tapHeight * 5, "full charge must feel dramatically higher than a tap");
 assert.ok(tower.towerPlatformWidth(1, 0.5) > tower.towerPlatformWidth(100, 0.5), "platforms must shrink gradually by floor");
-assert.ok(tower.towerPlatformWidth(100, 0.5) > 50, "floor 100 must remain fair despite the faster curve");
-assert.ok(tower.towerPlatformWidth(200, 0.5) < 46, "floor 200 must already demand accurate landings");
+assert.ok(tower.towerPlatformWidth(100, 0.5) < 49, "floor 100 must already demand deliberate landings");
+assert.ok(tower.towerPlatformWidth(200, 0.5) < 35, "floor 200 must be sharply narrower");
 assert.ok(tower.towerPlatformWidth(100, 0.5) > tower.towerPlatformWidth(350, 0.5), "late platforms must keep shrinking");
 assert.ok(tower.towerPlatformGap(350, 0.5) > tower.towerPlatformGap(1, 0.5), "platform gaps must grow");
 assert.equal(tower.towerDifficulty(29, 0).movingEvery, 999, "the opening must not contain moving platforms");

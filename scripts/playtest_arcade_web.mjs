@@ -146,7 +146,29 @@ try {
   await bubblePage.waitForTimeout(150);
   assert.equal(await bubblePage.getByLabel("Bubble projectile").count(), 1, "the projectile must animate visibly instead of appearing at its target");
   await bubblePage.screenshot({ path: path.join(outputDir, "bubble-swarm-shot-mobile.png") });
-  await bubblePage.waitForTimeout(650);
+  const flightFrames = await bubblePage.evaluate(() => new Promise((resolve, reject) => {
+    const frames = [];
+    const startedAt = performance.now();
+    function sample(now) {
+      const projectile = document.querySelector('[aria-label="Bubble projectile"]');
+      if (projectile) {
+        const box = projectile.getBoundingClientRect();
+        frames.push({ t: now, x: box.x, y: box.y });
+      } else if (frames.length) {
+        resolve(frames);
+        return;
+      }
+      if (now - startedAt > 1800) {
+        reject(new Error("Bubble projectile did not finish within 1.8 seconds"));
+        return;
+      }
+      requestAnimationFrame(sample);
+    }
+    requestAnimationFrame(sample);
+  }));
+  const lastFlightFrame = flightFrames.at(-1);
+  const finalPositionFrames = flightFrames.filter((frame) => Math.abs(frame.x - lastFlightFrame.x) < 0.5 && Math.abs(frame.y - lastFlightFrame.y) < 0.5);
+  assert.ok(finalPositionFrames.length >= 4, "the projectile must visibly complete its final impact frames before joining the board");
 
   const glidePage = await newTestPage(browser, { height: 844, width: 390 }, "glide");
   await openTraining(glidePage, "glide", "Bug Glide");

@@ -1,5 +1,7 @@
 # Status
 
+- BugBaas 2.10.5 is lokaal voorbereid met een veel grotere Tower-chargebandbreedte, behouden luchtmomentum, snellere platformkrimp en volledig zichtbare Bubble-impactframes; mechanische, type-, webbuild- en mobiele browsertests zijn geslaagd.
+- De publieke vriendenlink is `https://bugbaas.vercel.app`; web- en APK-publicatie van 2.10.5 volgen na definitieve releaseverificatie.
 - BugBaas 2.10.4 scherpt Bug Tower aan met snellere platformkrimp, sterkere links/rechts-wissels, eerdere bewegende treden en zichtbare touchzones; Sites-versie 7 en GitHub Release `v2.10.4` zijn gepubliceerd en geverifieerd.
 - Bug Tower heeft lokaal duidelijk zichtbare, halftransparante links/rechts-touchzones; logica-, type-, productiebuild- en mobiele browsertests zijn geslaagd.
 - De huidige ChatGPT Site blijft door workspacebeleid owner-only. Voor een gratis publieke vriendenlink is een losse statische deployment op Vercel, Netlify of Cloudflare Pages nodig.

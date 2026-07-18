@@ -30,6 +30,7 @@ type Projectile = { bounceAt: number | null; kind: BubbleKind; path: Point[]; ta
 const columns = BUBBLE_COLUMNS;
 const dangerRow = BUBBLE_DANGER_ROW;
 const maxDurationMs = 90000;
+const impactHoldMs = 90;
 const shooter = { x: 50, y: 91 };
 const background = require("../../../assets/minigames/bubble-swarm/bubble-swarm-background.png");
 const bubbleImages: Record<BubbleKind, number> = {
@@ -180,12 +181,15 @@ export function BubbleSwarmGame({ onBack, onResult, ranked = false, seed, user }
     flight.setValue(0);
     playBugSound("bubble_shoot");
     if (bounceAt !== null) setTimeout(() => playBugSound("bubble_bounce"), Math.round(620 * bounceAt));
-    Animated.timing(flight, {
-      duration: clamp(Math.round(pathLength(path) * 7.2), 440, 720),
-      easing: Easing.out(Easing.quad),
-      toValue: 1,
-      useNativeDriver: false
-    }).start(({ finished }) => {
+    Animated.sequence([
+      Animated.timing(flight, {
+        duration: clamp(Math.round(pathLength(path) * 7.2), 620, 820),
+        easing: Easing.linear,
+        toValue: 1,
+        useNativeDriver: false
+      }),
+      Animated.delay(impactHoldMs)
+    ]).start(({ finished }) => {
       if (finished && !finishedRef.current) resolveShot(currentKind, targetCell);
       else shootingRef.current = false;
     });
@@ -330,7 +334,8 @@ export function BubbleSwarmGame({ onBack, onResult, ranked = false, seed, user }
                     styles.projectile,
                     {
                       left: flight.interpolate(projectileInterpolation(projectile.path, "x", 4.85)),
-                      top: flight.interpolate(projectileInterpolation(projectile.path, "y", 4.05))
+                      top: flight.interpolate(projectileInterpolation(projectile.path, "y", 4.05)),
+                      transform: [{ scale: flight.interpolate({ inputRange: [0, 0.9, 1], outputRange: [1, 1, 0.94] }) }]
                     }
                   ]}
                 />

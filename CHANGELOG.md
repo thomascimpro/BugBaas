@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.5
+
+- Bug Tower vertaalt vasthouden nu veel sterker naar spronghoogte: een tik haalt ongeveer één trede en volledige charge ongeveer vijf openingstreden.
+- Horizontaal momentum blijft tijdens sprongen en muurkaatsen vrijwel behouden, terwijl platforms al rond verdieping 100 en 200 veel smaller zijn.
+- Bubble Swarm animeert ieder schot met constante baanvaart tot de exacte doelpositie en toont het impactframe vóór match-resolutie.
+
 ## 2.10.4
 
 - Bug Tower bouwt sneller uitdaging op: platforms krimpen en spreiden eerder, wisselen sterker links/rechts en bewegen vanaf verdieping 30 steeds vaker.

@@ -1,4 +1,5 @@
 export const TOWER_MAX_CHARGE_MS = 720;
+export const TOWER_GRAVITY = 0.13;
 
 export type TowerDifficulty = {
   gapMax: number;
@@ -12,7 +13,7 @@ export type TowerDifficulty = {
 
 export function towerDifficulty(floor: number, elapsedMs: number): TowerDifficulty {
   const safeFloor = Math.max(0, floor);
-  const heightProgress = clamp(safeFloor / 360, 0, 1);
+  const heightProgress = clamp(safeFloor / 240, 0, 1);
   const timeProgress = clamp((elapsedMs - 10000) / 125000, 0, 1);
   const level = Math.min(8, Math.floor(safeFloor / 50) + Math.floor(timeProgress * 2));
   const movingEvery = safeFloor < 30 ? 999 : Math.max(3, 10 - Math.floor(safeFloor / 45));
@@ -48,8 +49,8 @@ export function towerHorizontalOffset(floor: number, roll: number): number {
 
 export function towerJumpVelocity(holdMs: number): number {
   const charge = clamp(holdMs / TOWER_MAX_CHARGE_MS, 0, 1);
-  const eased = 1 - (1 - charge) ** 2;
-  return -(1.86 + eased * 1.32);
+  const power = charge ** 1.45;
+  return -(1.77 + power * 2.28);
 }
 
 export function towerDifficultyLabel(level: number): string {
