@@ -7,7 +7,7 @@
 - Medaillecriteria voor BugDex-aantallen en zeldzaamheden worden rechtstreeks uit historische unlocks berekend, inclusief niet-meer-bezette bugs.
 - Alleen oefenruns tonen en accepteren voortijdig afsluiten; actieve ranked minigames blokkeren de UI- en Android-terugroute tot het resultaat.
 - Webversie 2.10.10 staat productie op `https://bugbaas.vercel.app`, deployment `dpl_DQfZuBFLVCeVwbHicBKEXaaVCFRp` (`READY`).
-- Android 2.10.10 is gebouwd en gecontroleerd als `dist/BugBaas-2.10.10.apk`; GitHub-publicatie volgt na commit/tag.
+- Android 2.10.10 is gebouwd en gecontroleerd als `dist/BugBaas-2.10.10.apk`; GitHub Release `v2.10.10` is gepubliceerd en als latest gemarkeerd.
 - Geen Android-toestel aangesloten; fysieke installatie en native touch-feel blijven open.
 
 ## 2026-07-19 arcade survival release 2.10.9
