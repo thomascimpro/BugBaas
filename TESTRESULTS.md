@@ -1,5 +1,11 @@
 # Test Results
 
+## 2026-07-18 fullscreen web shell
+
+- Browserchecks op 390×844, 844×390, 768×1024 en 1280×800 zijn geslaagd zonder pagina-overflow.
+- Het iframe en de zichtbare Expo-`#root` waren op alle vier formaten exact even groot als de browserviewport.
+- Sites-toegang live gecontroleerd: huidige modus `custom`, alleen de eigenaar toegestaan; beschikbare modi zijn `custom` en `workspace_all`, niet `public`.
+
 ## 2026-07-18 release 2.10.2 gameplay and permissions
 
 - `npm run test:arcade`: geslaagd voor hold-duration versus spronghoogte, kleinere platforms, grotere gaten, oplopende scroll, match-3, geen pop bij twee bubbels en vallende unsupported clusters.

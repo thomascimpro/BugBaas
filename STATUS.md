@@ -1,5 +1,7 @@
 # Status
 
+- BugBaas Web gebruikt de volledige browserviewport zonder vaste websiteheader; echte browser-fullscreen blijft vanwege browserbeveiliging afhankelijk van een gebruikersactie.
+- De huidige Sites-toegang is eigenaar-only en biedt in deze workspace alleen `custom` of `workspace_all`; extern publiek delen is daarom nog niet beschikbaar.
 - BugBaas 2.10.2 bevat de vernieuwde Bug Tower-besturing, de klassieke Bubble Swarm-shooter, Bubble Swarm Ranked/Train en de herstelde Bug Glide-linkerstrook.
 - Firestore-regels voor Bubble Swarm-duels en geverifieerde ranked Arcade-runs zijn gecompileerd en live gedeployed naar `thomascimpro-6266f`.
 - Gameplaylogica, Expo-webexport, Sites-build, Chromium-flows en de Android 2.10.2-productiereleasebuild zijn geslaagd; APK-metadata, v2-signing en SHA-256 zijn geverifieerd.
