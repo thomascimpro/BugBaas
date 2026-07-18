@@ -13,6 +13,7 @@
 - APK: `dist/BugBaas-2.10.8.apk`, 83.876.785 bytes, package `nl.cimpro.bugbaas`, versionCode `188`, versionName `2.10.8`, targetSdk 36, ABI arm64-v8a.
 - APK-certificaat SHA-256: `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`; gelijk aan de bestaande install-base.
 - APK SHA-256: `D4D73C51F02E487BFDB59C1C7D744025897592ED4E6743D581ED51C66156D14A`.
+- GitHub latest-release API: `v2.10.8`, naam `BugBaas 2.10.8`, APK-asset aanwezig met exact 83.876.785 bytes.
 - `adb devices`: geen aangesloten toestel; fysieke install- en touch-feeltest niet uitgevoerd.
 
 ## 2026-07-18 web shell and arcade release candidate

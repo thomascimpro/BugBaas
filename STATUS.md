@@ -7,7 +7,7 @@
 - Train staat bij alle arcadegames, inclusief Bubble Swarm. Practice schrijft geen ranked run, Firestore-resultaat of lokaal highscore-record.
 - Herculeskever is vervangen door een transparante 1254x1254 HD-versie waarin hoorn, lijf en poten volledig zichtbaar zijn; Hooiwagen en Buddy-assets zijn gecontroleerd en bleken al correct.
 - Webversie 2.10.8 staat productie op `https://bugbaas.vercel.app`, deployment `dpl_2Zz1LbmkbBig1V5piHiVR2ocrzvj` (`READY`).
-- Android 2.10.8 is gebouwd en gecontroleerd als `dist/BugBaas-2.10.8.apk`; GitHub-publicatie wacht alleen nog op de releasecommit/tag.
+- Android 2.10.8 is gebouwd en gecontroleerd als `dist/BugBaas-2.10.8.apk`; GitHub Release `v2.10.8` is gepubliceerd met de geverifieerde APK-asset.
 - Geen Android-toestel aangesloten; de fysieke install- en touch-feeltest blijft daarom expliciet open.
 
 ## 2026-07-18 web shell, arcade scaling and release candidate
