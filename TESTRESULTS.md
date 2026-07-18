@@ -1,5 +1,20 @@
 # Test Results
 
+## 2026-07-18 release 2.10.5 movement and animation
+
+- Icy Tower-bronnen gecontroleerd: het kerngevoel komt uit opgebouwd momentum, multi-floor jumps, muurbehoud van snelheid, smallere vloeren en periodiek versnellende scrollpressure.
+- `npm run test:arcade`: geslaagd; tikhoogte 12,05% van het speelveld, volledige charge 63,08%, platformbreedte onder 49% op verdieping 100 en onder 35% op verdieping 200.
+- `npm run typecheck` en `git diff --check`: geslaagd.
+- `npm run site:build`: geslaagd met 317 assets en bundle `AppEntry-ea9ce32892e82c50828fa9067ab14d92.js`.
+- Lokale Chromium-flow mobiel 390x844 en desktop 1280x800: geslaagd; Bubble-projectiel bereikt zijn doel en toont minstens vier stabiele impactframes vóór bordresolutie.
+- Vercel production deployment `dpl_2rkr3QriUMbADrHab6Ye7U3oCvJj`: `READY`, alias `https://bugbaas.vercel.app`, root en nieuwe JavaScriptbundle HTTP 200.
+- Live Chromium-flow op `https://bugbaas.vercel.app`: Firebase-login, Bug Tower, Bubble Swarm, Bug Glide, mobiel en desktop volledig geslaagd zonder consolefouten.
+- Android `assembleRelease` met lint, R8 en resource-optimalisatie: geslaagd vanuit een korte fysieke Windows-worktree om CMake-padlimieten te vermijden.
+- APK-metadata: package `nl.cimpro.bugbaas`, versionCode `185`, versionName `2.10.5`, minSdk `26`, targetSdk `36`.
+- APK-signing: v2-verified met certificaat `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- Definitieve APK: `dist/BugBaas-2.10.5.apk`, 83.392.677 bytes; SHA-256 `7FD9F1251224684E7B9E4EF4428D01A33EEB87B4232F3ABB7F27B4CE25C7EE1D`.
+- `adb devices -l`: geen aangesloten apparaat; fysieke feeltest blijft open.
+
 ## 2026-07-18 faster Bug Tower difficulty
 
 - Balans: volledige platformkrimp verschuift van verdieping 500 naar 360; horizontale offsets, gaten, scrollpressure en bewegingsfrequentie nemen eerder toe.
