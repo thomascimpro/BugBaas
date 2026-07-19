@@ -14,6 +14,7 @@ import { maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSq
 import { dismissPhoneNotification, scheduleBuddyTaskNotification } from "../services/notificationService";
 import { listBugSmashDuels } from "../services/bugSmashDuelService";
 import { claimMovementRadarBonusesForApp, claimQueuedRadarBugs, getMovementRadarProgress, getQueuedRadarBugIds, MovementRadarProgress } from "../services/movementRadarService";
+import { disconnectFitnessSyncer, FitnessSyncerStatus, getFitnessSyncerStatus, startFitnessSyncerConnection, syncFitnessSyncerActivities } from "../services/fitnessSyncerService";
 import { bugDexEntries, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { languages, useI18n } from "../services/i18n";
 import { listLeaderboardUsers } from "../services/userService";
@@ -93,6 +94,9 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [queuedRadarBugIds, setQueuedRadarBugIds] = useState<BugArtId[]>([]);
   const [bugLampActivating, setBugLampActivating] = useState(false);
   const [movementClaiming, setMovementClaiming] = useState(false);
+  const [fitnessSyncerStatus, setFitnessSyncerStatus] = useState<FitnessSyncerStatus | null>(null);
+  const [fitnessSyncerBusy, setFitnessSyncerBusy] = useState(false);
+  const [fitnessSyncerMessage, setFitnessSyncerMessage] = useState("");
   const [soloCampaignWave, setSoloCampaignWave] = useState(1);
   const [bossProgress, setBossProgress] = useState<SoloCampaignBossProgress>({ dayCount: 0, dayId: "", updatedAt: "", weekCount: 0, weekId: "" });
   const [claimedDailyIds, setClaimedDailyIds] = useState<Set<string>>(new Set());
@@ -175,6 +179,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
 
   useEffect(() => {
     refreshMovementProgress();
+    getFitnessSyncerStatus().then(setFitnessSyncerStatus).catch(() => setFitnessSyncerStatus(null));
   }, [movementBoost, user.uid]);
 
   useEffect(() => {
@@ -299,6 +304,50 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     const previewStats = applyBuddyCareAction(buddyCareState.stats, actionId);
     const previewXp = Math.round(action.xp * buddyXpMultiplier(previewStats));
     setBuddyPopup({ actionId, duration: formatBuddyCooldown(action.cooldownMs), kind: "confirm", xp: previewXp });
+  }
+
+  async function handleFitnessSyncerConnect() {
+    if (fitnessSyncerBusy) return;
+    setFitnessSyncerBusy(true);
+    setFitnessSyncerMessage("");
+    try {
+      await Linking.openURL(await startFitnessSyncerConnection());
+    } catch (error) {
+      setFitnessSyncerMessage(error instanceof Error ? error.message : "FitnessSyncer connection failed.");
+    } finally {
+      setFitnessSyncerBusy(false);
+    }
+  }
+
+  async function handleFitnessSyncerSync() {
+    if (fitnessSyncerBusy) return;
+    setFitnessSyncerBusy(true);
+    setFitnessSyncerMessage("");
+    try {
+      const result = await syncFitnessSyncerActivities();
+      if (result.todayKm > 0 || result.weekKm > 0) await onMovementRegistered?.(result.todayKm, result.weekKm);
+      setFitnessSyncerMessage(`${formatKm(result.weekKm)} km synced this week.`);
+      setFitnessSyncerStatus(await getFitnessSyncerStatus());
+      await refreshMovementProgress();
+    } catch (error) {
+      setFitnessSyncerMessage(error instanceof Error ? error.message : "FitnessSyncer sync failed.");
+    } finally {
+      setFitnessSyncerBusy(false);
+    }
+  }
+
+  async function handleFitnessSyncerDisconnect() {
+    if (fitnessSyncerBusy) return;
+    setFitnessSyncerBusy(true);
+    setFitnessSyncerMessage("");
+    try {
+      await disconnectFitnessSyncer();
+      setFitnessSyncerStatus(await getFitnessSyncerStatus());
+    } catch (error) {
+      setFitnessSyncerMessage(error instanceof Error ? error.message : "FitnessSyncer disconnect failed.");
+    } finally {
+      setFitnessSyncerBusy(false);
+    }
   }
 
   function showBuddySelectPopup() {
@@ -671,6 +720,33 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
               );
             })}
           </View>
+        </View>
+      )}
+      {fitnessSyncerStatus?.configured && (
+        <View style={[styles.movementCard, styles.fitnessSyncerCard]}>
+          <View style={styles.fitnessSyncerHeader}>
+            <View style={styles.fitnessSyncerCopy}>
+              <Text style={styles.movementTitle}>FitnessSyncer</Text>
+              <Text style={styles.fitnessSyncerMeta}>
+                {fitnessSyncerStatus.connected
+                  ? fitnessSyncerStatus.lastSyncAt ? `Last sync ${formatShortDateTime(fitnessSyncerStatus.lastSyncAt)}` : "Connected"
+                  : "Import walking, running, and cycling distance on web."}
+              </Text>
+            </View>
+            <Pressable
+              disabled={fitnessSyncerBusy}
+              onPress={fitnessSyncerStatus.connected ? handleFitnessSyncerSync : handleFitnessSyncerConnect}
+              style={[styles.movementClaimButton, fitnessSyncerBusy && styles.movementClaimButtonDisabled]}
+            >
+              <Text style={styles.movementClaimText}>{fitnessSyncerBusy ? "..." : fitnessSyncerStatus.connected ? "Sync" : "Connect"}</Text>
+            </Pressable>
+          </View>
+          {fitnessSyncerMessage ? <Text style={styles.fitnessSyncerMessage}>{fitnessSyncerMessage}</Text> : null}
+          {fitnessSyncerStatus.connected && (
+            <Pressable disabled={fitnessSyncerBusy} onPress={handleFitnessSyncerDisconnect}>
+              <Text style={styles.fitnessSyncerDisconnect}>Disconnect FitnessSyncer</Text>
+            </Pressable>
+          )}
         </View>
       )}
       {showBugLamp && (
@@ -1165,6 +1241,11 @@ function formatKm(km: number): string {
   return km.toFixed(1).replace(".0", "");
 }
 
+function formatShortDateTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "recently" : date.toLocaleString([], { day: "2-digit", hour: "2-digit", minute: "2-digit", month: "2-digit" });
+}
+
 function movementGoalLabel(goal: MovementRadarProgress["goals"][number], t: (key: string) => string): string {
   return t(`movement.goal.${goal.id}`);
 }
@@ -1632,6 +1713,36 @@ const styles = StyleSheet.create({
   movementClaimText: {
     color: "#ffffff",
     fontSize: 12,
+    fontWeight: "900"
+  },
+  fitnessSyncerCard: {
+    gap: 6
+  },
+  fitnessSyncerHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between"
+  },
+  fitnessSyncerCopy: {
+    flex: 1,
+    minWidth: 0
+  },
+  fitnessSyncerMeta: {
+    color: "#52665d",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 15,
+    marginTop: 2
+  },
+  fitnessSyncerMessage: {
+    color: "#15724f",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  fitnessSyncerDisconnect: {
+    color: "#8f312a",
+    fontSize: 11,
     fontWeight: "900"
   },
   buddyAction: {

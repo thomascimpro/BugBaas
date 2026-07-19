@@ -113,6 +113,11 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.10.11": [
+    { key: "changelog.2.10.11.nest", image: require("./assets/bugdex/houtmier.png"), tone: "gold" },
+    { key: "changelog.2.10.11.fitness", image: require("./assets/generated/bug-radar-request-signal-hd.png"), tone: "green" },
+    { key: "changelog.2.10.11.security", image: require("./assets/badges/kilometer-colony.png"), tone: "purple" }
+  ],
   "2.10.10": [
     { key: "changelog.2.10.10.categories", image: require("./assets/generated/bug-smash-duel-concept.jpg"), tone: "green" },
     { key: "changelog.2.10.10.nest", image: require("./assets/bugdex/houtmier.png"), tone: "gold" },
@@ -1075,7 +1080,7 @@ function AppContent() {
 
   async function registerMovementKilometers(estimatedKm: number, estimatedWeekKm?: number) {
     const currentUser = userRef.current;
-    if (!currentUser || estimatedKm <= 0) return;
+    if (!currentUser || (estimatedKm <= 0 && (estimatedWeekKm ?? 0) <= 0)) return;
     const updated = await syncMovementKilometers(currentUser, estimatedKm, estimatedWeekKm);
     setUser(updated);
     userRef.current = updated;

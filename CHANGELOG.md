@@ -781,3 +781,8 @@
 - Firebase Auth, Firestore en Storage integratie met placeholder-config toegevoegd.
 - Bug melden, buglijst, bugdetail, statuswijziging, puntenlogica, leaderboard en profiel toegevoegd.
 - Demo-modus toegevoegd voor smoke-tests zonder Firebase secrets.
+# 2.10.11 - 2026-07-19
+
+- Nest Defense manual attacks now use the complete playfield, including the lower path.
+- Added a secure FitnessSyncer OAuth2/PKCE backend and client integration boundary for web distance imports.
+- Added activity-only distance filtering, encrypted token storage, stable import IDs, and week-first movement registration.

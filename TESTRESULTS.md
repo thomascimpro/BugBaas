@@ -671,3 +671,16 @@ Datum: 2026-06-02
 - `npm run apk:fast`: geslaagd (`BUILD SUCCESSFUL`, 274 taken).
 - Release-APK: `android/app/build/outputs/apk/release/app-release.apk` (83.173.820 bytes).
 - Device-smoke: niet uitgevoerd.
+# 2026-07-19 Nest and FitnessSyncer release 2.10.11
+
+- `npm run typecheck`: passed before release packaging.
+- FitnessSyncer parser tests: 4 passed for accepted activities, rejected summary/manual data, idempotency IDs, and token expiry formats.
+- Firebase Functions: all five endpoints active; unauthenticated status request returns HTTP 401.
+- Runtime configuration is intentionally incomplete because no FitnessSyncer Client ID, Client Secret, or token encryption key is present.
+- Vercel production `dpl_BMZtL6j5ZmsjkrZ5C4Gn7heqUSrL`: `READY`; alias `https://bugbaas.vercel.app` active.
+- Production Browser with hidden account: 2.10.11 changelog visible; a real enemy at 64% field height produced immediate `HIT` feedback and the run stayed active; zero app console errors.
+- `NODE_ENV=production npm run apk:release`: passed.
+- APK: `dist/BugBaas-2.10.11.apk`, 83,890,957 bytes, package `nl.cimpro.bugbaas`, versionCode `191`, versionName `2.10.11`, minSdk 26, targetSdk 36.
+- APK Signature Scheme v2 passed; existing debug certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- APK SHA-256: `73201DD771063C62127F9ED284889DA18159DC82697D16C25E0624C965828DB3`.
+- `adb devices -l`: no connected device; physical install and native touch-feel remain unverified.

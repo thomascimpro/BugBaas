@@ -29,6 +29,7 @@ module.exports = () => ({
   ...appConfig.expo,
   extra: {
     ...(appConfig.expo.extra ?? {}),
-    ...readExtra()
+    ...readExtra(),
+    fitnessSyncerApiBaseUrl: process.env.FITNESSSYNCER_API_BASE_URL ?? "https://us-central1-thomascimpro-6266f.cloudfunctions.net"
   }
 });

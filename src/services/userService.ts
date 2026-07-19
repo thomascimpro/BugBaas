@@ -346,10 +346,10 @@ export async function syncEngagementPoints(user: User): Promise<User> {
 }
 
 export async function syncMovementKilometers(user: User, todayKm: number, weekKm = todayKm): Promise<User> {
-  if (!Number.isFinite(todayKm) || todayKm <= 0) return normalizeUser(user);
+  if (!Number.isFinite(todayKm) || !Number.isFinite(weekKm) || (todayKm <= 0 && weekKm <= 0)) return normalizeUser(user);
   const day = new Date().toISOString().slice(0, 10);
   const week = isoWeekId();
-  const roundedTodayKm = Math.round(todayKm * 100) / 100;
+  const roundedTodayKm = Math.max(0, Math.round(todayKm * 100) / 100);
   const roundedWeekKm = Math.max(roundedTodayKm, Math.round((Number.isFinite(weekKm) ? weekKm : todayKm) * 100) / 100);
 
   if (!isFirebaseConfigured) {

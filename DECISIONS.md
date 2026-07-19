@@ -79,3 +79,9 @@
 - Solo Campaign bosses gebruiken eigen HD boss-art en custom target scaling in de bestaande native game view; geen extra chart/game-library toegevoegd.
 - Campaign clear reward gebruikt `solo_campaign_clear` als dagelijkse BugDex source met gegarandeerd Zeldzaam, zodat het max 1x per dag claimbaar blijft.
 - Bug Radar widget toont request-status als compacte native badges in plaats van extra schermen of notificatiekaarten.
+# 2026-07-19 Nest and FitnessSyncer release 2.10.11
+
+- Nest Defense makes the field itself the manual-attack responder so lower-path taps are not lost behind higher visual layers.
+- FitnessSyncer stays hidden until its server reports complete OAuth configuration; incomplete production setup is never shown as connected.
+- OAuth uses PKCE and read-only activity scopes. Tokens remain encrypted in a private server-only Firestore path.
+- Manual and daily-summary activities are excluded; provider source plus activity ID forms the idempotency key.
