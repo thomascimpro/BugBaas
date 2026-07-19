@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, BackHandler, DimensionValue, Image, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, BackHandler, DimensionValue, Image, ImageBackground, Platform as RNPlatform, Pressable, StyleSheet, Text, View } from "react-native";
 import { createArcadeSeed, loadArcadeHighScore, saveArcadeHighScore, seededNumber } from "../../services/arcadeResultService";
 import { arcadeSquadAssistForUser } from "../../services/bugSquadGameBalance";
 import { playBugSound } from "../../services/soundService";
@@ -30,6 +30,9 @@ const towerSkyBackground = require("../../../assets/minigames/bug-tower/bug-towe
 const towerVoidBackground = require("../../../assets/minigames/bug-tower/bug-tower-void.png");
 const towerBackgrounds = [towerBackground, towerJungleBackground, towerForgeBackground, towerSkyBackground, towerVoidBackground];
 const beetleSpriteSheet = require("../../../assets/minigames/bug-tower/bug-tower-beetle.png");
+const webHoldStyle = RNPlatform.OS === "web"
+  ? ({ touchAction: "none", userSelect: "none", WebkitTouchCallout: "none", WebkitUserSelect: "none" } as any)
+  : undefined;
 
 export function BugTowerGame({ onBack, onResult, practice = false, ranked = false, seed, user }: Props) {
   const squadAssist = useMemo(() => arcadeSquadAssistForUser(user), [user.activeBugSquad]);
@@ -75,6 +78,20 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => subscription.remove();
   }, [practice, state]);
+
+  useEffect(() => {
+    if (RNPlatform.OS !== "web" || typeof document === "undefined") return;
+    const releaseWebHold = () => {
+      const direction = manualDirectionRef.current;
+      if (direction !== 0) releaseRun(direction);
+    };
+    document.addEventListener("pointerup", releaseWebHold, true);
+    window.addEventListener("blur", releaseWebHold);
+    return () => {
+      document.removeEventListener("pointerup", releaseWebHold, true);
+      window.removeEventListener("blur", releaseWebHold);
+    };
+  }, [state]);
 
   function start() {
     seedRef.current = seed ?? createArcadeSeed("bug_tower", `${user.uid}:${Date.now()}`);
@@ -357,20 +374,20 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
               )}
               {renderState.platforms.map((platform) => <TowerPlatform key={platform.id} platform={platform} />)}
               {renderState.pickups.map((pickup) => <TowerPickupView key={pickup.id} pickup={pickup} />)}
-              <View style={styles.controlLayer}>
+              <View style={[styles.controlLayer, webHoldStyle]}>
                 <Pressable
                   accessibilityLabel="Run left and release to jump"
                   testID="bug-tower-left-control"
-                  style={[styles.controlHalf, heldDirection === -1 && styles.controlHalfActive]}
+                  style={[styles.controlHalf, webHoldStyle, heldDirection === -1 && styles.controlHalfActive]}
                   onPressIn={() => beginRun(-1)}
-                  onPressOut={() => releaseRun(-1)}
+                  onPressOut={RNPlatform.OS === "web" ? undefined : () => releaseRun(-1)}
                 ><Text style={styles.controlArrow}>‹</Text><Text style={styles.controlSideLabel}>LEFT</Text></Pressable>
                 <Pressable
                   accessibilityLabel="Run right and release to jump"
                   testID="bug-tower-right-control"
-                  style={[styles.controlHalf, heldDirection === 1 && styles.controlHalfActive]}
+                  style={[styles.controlHalf, webHoldStyle, heldDirection === 1 && styles.controlHalfActive]}
                   onPressIn={() => beginRun(1)}
-                  onPressOut={() => releaseRun(1)}
+                  onPressOut={RNPlatform.OS === "web" ? undefined : () => releaseRun(1)}
                 ><Text style={styles.controlArrow}>›</Text><Text style={styles.controlSideLabel}>RIGHT</Text></Pressable>
               </View>
               {renderState.chainUntil > Date.now() && (

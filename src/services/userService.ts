@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import {
   User as FirebaseUser,
   createUserWithEmailAndPassword,
@@ -6,6 +7,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithCredential,
+  signInWithPopup,
   signOut,
   updateProfile
 } from "firebase/auth";
@@ -229,10 +231,15 @@ export async function register(email: string, password: string, displayName?: st
   return ensureUserDocument(credential.user, name);
 }
 
-export async function loginWithGoogle(idToken: string, accessToken?: string): Promise<User> {
-  if (!idToken) throw new Error("Google-login gaf geen geldig token terug.");
+export async function loginWithGoogle(idToken?: string, accessToken?: string): Promise<User> {
   if (!isFirebaseConfigured) throw new Error("Firebase is nog niet geconfigureerd.");
 
+  if (Platform.OS === "web") {
+    const userCredential = await signInWithPopup(auth, new GoogleAuthProvider());
+    return ensureUserDocument(userCredential.user);
+  }
+
+  if (!idToken) throw new Error("Google-login gaf geen geldig token terug.");
   const credential = GoogleAuthProvider.credential(idToken, accessToken);
   const userCredential = await signInWithCredential(auth, credential);
   return ensureUserDocument(userCredential.user);

@@ -719,7 +719,7 @@ function AppContent() {
     }
   }
 
-  async function handleGoogleLogin(idToken: string, accessToken?: string) {
+  async function handleGoogleLogin(idToken?: string, accessToken?: string) {
     setAuthError("");
     try {
       const appUser = await loginWithGoogle(idToken, accessToken);

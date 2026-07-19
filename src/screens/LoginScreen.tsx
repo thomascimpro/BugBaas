@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Animated, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppBackground } from "../components/AppBackground";
 import { BugArtImage } from "../components/BugArtImage";
 import { WalkingBugsLayer } from "../components/WalkingBugsLayer";
@@ -21,7 +21,7 @@ function googleSignInModule() {
 type Props = {
   error: string;
   loading: boolean;
-  onGoogleSubmit: (idToken: string, accessToken?: string) => Promise<void>;
+  onGoogleSubmit: (idToken?: string, accessToken?: string) => Promise<void>;
   onSubmit: (email: string, password: string, createAccount: boolean, displayName?: string) => Promise<void>;
 };
 
@@ -77,13 +77,25 @@ export function LoginScreen({ error, loading, onGoogleSubmit, onSubmit }: Props)
       setGoogleError(t("login.googleNotConfigured"));
       return;
     }
+    setGoogleBusy(true);
+    setGoogleError("");
+    if (Platform.OS === "web") {
+      try {
+        await onGoogleSubmit();
+      } catch (error) {
+        setGoogleError(error instanceof Error ? error.message : t("login.googleFailed"));
+      } finally {
+        setGoogleBusy(false);
+      }
+      return;
+    }
+
     const google = googleSignInModule();
     if (!google?.GoogleSignin) {
       setGoogleError(t("login.googleFailed"));
+      setGoogleBusy(false);
       return;
     }
-    setGoogleBusy(true);
-    setGoogleError("");
     try {
       await google.GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const result = await google.GoogleSignin.signIn();
