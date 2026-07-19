@@ -234,7 +234,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     let active = true;
     const day = localDayId();
     async function loadHomeBuddyState() {
-      const state = await loadBuddyState(user.uid, buddyBugIds[0], day, { preferCache: true });
+      const state = await loadBuddyState(user.uid, buddyBugIds[0], day);
       const nextBuddyId = buddyBugIds.includes(state.bugId) ? state.bugId : buddyBugIds[0];
       if (!active) return;
       setBuddyBugId(nextBuddyId);

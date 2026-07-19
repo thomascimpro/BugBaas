@@ -1387,6 +1387,7 @@ function AppContent() {
             onBack={() => setRoute("home")}
             onChange={updateNotificationSettings}
             onHealthPermissionOpen={async () => { await requestHealthConnectPermissions(user.uid); }}
+            onMovementRegistered={registerMovementKilometers}
             onShowHelp={showHelpTour}
           />
         )}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ActivityIndicator, Alert, Animated, Image, ImageSourcePropType, ImageStyle, Modal, Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { ActivityIndicator, Alert, Animated, Image, ImageSourcePropType, ImageStyle, Modal, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
 import { BugJarArt } from "../components/BugJarArt";
 import { BugSwatterHit, playBugSwatterFeedback } from "../components/BugSwatterHit";
@@ -2562,6 +2562,7 @@ function renderTargets(
     return (
       <Pressable
         key={bugId}
+        testID={`tap-duel-target-${bugId}`}
         style={[
           styles.target,
           bossLevel > 0 && styles.bossTarget,
@@ -2575,7 +2576,8 @@ function renderTargets(
             width: targetSize
           }
         ]}
-        onPressIn={() => onHit(bugId, motion)}
+        onPointerDown={Platform.OS === "web" ? () => onHit(bugId, motion) : undefined}
+        onPressIn={Platform.OS === "web" ? undefined : () => onHit(bugId, motion)}
       >
         {feedback && !sprayMode && <BugSwatterHit bugSize={44} feedback={feedback} style={styles.targetSwatter} />}
         {frozen && (
@@ -6045,7 +6047,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 5,
     position: "absolute",
-    width: 62
+    width: 62,
+    ...Platform.select({ web: { touchAction: "none", userSelect: "none" } as any })
   },
   bossTarget: {
     backgroundColor: "rgba(16,32,24,0.9)",

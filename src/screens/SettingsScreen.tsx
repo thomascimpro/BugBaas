@@ -1,5 +1,6 @@
 import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { disconnectFitnessSyncer, FitnessSyncerStatus, getFitnessSyncerStatus, startFitnessSyncerConnection, syncFitnessSyncerActivities } from "../services/fitnessSyncerService";
 import { useI18n } from "../services/i18n";
 import { NotificationSettings, NotificationType } from "../types";
 import { sharedStyles } from "./sharedStyles";
@@ -19,12 +20,67 @@ type Props = {
   onBack: () => void;
   onChange: (settings: NotificationSettings) => void;
   onHealthPermissionOpen?: () => Promise<void>;
+  onMovementRegistered?: (todayKm: number, weekKm?: number) => Promise<void>;
   onShowHelp: () => void;
 };
 
-export function SettingsScreen({ settings, onBack, onChange, onHealthPermissionOpen, onShowHelp }: Props) {
+export function SettingsScreen({ settings, onBack, onChange, onHealthPermissionOpen, onMovementRegistered, onShowHelp }: Props) {
   const { t } = useI18n();
   const [healthPermissionOpening, setHealthPermissionOpening] = React.useState(false);
+  const [fitnessStatus, setFitnessStatus] = React.useState<FitnessSyncerStatus | null>(null);
+  const [fitnessBusy, setFitnessBusy] = React.useState(false);
+  const [fitnessMessage, setFitnessMessage] = React.useState("");
+
+  React.useEffect(() => {
+    void refreshFitnessStatus();
+  }, []);
+
+  async function refreshFitnessStatus() {
+    setFitnessStatus(await getFitnessSyncerStatus());
+  }
+
+  async function connectFitnessSyncer() {
+    if (fitnessBusy || !fitnessStatus?.configured) return;
+    setFitnessBusy(true);
+    setFitnessMessage("");
+    try {
+      await Linking.openURL(await startFitnessSyncerConnection());
+    } catch (error) {
+      setFitnessMessage(error instanceof Error ? error.message : t("settings.fitnessError"));
+    } finally {
+      setFitnessBusy(false);
+    }
+  }
+
+  async function syncFitnessSyncer() {
+    if (fitnessBusy || !fitnessStatus?.connected) return;
+    setFitnessBusy(true);
+    setFitnessMessage("");
+    try {
+      const result = await syncFitnessSyncerActivities();
+      if (result.todayKm > 0 || result.weekKm > 0) await onMovementRegistered?.(result.todayKm, result.weekKm);
+      setFitnessMessage(t("settings.fitnessSynced", { km: result.weekKm.toFixed(1) }));
+      await refreshFitnessStatus();
+    } catch (error) {
+      setFitnessMessage(error instanceof Error ? error.message : t("settings.fitnessError"));
+    } finally {
+      setFitnessBusy(false);
+    }
+  }
+
+  async function disconnectFitness() {
+    if (fitnessBusy || !fitnessStatus?.connected) return;
+    setFitnessBusy(true);
+    setFitnessMessage("");
+    try {
+      await disconnectFitnessSyncer();
+      await refreshFitnessStatus();
+    } catch (error) {
+      setFitnessMessage(error instanceof Error ? error.message : t("settings.fitnessError"));
+    } finally {
+      setFitnessBusy(false);
+    }
+  }
   function toggle(type: NotificationType) {
     onChange({ ...settings, [type]: !settings[type] });
   }
@@ -66,6 +122,30 @@ export function SettingsScreen({ settings, onBack, onChange, onHealthPermissionO
         <Text style={styles.healthButtonText}>{healthPermissionOpening ? "..." : t("health.reopen")}</Text>
         <Text style={styles.healthButtonBody}>{t("settings.healthBody")}</Text>
       </Pressable>
+      <View style={styles.fitnessCard}>
+        <Text style={styles.fitnessTitle}>{t("settings.fitnessTitle")}</Text>
+        <Text style={styles.fitnessBody}>{t("settings.fitnessBody")}</Text>
+        <Text style={styles.fitnessPrivacy}>{t("settings.fitnessPrivacy")}</Text>
+        {fitnessStatus?.connected ? (
+          <>
+            <Text style={styles.fitnessStatus}>{fitnessStatus.lastSyncAt ? t("settings.fitnessLastSync", { time: new Date(fitnessStatus.lastSyncAt).toLocaleString() }) : t("settings.fitnessConnected")}</Text>
+            <Pressable disabled={fitnessBusy} style={[styles.fitnessPrimary, fitnessBusy && styles.healthButtonDisabled]} onPress={() => void syncFitnessSyncer()}>
+              <Text style={styles.fitnessPrimaryText}>{fitnessBusy ? "..." : t("settings.fitnessSync")}</Text>
+            </Pressable>
+            <Pressable disabled={fitnessBusy} style={styles.fitnessSecondary} onPress={() => void disconnectFitness()}>
+              <Text style={styles.fitnessSecondaryText}>{t("settings.fitnessDisconnect")}</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            {(!fitnessStatus || !fitnessStatus.configured) && <Text style={styles.fitnessWarning}>{t("settings.fitnessUnavailable")}</Text>}
+            <Pressable disabled={fitnessBusy || !fitnessStatus?.configured} style={[styles.fitnessPrimary, (fitnessBusy || !fitnessStatus?.configured) && styles.healthButtonDisabled]} onPress={() => void connectFitnessSyncer()}>
+              <Text style={styles.fitnessPrimaryText}>{fitnessBusy ? "..." : t("settings.fitnessConnect")}</Text>
+            </Pressable>
+          </>
+        )}
+        {!!fitnessMessage && <Text style={styles.fitnessMessage}>{fitnessMessage}</Text>}
+      </View>
       <Pressable style={sharedStyles.secondaryButton} onPress={onBack}>
         <Text style={sharedStyles.secondaryButtonText}>{t("common.back")}</Text>
       </Pressable>
@@ -118,6 +198,17 @@ const styles = StyleSheet.create({
     color: "#15724f",
     fontWeight: "900"
   },
+  fitnessBody: { color: "#53645d", fontSize: 12, fontWeight: "700", lineHeight: 17 },
+  fitnessCard: { backgroundColor: "#fdfefb", borderColor: "#15724f", borderRadius: 8, borderWidth: 1, gap: 8, marginBottom: 10, padding: 12 },
+  fitnessMessage: { color: "#15724f", fontSize: 12, fontWeight: "800" },
+  fitnessPrimary: { alignItems: "center", backgroundColor: "#15724f", borderRadius: 8, minHeight: 46, justifyContent: "center", padding: 10 },
+  fitnessPrimaryText: { color: "#ffffff", fontWeight: "900" },
+  fitnessPrivacy: { color: "#64756d", fontSize: 11, fontWeight: "700" },
+  fitnessSecondary: { alignItems: "center", padding: 8 },
+  fitnessSecondaryText: { color: "#8f312a", fontSize: 12, fontWeight: "900" },
+  fitnessStatus: { color: "#15724f", fontSize: 12, fontWeight: "900" },
+  fitnessTitle: { color: "#102018", fontSize: 16, fontWeight: "900" },
+  fitnessWarning: { color: "#8f5a12", fontSize: 12, fontWeight: "800" },
   row: {
     alignItems: "center",
     backgroundColor: "#fdfefb",
