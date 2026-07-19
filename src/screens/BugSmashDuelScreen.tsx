@@ -2536,6 +2536,8 @@ function BossTargetArt({ bossLevel, bugArtSize, mechanic }: { bossLevel: number;
   );
 }
 
+const webTargetPointerDowns = new Set<string>();
+
 function renderTargets(
   duel: BugSmashDuel,
   timestamp: number,
@@ -2576,14 +2578,14 @@ function renderTargets(
             width: targetSize
           }
         ]}
-        onPointerDown={Platform.OS === "web" ? (event: any) => {
-          event.currentTarget.__bugBaasPointerDownAt = Date.now();
+        onPointerDown={Platform.OS === "web" ? () => {
+          webTargetPointerDowns.add(bugId);
           onHit(bugId, motion);
         } : undefined}
-        {...Platform.select({ web: { onClick: (event: any) => {
-          const pointerDownAt = Number(event.currentTarget.__bugBaasPointerDownAt ?? 0);
-          if (Date.now() - pointerDownAt > 500) onHit(bugId, motion);
-        } } as any })}
+        onPress={Platform.OS === "web" ? () => {
+          if (webTargetPointerDowns.delete(bugId)) return;
+          onHit(bugId, motion);
+        } : undefined}
         onPressIn={Platform.OS === "web" ? undefined : () => onHit(bugId, motion)}
       >
         {feedback && !sprayMode && <BugSwatterHit bugSize={44} feedback={feedback} style={styles.targetSwatter} />}
