@@ -1,5 +1,12 @@
 # Status
 
+## 2026-07-19 web auth, rewards and Tower hold hotfix
+
+- Web Google-login uses Firebase's browser popup instead of the unsupported native RN Google Sign-In method; Android keeps the native flow.
+- Bug Tower web hold ignores React Native Web press cancellation and releases only on a real global pointer-up or window blur.
+- Buddy, BugDex and mastery reward writes remain restricted to the signed-in owner's subcollections; the compiled rules are live on Firebase project `thomascimpro-6266f`.
+- Production is live at `https://bugbaas.vercel.app`, deployment `dpl_AgBRAgZyq9ysDpj7osQEEDs9KWZF` (`READY`).
+
 ## 2026-07-19 web arcade interaction hotfix
 
 - Bug Tower web-hold toont geen copy/selectiemenu meer; pickups staan los van treden en rockets vliegen langer en verder.

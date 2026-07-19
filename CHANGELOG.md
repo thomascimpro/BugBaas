@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.11
+
+- Google login on web uses Firebase popup authentication and no longer calls the unsupported React Native Google Sign-In implementation.
+- Bug Tower supports uninterrupted long holds on web; selection/copy gestures cannot trigger an early jump.
+- Owner-only Buddy, BugDex and mastery reward permissions were compiled and published to Firestore.
+
 ## 2.10.10
 
 - Fullscreen webgames blokkeren tekstselectie, contextmenu en de mobiele copy-callout tijdens hold-controls.

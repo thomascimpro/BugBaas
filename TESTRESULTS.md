@@ -1,5 +1,15 @@
 # Test Results
 
+## 2026-07-19 web auth, rewards and Tower hold hotfix
+
+- `npm run typecheck`: passed.
+- Isolated Expo web export from commit `92281d5`: passed; bundle `AppEntry-6a276fec375b9198824d7e903353bd97.js`.
+- Firestore rules compiled and deployed successfully to `thomascimpro-6266f`.
+- Vercel production `dpl_AgBRAgZyq9ysDpj7osQEEDs9KWZF`: `READY`; `https://bugbaas.vercel.app` points to this artifact.
+- In-app Browser with hidden account `Luna Review`: right Tower control is 230 x 614 px with `touch-action: none` and `user-select: none`.
+- Raw pointer test: after 4.2 seconds held, run remained active at `SPIN READY` / 100% and no Copy UI appeared; after `pointerup`, charge reset to 0% and jump state resumed.
+- Google popup code path is typechecked and present in the deployed bundle; full Google account selection was not completed because the Browser profile was already authenticated as the hidden test account.
+
 ## 2026-07-19 web arcade interaction hotfix
 
 - `npx tsc --noEmit`: geslaagd.

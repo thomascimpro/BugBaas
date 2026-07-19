@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-07-19 web auth, rewards and Tower hold hotfix
+
+- Web Google authentication uses the Firebase JavaScript SDK directly; native token exchange remains unchanged for Android.
+- Tower does not trust web `Pressable.onPressOut` because browser selection/context gestures can cancel that event; a document-level `pointerup` is the authoritative release.
+- Reward permissions are not widened globally: Buddy, BugDex and mastery writes stay UID-bound and schema-validated.
+
 ## 2026-07-19 web arcade interaction hotfix
 
 - Selectie- en contextmenuonderdrukking geldt alleen zolang een duelgame fullscreen is; normale apptekst blijft selecteerbaar buiten games.
