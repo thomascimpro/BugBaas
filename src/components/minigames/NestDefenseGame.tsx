@@ -437,6 +437,10 @@ export function NestDefenseGame({ onBack, onResult, practice = false, ranked = f
 
   function back() {
     if (!practice && state !== "result") return;
+    if (practice) {
+      onBack();
+      return;
+    }
     if (state === "running") {
       Alert.alert("Leave Nest Defense?", "Your run stops if you go back now.", [{ text: "Stay", style: "cancel" }, { text: "Leave", style: "destructive", onPress: onBack }]);
       return;
@@ -462,7 +466,7 @@ export function NestDefenseGame({ onBack, onResult, practice = false, ranked = f
           >
             <SpriteCrop pointerEvents="none" rect={{ x: 768, y: 20, width: 744, height: 724 }} sheetHeight={1536} sheetWidth={1536} source={arcadeShowcaseImage} style={styles.backgroundArt} />
             <View pointerEvents="none" style={styles.fieldShade} />
-            <View pointerEvents="none" style={styles.squadOverlay}><ArcadeSquadAssist compact label={`Squad ${squadAssist.activeCount}/3`} user={user} /></View>
+            <View pointerEvents="none" style={styles.squadOverlay}><ArcadeSquadAssist micro label={`Squad ${squadAssist.activeCount}/3`} user={user} /></View>
             {pathDots().map((dot, index) => <View key={index} pointerEvents="none" style={[styles.pathDot, { left: `${dot.x}%`, top: `${dot.y}%`, transform: [{ scale: fieldScale }] }]} />)}
             <Pressable accessibilityLabel="Manual tap attack" ref={fieldRef} testID="nest-defense-tap-layer" style={styles.tapLayer} onPress={manualTapAttack} />
             {slowZones.map((zone) => {
@@ -477,30 +481,32 @@ export function NestDefenseGame({ onBack, onResult, practice = false, ranked = f
             {enemies.map((enemy) => <EnemyView key={enemy.id} enemy={enemy} scale={fieldScale} />)}
             {impacts.map((impact) => <View key={impact.id} pointerEvents="none" style={[styles.manualImpact, { left: `${impact.x}%`, top: `${impact.y}%`, transform: [{ scale: fieldScale }] }]}><Text style={styles.manualImpactText}>HIT</Text></View>)}
           </View>
-          <View style={styles.abilityBar}>
-            <AbilityButton disabled={now < manualCooldownUntil} label={now < manualCooldownUntil ? `Tap ${Math.ceil((manualCooldownUntil - now) / 1000)}s` : `Tap ${manualDamageForLevel(tapDamageLevel, wave)}` } />
-            <Pressable disabled={now < sprayCooldownUntil} style={[styles.abilityButton, now < sprayCooldownUntil && styles.abilityDisabled]} onPress={useBugSpray}><Text style={styles.abilityText}>{now < sprayCooldownUntil ? `Spray ${Math.ceil((sprayCooldownUntil - now) / 1000)}s` : "Bug spray"}</Text></Pressable>
-            <Pressable disabled={now < stickyCooldownUntil} style={[styles.abilityButton, now < stickyCooldownUntil && styles.abilityDisabled]} onPress={useStickyWeb}><Text style={styles.abilityText}>{now < stickyCooldownUntil ? `Web ${Math.ceil((stickyCooldownUntil - now) / 1000)}s` : "Sticky web"}</Text></Pressable>
-          </View>
-          <View style={styles.tapUpgradeBar}>
-            <Pressable disabled={!tapDamageCost || coins < tapDamageCost} style={[styles.tapUpgradeButton, (!tapDamageCost || coins < tapDamageCost) && styles.tapUpgradeDisabled]} onPress={() => upgradeTap("damage")}>
-              <Text style={styles.tapUpgradeTitle}>Tap DMG Lv{tapDamageLevel}</Text>
-              <Text style={styles.tapUpgradeCost}>{tapDamageCost ? `Up ${tapDamageCost}` : "MAX"}</Text>
-            </Pressable>
-            <Pressable disabled={!tapSpeedCost || coins < tapSpeedCost} style={[styles.tapUpgradeButton, (!tapSpeedCost || coins < tapSpeedCost) && styles.tapUpgradeDisabled]} onPress={() => upgradeTap("speed")}>
-              <Text style={styles.tapUpgradeTitle}>Tap SPD Lv{tapSpeedLevel}</Text>
-              <Text style={styles.tapUpgradeCost}>{tapSpeedCost ? `Up ${tapSpeedCost}` : "MAX"}</Text>
-            </Pressable>
-          </View>
-          <View style={styles.towerBar}>
-            {(["rapid", "heavy", "slow"] as TowerKind[]).map((kind) => (
-              <Pressable key={kind} style={[styles.towerButton, selectedTower === kind && styles.towerButtonActive]} onPress={() => setSelectedTower(kind)}>
-                <Image accessibilityIgnoresInvertColors resizeMode="contain" source={towerImage[kind]} style={styles.towerButtonImage} />
-                <Text style={styles.towerButtonTitle}>{towerLabel(kind)}</Text>
-                <Text style={styles.towerButtonMeta}>{towerHint(kind)}</Text>
-                <Text style={styles.towerButtonMeta}>Build {towerCost[kind]}</Text>
+          <View style={styles.controlDeck}>
+            <View style={styles.abilityBar}>
+              <AbilityButton disabled={now < manualCooldownUntil} label={now < manualCooldownUntil ? `Tap ${Math.ceil((manualCooldownUntil - now) / 1000)}s` : `Tap ${manualDamageForLevel(tapDamageLevel, wave)}` } />
+              <Pressable disabled={now < sprayCooldownUntil} style={[styles.abilityButton, now < sprayCooldownUntil && styles.abilityDisabled]} onPress={useBugSpray}><Text style={styles.abilityText}>{now < sprayCooldownUntil ? `Spray ${Math.ceil((sprayCooldownUntil - now) / 1000)}s` : "Bug spray"}</Text></Pressable>
+              <Pressable disabled={now < stickyCooldownUntil} style={[styles.abilityButton, now < stickyCooldownUntil && styles.abilityDisabled]} onPress={useStickyWeb}><Text style={styles.abilityText}>{now < stickyCooldownUntil ? `Web ${Math.ceil((stickyCooldownUntil - now) / 1000)}s` : "Sticky web"}</Text></Pressable>
+            </View>
+            <View style={styles.tapUpgradeBar}>
+              <Pressable disabled={!tapDamageCost || coins < tapDamageCost} style={[styles.tapUpgradeButton, (!tapDamageCost || coins < tapDamageCost) && styles.tapUpgradeDisabled]} onPress={() => upgradeTap("damage")}>
+                <Text style={styles.tapUpgradeTitle}>Tap DMG Lv{tapDamageLevel}</Text>
+                <Text style={styles.tapUpgradeCost}>{tapDamageCost ? `Up ${tapDamageCost}` : "MAX"}</Text>
               </Pressable>
-            ))}
+              <Pressable disabled={!tapSpeedCost || coins < tapSpeedCost} style={[styles.tapUpgradeButton, (!tapSpeedCost || coins < tapSpeedCost) && styles.tapUpgradeDisabled]} onPress={() => upgradeTap("speed")}>
+                <Text style={styles.tapUpgradeTitle}>Tap SPD Lv{tapSpeedLevel}</Text>
+                <Text style={styles.tapUpgradeCost}>{tapSpeedCost ? `Up ${tapSpeedCost}` : "MAX"}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.towerBar}>
+              {(["rapid", "heavy", "slow"] as TowerKind[]).map((kind) => (
+                <Pressable key={kind} style={[styles.towerButton, selectedTower === kind && styles.towerButtonActive]} onPress={() => setSelectedTower(kind)}>
+                  <Image accessibilityIgnoresInvertColors resizeMode="contain" source={towerImage[kind]} style={styles.towerButtonImage} />
+                  <Text style={styles.towerButtonTitle}>{towerLabel(kind)}</Text>
+                  <Text style={styles.towerButtonMeta}>{towerHint(kind)}</Text>
+                  <Text style={styles.towerButtonMeta}>Build {towerCost[kind]}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
           {manualCombo > 1 && <Text style={styles.comboNotice}>Manual combo x{manualCombo}</Text>}
         </View>
@@ -695,7 +701,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 const styles = StyleSheet.create({
-  abilityBar: { bottom: 128, flexDirection: "row", gap: 7, left: 10, position: "absolute", right: 10, zIndex: 11 },
+  abilityBar: { flexDirection: "row", gap: 7 },
   abilityButton: { alignItems: "center", backgroundColor: "rgba(215,189,87,0.94)", borderColor: "rgba(249,251,247,0.8)", borderRadius: 8, borderWidth: 1, flex: 1, justifyContent: "center", minHeight: 38 },
   abilityDisabled: { backgroundColor: "rgba(156,163,175,0.8)", opacity: 0.8 },
   abilityText: { color: "#102018", fontSize: 11, fontWeight: "900" },
@@ -706,14 +712,15 @@ const styles = StyleSheet.create({
   closeButton: { alignItems: "center", backgroundColor: "#f9fbf7", borderRadius: 12, height: 52, justifyContent: "center", width: 52 },
   closeText: { color: "#102018", fontSize: 28, fontWeight: "900" },
   comboNotice: { backgroundColor: "rgba(16,32,24,0.86)", borderColor: "#d7bd57", borderRadius: 999, borderWidth: 1, bottom: 166, color: "#d7bd57", fontSize: 14, fontWeight: "900", left: 14, overflow: "hidden", paddingHorizontal: 10, paddingVertical: 4, position: "absolute", zIndex: 12 },
+  controlDeck: { backgroundColor: "rgba(7,29,18,0.98)", borderTopColor: "rgba(215,189,87,0.45)", borderTopWidth: 1, gap: 6, padding: 7, zIndex: 10 },
   emptySlotCost: { bottom: -16, color: "#f9fbf7", fontSize: 8, fontWeight: "900", position: "absolute" },
   emptySlotDot: { backgroundColor: "#d7bd57", borderRadius: 999, height: 14, width: 14 },
   emptySlotMark: { alignItems: "center", borderColor: "rgba(215,189,87,0.75)", borderRadius: 999, borderWidth: 2, height: 28, justifyContent: "center", width: 28 },
   enemy: { alignItems: "center", height: 58, justifyContent: "center", marginLeft: -29, marginTop: -29, position: "absolute", width: 58, zIndex: 5 },
   enemyType: { backgroundColor: "rgba(16,32,24,0.82)", borderRadius: 999, color: "#d7bd57", fontSize: 7, fontWeight: "900", marginTop: -6, overflow: "hidden", paddingHorizontal: 4 },
-  field: { flex: 1, overflow: "hidden", paddingBottom: 190 },
+  field: { flex: 1, minHeight: 0, overflow: "hidden" },
   fieldShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(7,29,18,0.2)" },
-  game: { flex: 1, position: "relative" },
+  game: { flex: 1, minHeight: 0, position: "relative" },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12 },
   healthBarFill: { backgroundColor: "#22c55e", borderRadius: 999, height: "100%" },
   healthBarLabel: { color: "#d7bd57", fontSize: 10, fontWeight: "900", marginBottom: 3 },
@@ -743,16 +750,16 @@ const styles = StyleSheet.create({
   secondaryText: { color: "#f9fbf7", fontSize: 16, fontWeight: "900" },
   shell: { backgroundColor: "#071d12", flex: 1 },
   slowZone: { backgroundColor: "rgba(56,189,248,0.18)", borderColor: "#38bdf8", borderRadius: 999, borderWidth: 3, height: 92, marginLeft: -46, marginTop: -46, position: "absolute", width: 92, zIndex: 3 },
-  squadOverlay: { position: "absolute", right: 10, top: 10, zIndex: 9 },
+  squadOverlay: { position: "absolute", right: 6, top: 6, zIndex: 9 },
   title: { color: "#f9fbf7", fontSize: 28, fontWeight: "900" },
-  tapUpgradeBar: { bottom: 78, flexDirection: "row", gap: 8, left: 10, position: "absolute", right: 10, zIndex: 10 },
+  tapUpgradeBar: { flexDirection: "row", gap: 7 },
   tapUpgradeButton: { alignItems: "center", backgroundColor: "rgba(16,32,24,0.92)", borderColor: "#d7bd57", borderRadius: 8, borderWidth: 1, flex: 1, justifyContent: "center", minHeight: 42 },
   tapUpgradeCost: { color: "#d7bd57", fontSize: 10, fontWeight: "900" },
   tapUpgradeDisabled: { opacity: 0.52 },
   tapUpgradeTitle: { color: "#f9fbf7", fontSize: 11, fontWeight: "900" },
   tapLayer: { ...StyleSheet.absoluteFillObject, zIndex: 3 },
-  towerBar: { bottom: 8, flexDirection: "row", gap: 8, left: 10, position: "absolute", right: 10, zIndex: 10 },
-  towerButton: { alignItems: "center", backgroundColor: "rgba(249,251,247,0.9)", borderColor: "rgba(215,189,87,0.55)", borderRadius: 8, borderWidth: 1, flex: 1, justifyContent: "center", minHeight: 54 },
+  towerBar: { flexDirection: "row", gap: 7 },
+  towerButton: { alignItems: "center", backgroundColor: "rgba(249,251,247,0.9)", borderColor: "rgba(215,189,87,0.55)", borderRadius: 8, borderWidth: 1, flex: 1, justifyContent: "center", minHeight: 48 },
   towerButtonActive: { backgroundColor: "#d7bd57", borderColor: "#f9fbf7" },
   towerButtonImage: { height: 28, width: 38 },
   towerButtonMeta: { color: "#425047", fontSize: 9, fontWeight: "900" },

@@ -77,11 +77,14 @@ export function WebRunnerGame({ onBack, onResult, practice = false, ranked = fal
   }, [practice, state]);
 
   const panResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+    onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 14 || Math.abs(gesture.dy) > 14,
     onPanResponderRelease: (_, gesture) => {
+      if (gesture.dy < -24 && Math.abs(gesture.dy) > Math.abs(gesture.dx)) {
+        jump();
+        return;
+      }
       if (gesture.dx > 20) moveLane(1);
       if (gesture.dx < -20) moveLane(-1);
-      if (gesture.dy < -24) jump();
     }
   }), []);
 
@@ -245,6 +248,10 @@ export function WebRunnerGame({ onBack, onResult, practice = false, ranked = fal
 
   function back() {
     if (!practice && state !== "result") return;
+    if (practice) {
+      onBack();
+      return;
+    }
     if (state === "running") {
       Alert.alert(t("arcade.exitTitle"), t("arcade.exitBody"), [{ text: t("common.close"), style: "cancel" }, { text: t("arcade.backToArcade"), style: "destructive", onPress: onBack }]);
       return;

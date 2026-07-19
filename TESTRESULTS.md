@@ -1,5 +1,18 @@
 # Test Results
 
+## 2026-07-19 web arcade interaction hotfix
+
+- `npx tsc --noEmit`: geslaagd.
+- Expo web export: geslaagd; bundle `AppEntry-797c3719c1e537f1fe3ebe583e0450f4.js`.
+- Vercel productie `dpl_9pKLUM1DmuaC1oF9HodtUdekqtRW`: `READY`, alias actief en root HTTP 200.
+- Lokale en productie-bundle hebben dezelfde SHA-256 `3F2DAF60EA624BE68CCD0FA56C93E3EB69A3E6A3FDC5CA1E1D1F1600DEA2E153`.
+- Chrome mobiele viewport 460x844 met hidden testaccount: Tower toont vrij zwevende pickups; fullscreen `user-select` is `none`; Train-X keert direct terug naar Arena.
+- Bubble Swarm toont zichtbare B/F-powerups in het grid. Na twee drukstappen kwamen alle acht vastgelegde bestaande kleurvolgordes exact en ongewijzigd twee rijen lager terug.
+- Web Runner swipe omhoog activeerde direct `Jump` en `JUMP`; Train-X werkte tijdens de actieve run.
+- Nest Defense toont veld en drie controlrijen zonder overlap; screenshotcontrole bevestigde dat het control deck volledig onder het speelveld staat.
+- Geen app-consolefouten gezien; alleen bestaande Chrome-extensionmeldingen buiten `https://bugbaas.vercel.app`.
+- Android/APK niet gebouwd of fysiek getest omdat deze hotfix uitsluitend webinteractie en layout wijzigt.
+
 ## 2026-07-19 regression repair release 2.10.10
 
 - `npx tsc --noEmit`: geslaagd.

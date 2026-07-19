@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-07-19 web arcade interaction hotfix
+
+- Selectie- en contextmenuonderdrukking geldt alleen zolang een duelgame fullscreen is; normale apptekst blijft selecteerbaar buiten games.
+- Tower-pickups hebben eigen wereldcoordinaten en collision in plaats van platformvelden, zodat ze zichtbaar en fysiek los van treden kunnen staan.
+- Bubble-pressure wisselt een globale hexgridfase bij iedere nieuwe rij; daardoor blijft de horizontale positie en volgorde van alle bestaande bubbels gelijk.
+- Bubble-powerups activeren alleen wanneer hun gemarkeerde gridbubble wordt weggecleared; het afgeschoten projectiel blijft altijd een normale gekleurde bubble.
+- Practice-X sluit direct zonder web-alert; non-practice runs blijven tot het resultaat beschermd.
+
 ## 2026-07-19 regression restoration release 2.10.10
 
 - Reporttypes zijn primaire categorieën en blijven daarom zonder extra tap zichtbaar op het nieuwe-meldingsformulier.

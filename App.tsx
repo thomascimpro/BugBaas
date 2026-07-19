@@ -347,6 +347,32 @@ function AppContent() {
     };
   }, []);
 
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined" || !duelFullscreen) return;
+    const targets = [document.documentElement, document.body, document.getElementById("root")].filter(Boolean) as HTMLElement[];
+    const previous = targets.map((element) => ({
+      element,
+      touchCallout: element.style.getPropertyValue("-webkit-touch-callout"),
+      userSelect: element.style.userSelect
+    }));
+    const preventGameMenu = (event: Event) => event.preventDefault();
+    targets.forEach((element) => {
+      element.style.userSelect = "none";
+      element.style.setProperty("-webkit-touch-callout", "none");
+    });
+    document.addEventListener("contextmenu", preventGameMenu, true);
+    document.addEventListener("selectstart", preventGameMenu, true);
+    return () => {
+      document.removeEventListener("contextmenu", preventGameMenu, true);
+      document.removeEventListener("selectstart", preventGameMenu, true);
+      previous.forEach(({ element, touchCallout, userSelect }) => {
+        element.style.userSelect = userSelect;
+        if (touchCallout) element.style.setProperty("-webkit-touch-callout", touchCallout);
+        else element.style.removeProperty("-webkit-touch-callout");
+      });
+    };
+  }, [duelFullscreen]);
+
   function recordUserActivity(currentUser: User, force = false) {
     void touchUserActivity(currentUser, force)
       .then((lastActiveAt) => {

@@ -2,6 +2,11 @@
 
 ## 2.10.10
 
+- Fullscreen webgames blokkeren tekstselectie, contextmenu en de mobiele copy-callout tijdens hold-controls.
+- Bug Tower-pickups zweven los en seeded verspreid tussen de treden; de rocket vliegt 3 seconden met hogere klimsnelheid.
+- Bubble Swarm bevat Bomb en Freeze in bestaande gridbubbels; drukrijen behouden hun horizontale volgorde en schuiven geanimeerd omlaag.
+- Web Runner accepteert een verticale swipe omhoog als jump; Train-sluiten verlaat iedere minigame direct.
+- Nest Defense gebruikt een afzonderlijk compact control deck en micro squad-overlay, zodat webcontrols het speelveld niet meer bedekken.
 - Het nieuwe-meldingsformulier toont Bug, Tip, Trick en Idee permanent als categorieknoppen in plaats van achter een verborgen dropdown.
 - Nest Defense gebruikt een afzonderlijke volledige taplaag; torenknoppen blijven interactief en spelvisuals kunnen handmatige aanvallen niet meer onderscheppen.
 - BugDex-aantal-, legendary-, mythic- en setmedailles worden rechtstreeks uit de historische unlocklijst berekend.

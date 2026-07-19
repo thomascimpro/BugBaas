@@ -8,6 +8,7 @@ import { BugJarArt } from "../BugJarArt";
 type Props = {
   compact?: boolean;
   label: string;
+  micro?: boolean;
   user: Pick<User, "activeBugSquad">;
 };
 
@@ -21,23 +22,24 @@ const rarityColors: Record<BugDexRarity, string> = {
 
 const entryById = new Map(bugDexEntries.map((entry) => [entry.id, entry]));
 
-export function ArcadeSquadAssist({ compact = false, label, user }: Props) {
+export function ArcadeSquadAssist({ compact = false, label, micro = false, user }: Props) {
   const bonuses = activeBugSquadBonusList(user);
+  const isCompact = compact || micro;
 
   if (!bonuses.length) return null;
 
   return (
-    <View style={[styles.wrap, compact && styles.wrapCompact]}>
-      <Text style={[styles.label, compact && styles.labelCompact]}>{label}</Text>
+    <View style={[styles.wrap, isCompact && styles.wrapCompact, micro && styles.wrapMicro]}>
+      <Text style={[styles.label, isCompact && styles.labelCompact, micro && styles.labelMicro]}>{label}</Text>
       <View style={styles.jars}>
         {bonuses.map((bonus) => {
           const entry = entryById.get(bonus.bugId);
           const kind = bugSquadAttackKindForCategory(bonus.category);
           return (
-            <View key={bonus.bugId} style={[styles.jarSlot, compact && styles.jarSlotCompact, { borderColor: rarityColors[bonus.rarity] }]}>
-              <BugJarArt bugId={bonus.bugId} rarity={bonus.rarity} size={compact ? 30 : 44} />
-              <Text style={[styles.kind, compact && styles.kindCompact]} numberOfLines={1}>{kind}</Text>
-              {!compact && entry ? <Text style={styles.name} numberOfLines={1}>{entry.name}</Text> : null}
+            <View key={bonus.bugId} style={[styles.jarSlot, isCompact && styles.jarSlotCompact, micro && styles.jarSlotMicro, { borderColor: rarityColors[bonus.rarity] }]}>
+              <BugJarArt bugId={bonus.bugId} rarity={bonus.rarity} size={micro ? 20 : isCompact ? 30 : 44} />
+              <Text style={[styles.kind, isCompact && styles.kindCompact, micro && styles.kindMicro]} numberOfLines={1}>{kind}</Text>
+              {!isCompact && entry ? <Text style={styles.name} numberOfLines={1}>{entry.name}</Text> : null}
             </View>
           );
         })}
@@ -62,6 +64,7 @@ const styles = StyleSheet.create({
     minWidth: 48,
     padding: 3
   },
+  jarSlotMicro: { minWidth: 32, padding: 2 },
   jars: {
     flexDirection: "row",
     gap: 6
@@ -75,6 +78,7 @@ const styles = StyleSheet.create({
   kindCompact: {
     fontSize: 8
   },
+  kindMicro: { fontSize: 6 },
   label: {
     color: "#f9fbf7",
     fontSize: 12,
@@ -83,6 +87,7 @@ const styles = StyleSheet.create({
   labelCompact: {
     fontSize: 10
   },
+  labelMicro: { fontSize: 8 },
   name: {
     color: "#a9b8ae",
     fontSize: 9,
@@ -105,5 +110,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     marginTop: 0,
     padding: 5
-  }
+  },
+  wrapMicro: { gap: 2, padding: 3 }
 });

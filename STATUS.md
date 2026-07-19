@@ -1,5 +1,13 @@
 # Status
 
+## 2026-07-19 web arcade interaction hotfix
+
+- Bug Tower web-hold toont geen copy/selectiemenu meer; pickups staan los van treden en rockets vliegen langer en verder.
+- Bubble Swarm gebruikt Bomb/Freeze-gridbubbels en vloeiende, positievaste drukrijen; Web Runner ondersteunt swipe-up jump.
+- Train-X sluit direct en Nest Defense-controls staan buiten het speelveld zonder de mobiele overlay uit de aangeleverde screenshot.
+- Web-hotfix staat productie op `https://bugbaas.vercel.app`, deployment `dpl_9pKLUM1DmuaC1oF9HodtUdekqtRW` (`READY`).
+- Android/APK is niet gewijzigd of opnieuw uitgebracht voor deze webgerichte hotfix.
+
 ## 2026-07-19 regression repair release 2.10.10
 
 - Het nieuwe-meldingsformulier toont Bug, Tip, Trick en Idee altijd direct; de gekozen categorie blijft bepalend voor de velden.

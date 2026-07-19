@@ -8,9 +8,10 @@ import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
 
 type Props = { onBack: () => void; onResult?: (result: ArcadeRunResult) => void; practice?: boolean; ranked?: boolean; seed?: string; user: User };
 type GameState = "ready" | "result" | "running";
-type Platform = { coin?: boolean; drift: number; floor: number; id: string; rocket?: boolean; spring?: boolean; width: number; x: number; y: number };
+type Platform = { drift: number; floor: number; id: string; width: number; x: number; y: number };
+type TowerPickup = { id: string; kind: "coin" | "rocket" | "spring"; x: number; y: number };
 type Player = { grounded: boolean; highJump: boolean; lastGroundAt: number; spinAngle: number; spinning: boolean; vx: number; vy: number; x: number; y: number };
-type RenderState = { chainProgress: number; chainUntil: number; charge: number; combo: number; elapsed: number; floor: number; maxCombo: number; platforms: Platform[]; player: Player; rocketActive: boolean; score: number; springReady: boolean };
+type RenderState = { chainProgress: number; chainUntil: number; charge: number; combo: number; elapsed: number; floor: number; maxCombo: number; pickups: TowerPickup[]; platforms: Platform[]; player: Player; rocketActive: boolean; score: number; springReady: boolean };
 
 const tickMs = 20;
 const gravity = 0.13;
@@ -20,6 +21,8 @@ const playerHalfWidth = 6.5;
 const playerHalfHeight = 5.2;
 const maxDurationMs = 120000;
 const landingChainWindowMs = 360;
+const rocketDurationMs = 3000;
+const rocketClimbSpeed = -0.76;
 const towerBackground = require("../../../assets/minigames/bug-tower/bug-tower-background.png");
 const towerJungleBackground = require("../../../assets/minigames/bug-tower/bug-tower-jungle.png");
 const towerForgeBackground = require("../../../assets/minigames/bug-tower/bug-tower-forge.png");
@@ -37,6 +40,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
   const [renderState, setRenderState] = useState<RenderState>(() => initialRenderState("preview"));
   const playerRef = useRef<Player>(initialPlayer());
   const platformsRef = useRef<Platform[]>([]);
+  const pickupsRef = useRef<TowerPickup[]>([]);
   const seedRef = useRef(createArcadeSeed("bug_tower", user.uid));
   const nextFloorRef = useRef(1);
   const landedFloorRef = useRef(0);
@@ -75,8 +79,10 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
   function start() {
     seedRef.current = seed ?? createArcadeSeed("bug_tower", `${user.uid}:${Date.now()}`);
     const initial = buildInitialPlatforms(seedRef.current);
+    const initialPickups = initial.map((platform) => createTowerPickup(platform, seedRef.current)).filter((pickup): pickup is TowerPickup => Boolean(pickup));
     playerRef.current = initialPlayer();
     platformsRef.current = initial;
+    pickupsRef.current = initialPickups;
     nextFloorRef.current = initial.length;
     landedFloorRef.current = 0;
     scoreRef.current = 0;
@@ -94,7 +100,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
     springReadyRef.current = false;
     setResult(null);
     setHeldDirection(0);
-    setRenderState({ chainProgress: 0, chainUntil: 0, charge: 0, combo: 0, elapsed: 0, floor: 0, maxCombo: 0, platforms: initial, player: initialPlayer(), rocketActive: false, score: 0, springReady: false });
+    setRenderState({ chainProgress: 0, chainUntil: 0, charge: 0, combo: 0, elapsed: 0, floor: 0, maxCombo: 0, pickups: initialPickups, platforms: initial, player: initialPlayer(), rocketActive: false, score: 0, springReady: false });
     setState("running");
     playBugSound("arcade_start");
   }
@@ -115,7 +121,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
       ? clamp(previous.vx * 0.96 + input * horizontalAcceleration, -maxHorizontalSpeed, maxHorizontalSpeed)
       : previous.vx * friction;
     if (previous.grounded && input) runDistanceRef.current = Math.min(32, runDistanceRef.current + Math.abs(vx));
-    const nextVy = rocketActive ? -0.55 : Math.min(2.25, previous.vy + gravity);
+    const nextVy = rocketActive ? rocketClimbSpeed : Math.min(2.25, previous.vy + gravity);
     let nextPlayer: Player = {
       ...previous,
       grounded: false,
@@ -123,7 +129,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
       vx,
       vy: nextVy,
       x: previous.x + vx,
-      y: previous.y + (rocketActive ? -0.55 : previous.vy + gravity)
+      y: previous.y + (rocketActive ? rocketClimbSpeed : previous.vy + gravity)
     };
 
     if (nextPlayer.x <= playerHalfWidth) {
@@ -136,6 +142,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
 
     const scroll = towerScrollSpeed(landedFloorRef.current, elapsed);
     let platforms = platformsRef.current.map((platform) => movePlatform(platform, scroll));
+    let pickups = pickupsRef.current.map((pickup) => ({ ...pickup, y: pickup.y + scroll }));
     nextPlayer.y += scroll;
 
     const oldBottom = previous.y + playerHalfHeight + scroll;
@@ -155,43 +162,55 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
         nextPlayer.spinAngle = 0;
         nextPlayer.spinning = false;
         landingChainUntilRef.current = chainLanding ? now + landingChainWindowMs : 0;
-        if (landing.coin) {
-          coinsCollectedRef.current += 1;
-          scoreRef.current += 45;
-          platforms = platforms.map((platform) => platform.id === landing.id ? { ...platform, coin: false } : platform);
-          playBugSound("arcade_pickup");
-        }
-        if (landing.rocket && rocketCooldownUntilRef.current <= now) {
-          rocketUntilRef.current = now + 1500;
-          rocketCooldownUntilRef.current = now + 9000;
-          platforms = platforms.map((platform) => platform.id === landing.id ? { ...platform, rocket: false } : platform);
-          playBugSound("arcade_build");
-        }
-        if (landing.spring) {
-          springReadyRef.current = true;
-          platforms = platforms.map((platform) => platform.id === landing.id ? { ...platform, spring: false } : platform);
-          playBugSound("arcade_pickup");
-        }
         if (landing.floor > landedFloorRef.current) landOnFloor(landing.floor, now);
       }
+    }
+
+    const collected = pickups.filter((pickup) => (
+      (pickup.kind !== "rocket" || rocketCooldownUntilRef.current <= now)
+      && Math.abs(pickup.x - nextPlayer.x) <= 7.5
+      && Math.abs(pickup.y - nextPlayer.y) <= 7.5
+    ));
+    if (collected.length) {
+      const collectedIds = new Set(collected.map((pickup) => pickup.id));
+      pickups = pickups.filter((pickup) => !collectedIds.has(pickup.id));
+      collected.forEach((pickup) => {
+        if (pickup.kind === "coin") {
+          coinsCollectedRef.current += 1;
+          scoreRef.current += 45;
+          playBugSound("arcade_pickup");
+        } else if (pickup.kind === "rocket" && rocketCooldownUntilRef.current <= now) {
+          rocketUntilRef.current = now + rocketDurationMs;
+          rocketCooldownUntilRef.current = now + 9000;
+          playBugSound("arcade_build");
+        } else if (pickup.kind === "spring") {
+          springReadyRef.current = true;
+          playBugSound("arcade_pickup");
+        }
+      });
     }
 
     if (nextPlayer.y < 36) {
       const cameraShift = 36 - nextPlayer.y;
       nextPlayer.y = 36;
       platforms = platforms.map((platform) => ({ ...platform, y: platform.y + cameraShift }));
+      pickups = pickups.map((pickup) => ({ ...pickup, y: pickup.y + cameraShift }));
     }
 
     platforms = platforms.filter((platform) => platform.y < 108);
+    pickups = pickups.filter((pickup) => pickup.y < 108);
     while (platforms.length === 0 || Math.min(...platforms.map((platform) => platform.y)) > -12) {
       const highest = platforms.reduce<Platform | null>((best, platform) => !best || platform.y < best.y ? platform : best, null);
       const next = createPlatform(highest, nextFloorRef.current, seedRef.current);
       platforms.push(next);
+      const pickup = createTowerPickup(next, seedRef.current);
+      if (pickup) pickups.push(pickup);
       nextFloorRef.current += 1;
     }
 
     playerRef.current = nextPlayer;
     platformsRef.current = platforms;
+    pickupsRef.current = pickups;
     scoreRef.current += 0.08 + Math.max(0, comboRef.current - 1) * 0.012;
     setRenderState({
       chainProgress: clamp((landingChainUntilRef.current - now) / landingChainWindowMs, 0, 1),
@@ -201,6 +220,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
       elapsed,
       floor: landedFloorRef.current,
       maxCombo: maxComboRef.current,
+      pickups,
       platforms,
       player: nextPlayer,
       rocketActive: rocketUntilRef.current > now,
@@ -208,7 +228,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
       springReady: springReadyRef.current
     });
 
-    if (!rocketActive && nextPlayer.y - playerHalfHeight > 105) finish();
+    if (rocketUntilRef.current <= now && nextPlayer.y - playerHalfHeight > 105) finish();
   }
 
   function beginRun(direction: -1 | 1) {
@@ -294,6 +314,10 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
 
   function back() {
     if (!practice && state !== "result") return;
+    if (practice) {
+      onBack();
+      return;
+    }
     if (state === "running") {
       Alert.alert("Leave Bug Tower?", "Your climb ends if you leave now.", [
         { text: "Keep climbing", style: "cancel" },
@@ -332,6 +356,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
                 </View>
               )}
               {renderState.platforms.map((platform) => <TowerPlatform key={platform.id} platform={platform} />)}
+              {renderState.pickups.map((pickup) => <TowerPickupView key={pickup.id} pickup={pickup} />)}
               <View style={styles.controlLayer}>
                 <Pressable
                   accessibilityLabel="Run left and release to jump"
@@ -428,9 +453,16 @@ function TowerPlatform({ platform }: { platform: Platform }) {
     }]}>
       <View style={styles.platformShine} />
       <Text numberOfLines={1} style={styles.floorNumber}>#{platform.floor}</Text>
-      {platform.coin && <View pointerEvents="none" style={styles.coin}><View style={styles.coinInset} /></View>}
-      {platform.rocket && <View pointerEvents="none" style={styles.rocketPickup}><Text style={styles.rocketPickupText}>▲</Text></View>}
-      {platform.spring && <View pointerEvents="none" style={styles.springPickup}><Text style={styles.springPickupText}>↟</Text></View>}
+    </View>
+  );
+}
+
+function TowerPickupView({ pickup }: { pickup: TowerPickup }) {
+  return (
+    <View pointerEvents="none" style={[styles.pickup, percentPosition(pickup.x, pickup.y)]}>
+      {pickup.kind === "coin" && <View style={styles.coin}><View style={styles.coinInset} /></View>}
+      {pickup.kind === "rocket" && <View style={styles.rocketPickup}><Text style={styles.rocketPickupText}>▲</Text></View>}
+      {pickup.kind === "spring" && <View style={styles.springPickup}><Text style={styles.springPickupText}>↟</Text></View>}
     </View>
   );
 }
@@ -461,7 +493,8 @@ function BugTowerSprite({ frame, large = false }: { frame: number; large?: boole
 
 function initialRenderState(seed: string): RenderState {
   const platforms = buildInitialPlatforms(seed);
-  return { chainProgress: 0, chainUntil: 0, charge: 0, combo: 0, elapsed: 0, floor: 0, maxCombo: 0, platforms, player: initialPlayer(), rocketActive: false, score: 0, springReady: false };
+  const pickups = platforms.map((platform) => createTowerPickup(platform, seed)).filter((pickup): pickup is TowerPickup => Boolean(pickup));
+  return { chainProgress: 0, chainUntil: 0, charge: 0, combo: 0, elapsed: 0, floor: 0, maxCombo: 0, pickups, platforms, player: initialPlayer(), rocketActive: false, score: 0, springReady: false };
 }
 
 function initialPlayer(): Player {
@@ -507,11 +540,20 @@ function createPlatform(previous: Platform | null, floor: number, seed: string):
   const driftRoll = seededNumber(seed, floor * 5 + 3);
   const moving = driftRoll < movingPlatformChance(floor);
   const drift = moving ? (seededNumber(seed, floor * 5 + 4) > 0.5 ? 1 : -1) * clamp(0.032 + floor * 0.0002, 0.032, 0.12) : 0;
-  const boost = platformBoostForFloor(seed, floor);
-  const rocket = boost === "rocket";
-  const spring = boost === "spring";
-  const coin = !boost && (floor === 3 || (floor > 0 && seededNumber(seed, floor * 5 + 6) > 0.82));
-  return { coin, drift, floor, id: `floor-${floor}`, rocket, spring, width, x, y: (previous?.y ?? 2) - gap };
+  return { drift, floor, id: `floor-${floor}`, width, x, y: (previous?.y ?? 2) - gap };
+}
+
+function createTowerPickup(platform: Platform, seed: string): TowerPickup | null {
+  if (platform.floor <= 0) return null;
+  const boost = platformBoostForFloor(seed, platform.floor);
+  const kind = boost ?? (platform.floor === 3 || seededNumber(seed, platform.floor * 5 + 6) > 0.82 ? "coin" : null);
+  if (!kind) return null;
+  return {
+    id: `pickup-${platform.floor}-${kind}`,
+    kind,
+    x: 8 + seededNumber(seed, platform.floor * 17 + 91) * 84,
+    y: platform.y - 4 - seededNumber(seed, platform.floor * 19 + 103) * 5
+  };
 }
 
 function platformBoostForFloor(seed: string, floor: number): "rocket" | "spring" | null {
@@ -592,7 +634,7 @@ const styles = StyleSheet.create({
   chainTutorialText: { color: "#fff7b2", fontSize: 11, fontWeight: "900", letterSpacing: 0.6 },
   chainTutorialTitle: { color: "#f8fbff", fontSize: 9, fontWeight: "900" },
   chainText: { color: "#fff7b2", fontSize: 12, fontWeight: "900" },
-  coin: { alignItems: "center", backgroundColor: "#facc15", borderColor: "#fff7ae", borderRadius: 999, borderWidth: 2, height: 18, justifyContent: "center", left: "50%", marginLeft: -9, position: "absolute", top: -24, width: 18 },
+  coin: { alignItems: "center", backgroundColor: "#facc15", borderColor: "#fff7ae", borderRadius: 999, borderWidth: 2, height: 18, justifyContent: "center", width: 18 },
   coinInset: { borderColor: "#b45309", borderRadius: 999, borderWidth: 2, height: 8, width: 8 },
   controlArrow: { color: "rgba(255,255,255,0.7)", fontSize: 48, fontWeight: "900", lineHeight: 50 },
   controlHalf: { alignItems: "center", flex: 1, justifyContent: "flex-end", paddingBottom: 18 },
@@ -620,6 +662,7 @@ const styles = StyleSheet.create({
   platformShine: { backgroundColor: "rgba(255,255,255,0.5)", borderRadius: 999, height: 2, left: 5, position: "absolute", right: 5, top: 2 },
   platformSky: { backgroundColor: "#38bdf8", borderBottomColor: "#075985", borderColor: "#f0f9ff" },
   platformVoid: { backgroundColor: "#ec4899", borderBottomColor: "#701a75", borderColor: "#fce7f3" },
+  pickup: { alignItems: "center", height: 30, justifyContent: "center", marginLeft: -15, marginTop: -15, position: "absolute", width: 30, zIndex: 8 },
   player: { alignItems: "center", height: 72, justifyContent: "center", marginLeft: -32, marginTop: -36, position: "absolute", width: 64, zIndex: 7 },
   playfield: { flex: 1 },
   primaryButton: { alignItems: "center", backgroundColor: "#168b65", borderRadius: 10, justifyContent: "center", minHeight: 52, paddingHorizontal: 20, width: "100%" },
@@ -630,10 +673,10 @@ const styles = StyleSheet.create({
   secondaryButton: { alignItems: "center", borderColor: "#dce9ff", borderRadius: 10, borderWidth: 1, justifyContent: "center", minHeight: 48, paddingHorizontal: 20, width: "100%" },
   secondaryText: { color: "#f8fbff", fontSize: 16, fontWeight: "900" },
   rocketFlame: { backgroundColor: "#facc15", borderColor: "#fb923c", borderRadius: 999, borderWidth: 2, bottom: -14, height: 22, position: "absolute", width: 12 },
-  rocketPickup: { alignItems: "center", backgroundColor: "#f97316", borderColor: "#ffedd5", borderRadius: 8, borderWidth: 2, height: 24, justifyContent: "center", left: "50%", marginLeft: -10, position: "absolute", top: -30, width: 20 },
+  rocketPickup: { alignItems: "center", backgroundColor: "#f97316", borderColor: "#ffedd5", borderRadius: 8, borderWidth: 2, height: 24, justifyContent: "center", width: 20 },
   rocketPickupText: { color: "#fff", fontSize: 13, fontWeight: "900" },
   shell: { backgroundColor: "#050d24", flex: 1 },
-  springPickup: { alignItems: "center", backgroundColor: "#22c55e", borderColor: "#dcfce7", borderRadius: 999, borderWidth: 2, height: 24, justifyContent: "center", left: "50%", marginLeft: -12, position: "absolute", top: -30, width: 24 },
+  springPickup: { alignItems: "center", backgroundColor: "#22c55e", borderColor: "#dcfce7", borderRadius: 999, borderWidth: 2, height: 24, justifyContent: "center", width: 24 },
   springPickupText: { color: "#fff", fontSize: 16, fontWeight: "900", lineHeight: 18 },
   spriteFrame: { overflow: "hidden" },
   squadOverlay: { position: "absolute", right: 8, top: 42, zIndex: 9 },

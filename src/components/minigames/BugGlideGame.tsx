@@ -340,6 +340,10 @@ export function BugGlideGame({ onBack, onResult, practice = false, ranked = fals
 
   function back() {
     if (!practice && state !== "result") return;
+    if (practice) {
+      onBack();
+      return;
+    }
     if (state === "running") {
       Alert.alert("Leave Bug Glide?", "Your run stops if you go back now.", [{ text: "Stay", style: "cancel" }, { text: "Leave", style: "destructive", onPress: onBack }]);
       return;
