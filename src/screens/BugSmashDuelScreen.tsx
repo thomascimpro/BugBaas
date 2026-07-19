@@ -2576,7 +2576,14 @@ function renderTargets(
             width: targetSize
           }
         ]}
-        onPointerDown={Platform.OS === "web" ? () => onHit(bugId, motion) : undefined}
+        onPointerDown={Platform.OS === "web" ? (event: any) => {
+          event.currentTarget.__bugBaasPointerDownAt = Date.now();
+          onHit(bugId, motion);
+        } : undefined}
+        {...Platform.select({ web: { onClick: (event: any) => {
+          const pointerDownAt = Number(event.currentTarget.__bugBaasPointerDownAt ?? 0);
+          if (Date.now() - pointerDownAt > 500) onHit(bugId, motion);
+        } } as any })}
         onPressIn={Platform.OS === "web" ? undefined : () => onHit(bugId, motion)}
       >
         {feedback && !sprayMode && <BugSwatterHit bugSize={44} feedback={feedback} style={styles.targetSwatter} />}
