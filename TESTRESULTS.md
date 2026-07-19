@@ -683,4 +683,6 @@ Datum: 2026-06-02
 - APK: `dist/BugBaas-2.10.11.apk`, 83,890,957 bytes, package `nl.cimpro.bugbaas`, versionCode `191`, versionName `2.10.11`, minSdk 26, targetSdk 36.
 - APK Signature Scheme v2 passed; existing debug certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
 - APK SHA-256: `73201DD771063C62127F9ED284889DA18159DC82697D16C25E0624C965828DB3`.
+- Local and production web bundle SHA-256 match: `0467CFA717D7F3154DDF2FDD347294DBA5E4E409B66860A59CD90EA809D32A62`.
+- GitHub latest release: `v2.10.11`; APK asset present with exact size 83,890,957 bytes.
 - `adb devices -l`: no connected device; physical install and native touch-feel remain unverified.

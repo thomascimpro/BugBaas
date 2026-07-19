@@ -112,4 +112,4 @@
 - Five FitnessSyncer Firebase Functions are active and protected by Firebase authentication; container cleanup is set to seven days.
 - FitnessSyncer Client ID, Client Secret, and token encryption key are not configured yet; the production UI therefore remains hidden by design.
 - Web 2.10.11 is live on `https://bugbaas.vercel.app`, deployment `dpl_BMZtL6j5ZmsjkrZ5C4Gn7heqUSrL` (`READY`).
-- Android 2.10.11 is built as `dist/BugBaas-2.10.11.apk`; GitHub publication is in progress.
+- Android 2.10.11 is published as `dist/BugBaas-2.10.11.apk`; GitHub Release `v2.10.11` is latest.
