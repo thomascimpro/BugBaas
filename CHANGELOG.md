@@ -1,7 +1,16 @@
 # Changelog
 
+## 2.10.18
+
+- BugScan stuurt een scherpere 1536 px-foto naar de herkennings-AI en toont altijd wat volgens de AI op de foto staat.
+- Herkenning benoemt eerst de werkelijke soort en vergelijkt die daarna pas met BugDex, zodat geen dichtstbijzijnde catalogusbug wordt geforceerd.
+- Soorten buiten BugDex worden met vinder, soortnamen, confidence, uitleg, feitje en reviewfoto voor developer-review opgeslagen.
+- Verborgen testaccounts zijn uit de productieomgeving verwijderd.
+
 ## 2.10.17
 
+- BugScan stuurt voortaan een veel scherpere foto naar de herkennings-AI en toont ook bij een onzekere of afgekeurde scan wat er volgens de AI op de foto staat.
+- Soorten buiten de BugDex worden met vinder, soortnaam, confidence, uitleg, feitje en reviewfoto als developer-record opgeslagen.
 - 48 nieuwe Nederlandse BugDex-soorten gebruiken eigen transparante, visueel gecontroleerde afbeeldingen.
 - BugScan verbruikt alleen een dagelijkse poging bij een geldige BugDex-match of een zekere nieuwe soort; onzekere, slechte of bugloze foto's kosten geen poging.
 - Een zekere soort buiten de catalogus wordt als developer-suggestie vastgelegd; bestaande BugDex-soorten geven de normale reward.

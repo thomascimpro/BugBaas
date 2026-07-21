@@ -16,9 +16,16 @@ const user = {
 const identification = {
   bugId: null,
   commonName: "Aziatisch lieveheersbeestje",
+  commonNameEn: "Asian lady beetle",
+  commonNameFr: "Coccinelle asiatique",
   scientificName: "Harmonia axyridis",
+  fact: "Deze soort kent veel verschillende kleurpatronen.",
+  factEn: "This species has many different color patterns.",
+  factFr: "Cette espèce présente de nombreux motifs de couleur.",
   confidence: 0.92,
-  reason: "De soort staat niet in de huidige BugDex."
+  reason: "De soort staat niet in de huidige BugDex.",
+  reasonEn: "The species is not in the current BugDex.",
+  reasonFr: "L'espèce ne figure pas dans le BugDex actuel."
 };
 
 test("normalizes a stable species key", () => {
@@ -38,6 +45,7 @@ test("builds an immutable reward owed record", () => {
   assert.equal(record.userId, "user-1");
   assert.equal(record.normalizedSpeciesKey, "harmonia-axyridis");
   assert.equal(record.bugDexBugId, null);
+  assert.match(record.factEn, /color patterns/);
   assert.equal(record.createdAt, record.updatedAt);
 });
 

@@ -10,13 +10,13 @@ export type RealBugPhotoPlan = {
   quality: number;
 };
 
-const primaryMaxSide = 768;
-const primaryQuality = 0.6;
-const fallbackMaxSide = 640;
-const fallbackQuality = 0.5;
+const primaryMaxSide = 1536;
+const primaryQuality = 0.9;
+const fallbackMaxSide = 1280;
+const fallbackQuality = 0.8;
 const reviewThumbnailMaxSide = 320;
 const reviewThumbnailQuality = 0.35;
-const fallbackThresholdBytes = 750 * 1024;
+const fallbackThresholdBytes = 4 * 1024 * 1024;
 
 function resizeActions(width: number, height: number, maxSide: number): RealBugPhotoResizeAction[] {
   const safeWidth = Number.isFinite(width) ? Math.max(0, width) : 0;

@@ -43,7 +43,12 @@ test("marks a confident named species outside the catalog as reward owed", () =>
     catalogStatus: "not_in_catalog",
     matchedBugId: null,
     commonName: "Aziatisch lieveheersbeestje",
+    commonNameEn: "Asian lady beetle",
+    commonNameFr: "Coccinelle asiatique",
     scientificName: "Harmonia axyridis",
+    fact: "Deze soort heeft veel verschillende kleurpatronen.",
+    factEn: "This species has many different color patterns.",
+    factFr: "Cette espèce présente de nombreux motifs de couleur.",
     confidence: 0.92,
     reason: "Kenmerkend halsschild en variabele dekschildtekening."
   }, catalog);
@@ -51,6 +56,29 @@ test("marks a confident named species outside the catalog as reward owed", () =>
   assert.equal(result.status, "not_in_catalog");
   assert.equal(result.identification.bugId, null);
   assert.equal(result.identification.scientificName, "Harmonia axyridis");
+  assert.match(result.identification.fact, /kleurpatronen/);
+});
+
+test("rejects a forced nearest BugDex match and stores it as a missing species", () => {
+  const result = normalizeIdentification({
+    containsBug: true,
+    imageQuality: "good",
+    catalogStatus: "matched",
+    matchedBugId: "lieveheersbeestje",
+    commonName: "Aziatisch lieveheersbeestje",
+    commonNameEn: "Asian lady beetle",
+    commonNameFr: "Coccinelle asiatique",
+    scientificName: "Harmonia axyridis",
+    fact: "Deze soort heeft veel verschillende kleurpatronen.",
+    factEn: "This species has many different color patterns.",
+    factFr: "Cette espèce présente de nombreux motifs de couleur.",
+    confidence: 0.94,
+    reason: "De specifieke soort is niet als eigen BugDex-entry aanwezig."
+  }, catalog);
+
+  assert.equal(result.status, "not_in_catalog");
+  assert.equal(result.identification.bugId, null);
+  assert.equal(result.identification.commonName, "Aziatisch lieveheersbeestje");
 });
 
 test("fills empty model text fields before returning the API contract", () => {

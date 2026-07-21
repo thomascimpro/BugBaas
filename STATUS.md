@@ -1,5 +1,23 @@
 # Status
 
+## 2026-07-21 release 2.10.18
+
+- Release scope: sharper BugScan input, honest subject-first identification, localized missing-species developer records and hidden test-account cleanup.
+- Version metadata is aligned at 2.10.18 / Android versionCode 198.
+- Firebase Rules are live on `thomascimpro-6266f` and Vercel production deployment `dpl_2gwHfcpXmMgytVoMuSPsEhAJszGk` is `READY` on `https://bugbaas.vercel.app`.
+- Signed APK `dist/BugBaas-2.10.18.apk` is built and verified; physical-device smoke testing was not possible because ADB reported no connected device.
+- Commit/tag publication is in progress; GitHub Release asset upload is blocked because GitHub CLI is not logged in.
+
+## 2026-07-21 BugScan missing-species correction
+
+- BugScan sends a 1536 px JPEG at quality 0.90 to AI, with a 1280 px/0.80 fallback only above 4 MB, instead of the former 768 px/0.60 input.
+- BugScan identifies the photographed taxon before comparing it with BugDex and rejects a forced nearest catalog match server-side.
+- The result always displays the AI's honest name for the visible subject, including unclear and rejected photos.
+- A confidently identified species outside BugDex now shows and stores localized names, facts, and explanations in Dutch, English, and French under `pendingBugDexDiscoveries`.
+- Developer/admin Firebase claims can review and resolve discovery records; existing 2.10.17 clients remain compatible with the updated rules.
+- All 37 live users marked `testAccount: true` and their 477 Firestore documents were removed from Firebase; no marked accounts remain.
+- The complete BugScan page is translated in Dutch, English, and French. Deployment is still pending release approval.
+
 ## 2026-07-21 release 2.10.17
 
 - Alle 48 ontbrekende BugDex-afbeeldingen zijn toegevoegd, transparant gemaakt, geoptimaliseerd en gekoppeld aan de catalogus.

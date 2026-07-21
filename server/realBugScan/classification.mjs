@@ -13,6 +13,15 @@ function clampConfidence(value) {
   return Math.min(1, Math.max(0, number));
 }
 
+function normalizedTaxonName(value) {
+  return cleanString(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 export function buildBugCatalogPrompt(catalog) {
   return catalog.map((entry) => `${entry.id}: ${entry.name}`).join("\n");
 }
@@ -52,29 +61,45 @@ export function normalizeIdentification(
   const matchedEntry = requestedBugId ? catalogMap.get(requestedBugId) : null;
   const confidence = clampConfidence(raw?.confidence);
   const commonName = cleanString(raw?.commonName, containsBug ? "Onbekende bug" : "Geen bug herkend");
+  const commonNameEn = cleanString(raw?.commonNameEn, commonName);
+  const commonNameFr = cleanString(raw?.commonNameFr, commonName);
   const scientificName = cleanString(raw?.scientificName);
+  const fact = cleanString(raw?.fact);
+  const factEn = cleanString(raw?.factEn, fact);
+  const factFr = cleanString(raw?.factFr, fact);
   const reason = cleanString(raw?.reason, "De foto kon niet betrouwbaar worden beoordeeld.");
+  const reasonEn = cleanString(raw?.reasonEn, reason);
+  const reasonFr = cleanString(raw?.reasonFr, reason);
+  const exactCatalogNameMatch = Boolean(matchedEntry)
+    && normalizedTaxonName(commonName) === normalizedTaxonName(matchedEntry.name);
 
   let status;
   if (!containsBug) status = "rejected_no_bug";
   else if (imageQuality === "poor") status = "rejected_quality";
-  else if (catalogStatus === "matched" && matchedEntry && confidence >= autoAwardThreshold) status = "matched";
+  else if (catalogStatus === "matched" && exactCatalogNameMatch && confidence >= autoAwardThreshold) status = "matched";
   else if (
-    catalogStatus === "not_in_catalog"
-    && !matchedEntry
+    (catalogStatus === "not_in_catalog" || (catalogStatus === "matched" && matchedEntry && !exactCatalogNameMatch))
     && confidence >= missingCatalogThreshold
     && specificMissingSpeciesName(commonName, scientificName)
+    && fact.length >= 12
   ) status = "not_in_catalog";
   else status = "pending_review";
 
   return {
     status,
     identification: {
-      bugId: matchedEntry?.id ?? null,
-      commonName: matchedEntry?.name ?? commonName,
+      bugId: status === "not_in_catalog" ? null : matchedEntry?.id ?? null,
+      commonName: status === "matched" ? matchedEntry?.name ?? commonName : commonName,
+      commonNameEn,
+      commonNameFr,
       scientificName,
+      fact,
+      factEn,
+      factFr,
       confidence,
-      reason
+      reason,
+      reasonEn,
+      reasonFr
     }
   };
 }

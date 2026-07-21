@@ -10,9 +10,16 @@ const validResponse = {
   identification: {
     bugId: "lieveheersbeestje",
     commonName: "Lieveheersbeestje",
+    commonNameEn: "Ladybug",
+    commonNameFr: "Coccinelle",
     scientificName: "Coccinellidae",
+    fact: "Lieveheersbeestjes eten vaak bladluizen.",
+    factEn: "Ladybugs often eat aphids.",
+    factFr: "Les coccinelles mangent souvent des pucerons.",
     confidence: 0.93,
-    reason: "Rode dekschilden met zwarte stippen."
+    reason: "Rode dekschilden met zwarte stippen.",
+    reasonEn: "Red wing cases with black spots.",
+    reasonFr: "Élytres rouges avec des points noirs."
   },
   reward: {
     granted: true,
@@ -68,9 +75,16 @@ test("parses a confident species that is not in the BugDex", () => {
     identification: {
       bugId: null,
       commonName: "Aziatisch lieveheersbeestje",
+      commonNameEn: "Asian lady beetle",
+      commonNameFr: "Coccinelle asiatique",
       scientificName: "Harmonia axyridis",
+      fact: "Deze soort heeft veel kleurvormen.",
+      factEn: "This species has many color forms.",
+      factFr: "Cette espèce présente de nombreuses formes colorées.",
       confidence: 0.92,
-      reason: "De soort staat niet in de aangeleverde catalogus."
+      reason: "De soort staat niet in de aangeleverde catalogus.",
+      reasonEn: "The species is not in the supplied catalog.",
+      reasonFr: "L'espèce ne figure pas dans le catalogue fourni."
     }
   } as const;
   assert.deepEqual(parseRealBugIdentifyApiResponse(apiResponse), apiResponse);

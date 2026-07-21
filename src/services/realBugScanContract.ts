@@ -9,9 +9,16 @@ export type RealBugScanStatus =
 export type RealBugIdentification = {
   bugId: string | null;
   commonName: string;
+  commonNameEn: string;
+  commonNameFr: string;
   scientificName: string;
+  fact: string;
+  factEn: string;
+  factFr: string;
   confidence: number;
   reason: string;
+  reasonEn: string;
+  reasonFr: string;
 };
 
 export type RealBugScanReward = {
@@ -70,14 +77,28 @@ function normalizeIdentification(value: unknown): RealBugIdentification {
     ? ""
     : value.scientificName;
   if (typeof scientificName !== "string") invalidResponse();
+  const fact = typeof value.fact === "string" ? value.fact.trim() : "";
+  const commonNameEn = typeof value.commonNameEn === "string" ? value.commonNameEn.trim() : value.commonName.trim();
+  const commonNameFr = typeof value.commonNameFr === "string" ? value.commonNameFr.trim() : value.commonName.trim();
+  const factEn = typeof value.factEn === "string" ? value.factEn.trim() : fact;
+  const factFr = typeof value.factFr === "string" ? value.factFr.trim() : fact;
   if (typeof value.confidence !== "number" || value.confidence < 0 || value.confidence > 1) invalidResponse();
   if (!isNonEmptyString(value.reason)) invalidResponse();
+  const reasonEn = typeof value.reasonEn === "string" ? value.reasonEn.trim() : value.reason.trim();
+  const reasonFr = typeof value.reasonFr === "string" ? value.reasonFr.trim() : value.reason.trim();
   return {
     bugId,
     commonName: value.commonName.trim(),
+    commonNameEn,
+    commonNameFr,
     scientificName: scientificName.trim(),
+    fact,
+    factEn,
+    factFr,
     confidence: value.confidence,
-    reason: value.reason.trim()
+    reason: value.reason.trim(),
+    reasonEn,
+    reasonFr
   };
 }
 

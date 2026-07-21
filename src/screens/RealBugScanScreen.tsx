@@ -4,6 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { BugArtImage } from "../components/BugArtImage";
+import { type Language, useI18n } from "../services/i18n";
 import { type RealBugScanResponse } from "../services/realBugScanContract";
 import {
   fallbackRealBugPhotoPlan,
@@ -27,57 +28,66 @@ type PreparedPhoto = {
   reviewThumbnailDataUrl: string;
 };
 
-function resultCopy(result: RealBugScanResponse): { eyebrow: string; title: string; body: string } {
+type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+function localizedIdentification(result: RealBugScanResponse, language: Language): { name: string; fact: string; reason: string } {
+  if (language === "en") return { name: result.identification.commonNameEn, fact: result.identification.factEn, reason: result.identification.reasonEn };
+  if (language === "fr") return { name: result.identification.commonNameFr, fact: result.identification.factFr, reason: result.identification.reasonFr };
+  return { name: result.identification.commonName, fact: result.identification.fact, reason: result.identification.reason };
+}
+
+function resultCopy(result: RealBugScanResponse, t: Translate, displayName: string): { eyebrow: string; title: string; body: string } {
   if (result.status === "matched" && result.reward?.granted) {
     return {
-      eyebrow: "BUGDEX REWARD",
-      title: `${result.reward.bugName} gevangen`,
-      body: "Deze echte vondst is als nieuwe bug aan je BugDex toegevoegd."
+      eyebrow: t("bugScan.result.reward.eyebrow"),
+      title: t("bugScan.result.reward.title", { name: displayName }),
+      body: t("bugScan.result.reward.body")
     };
   }
   if (result.status === "matched") {
     return {
-      eyebrow: "ECHTE VONDST",
-      title: result.reward?.bugName ?? result.identification.commonName,
-      body: "Deze soort stond al in je BugDex. De echte vondst is geregistreerd zonder extra kopie."
+      eyebrow: t("bugScan.result.matched.eyebrow"),
+      title: displayName,
+      body: t("bugScan.result.matched.body")
     };
   }
   if (result.status === "already_spotted") {
     return {
-      eyebrow: "AL GESPOT",
-      title: result.reward?.bugName ?? result.identification.commonName,
-      body: "Je had deze soort al eerder in het echt gescand. Er wordt geen extra BugDex-kopie gegeven."
+      eyebrow: t("bugScan.result.seen.eyebrow"),
+      title: displayName,
+      body: t("bugScan.result.seen.body")
     };
   }
   if (result.status === "not_in_catalog") {
     return {
-      eyebrow: "NIEUWE SOORT ONTDEKT",
-      title: result.identification.commonName,
-      body: "Deze bug staat nog niet in de BugDex. Je vondst is opgeslagen. Zodra deze soort wordt toegevoegd, staat je BugDex-reward voor je klaar."
+      eyebrow: t("bugScan.result.newSpecies.eyebrow"),
+      title: displayName,
+      body: t("bugScan.result.newSpecies.body")
     };
   }
   if (result.status === "pending_review") {
     return {
-      eyebrow: "NOG NIET ZEKER",
-      title: result.identification.commonName,
-      body: "De AI ziet waarschijnlijk een bug, maar de match is niet betrouwbaar genoeg voor een automatische reward."
+      eyebrow: t("bugScan.result.uncertain.eyebrow"),
+      title: displayName,
+      body: t("bugScan.result.uncertain.body")
     };
   }
   if (result.status === "rejected_quality") {
     return {
-      eyebrow: "FOTO TE ONDUIDELIJK",
-      title: "Probeer dichterbij",
-      body: "Zorg voor meer licht en houd de bug scherp en groot in beeld."
+      eyebrow: t("bugScan.result.quality.eyebrow"),
+      title: displayName,
+      body: t("bugScan.result.quality.body")
     };
   }
   return {
-    eyebrow: "GEEN BUG HERKEND",
-    title: "Geen duidelijke bug gevonden",
-    body: "Fotografeer één insect of spin van dichtbij, zonder handen of andere grote onderwerpen ervoor."
+    eyebrow: t("bugScan.result.noBug.eyebrow"),
+    title: displayName,
+    body: t("bugScan.result.noBug.body")
   };
 }
 
 export function RealBugScanScreen({ user, onBack }: Props) {
+  const { language, t } = useI18n();
   const cameraRef = useRef<CameraView | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -115,7 +125,7 @@ export function RealBugScanScreen({ user, onBack }: Props) {
         asset.uri,
         primaryRealBugPhotoPlan(asset.width ?? 0, asset.height ?? 0)
       );
-      if (!primary.base64) throw new Error("De foto kon niet worden voorbereid.");
+      if (!primary.base64) throw new Error(t("bugScan.error.prepare"));
 
       const prepared = shouldFallbackRealBugPhoto(primary.base64)
         ? await manipulatePhoto(
@@ -123,13 +133,13 @@ export function RealBugScanScreen({ user, onBack }: Props) {
             fallbackRealBugPhotoPlan(primary.width ?? 0, primary.height ?? 0)
           )
         : primary;
-      if (!prepared.base64) throw new Error("De foto kon niet worden voorbereid.");
+      if (!prepared.base64) throw new Error(t("bugScan.error.prepare"));
 
       const thumbnail = await manipulatePhoto(
         prepared.uri,
         reviewRealBugThumbnailPlan(prepared.width ?? 0, prepared.height ?? 0)
       );
-      if (!thumbnail.base64) throw new Error("De review-thumbnail kon niet worden voorbereid.");
+      if (!thumbnail.base64) throw new Error(t("bugScan.error.thumbnail"));
 
       setPhoto({
         dataUrl: `data:image/jpeg;base64,${prepared.base64}`,
@@ -137,7 +147,7 @@ export function RealBugScanScreen({ user, onBack }: Props) {
         reviewThumbnailDataUrl: `data:image/jpeg;base64,${thumbnail.base64}`
       });
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "De foto kon niet worden geopend.");
+      setError(nextError instanceof Error ? nextError.message : t("bugScan.error.openPhoto"));
     } finally {
       setBusy(false);
     }
@@ -146,19 +156,19 @@ export function RealBugScanScreen({ user, onBack }: Props) {
   async function openCamera() {
     setError("");
     if (remainingScans <= 0) {
-      setError("Je hebt vandaag al drie echte bugs gescand.");
+      setError(t("bugScan.error.limit"));
       return;
     }
     try {
       const permission = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
       if (!permission.granted) {
-        setError("Cameratoegang is nodig om een bug te fotograferen.");
+        setError(t("bugScan.error.cameraPermission"));
         return;
       }
       setCameraReady(false);
       setCameraOpen(true);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "De camera kon niet worden geopend.");
+      setError(nextError instanceof Error ? nextError.message : t("bugScan.error.cameraOpen"));
     }
   }
 
@@ -168,12 +178,12 @@ export function RealBugScanScreen({ user, onBack }: Props) {
     setError("");
     try {
       const captured = await cameraRef.current.takePictureAsync({ quality: 1 });
-      if (!captured) throw new Error("De camera gaf geen foto terug.");
+      if (!captured) throw new Error(t("bugScan.error.noCapture"));
       setCameraOpen(false);
       setCameraReady(false);
       await prepareAsset(normalizeRealBugCameraAsset(captured));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "De foto kon niet worden gemaakt.");
+      setError(nextError instanceof Error ? nextError.message : t("bugScan.error.capture"));
     } finally {
       setCapturing(false);
     }
@@ -182,7 +192,7 @@ export function RealBugScanScreen({ user, onBack }: Props) {
   async function selectPhoto() {
     setError("");
     if (remainingScans <= 0) {
-      setError("Je hebt vandaag al drie echte bugs gescand.");
+      setError(t("bugScan.error.limit"));
       return;
     }
     try {
@@ -193,7 +203,7 @@ export function RealBugScanScreen({ user, onBack }: Props) {
       });
       if (!picked.canceled && picked.assets[0]) await prepareAsset(picked.assets[0]);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "De foto kon niet worden geopend.");
+      setError(nextError instanceof Error ? nextError.message : t("bugScan.error.openPhoto"));
     }
   }
 
@@ -207,7 +217,7 @@ export function RealBugScanScreen({ user, onBack }: Props) {
       setRemainingScans(nextResult.remainingScans);
     } catch (nextError) {
       if (nextError instanceof RealBugScanLimitError) setRemainingScans(0);
-      setError(nextError instanceof Error ? nextError.message : "De bugscan is mislukt.");
+      setError(nextError instanceof Error ? nextError.message : t("bugScan.error.failed"));
     } finally {
       setBusy(false);
     }
@@ -221,7 +231,8 @@ export function RealBugScanScreen({ user, onBack }: Props) {
     setError("");
   }
 
-  const copy = result ? resultCopy(result) : null;
+  const localized = result ? localizedIdentification(result, language) : null;
+  const copy = result && localized ? resultCopy(result, t, localized.name) : null;
   const matchedBugId = result?.reward?.bugId ?? result?.identification.bugId ?? undefined;
 
   return (
@@ -232,11 +243,11 @@ export function RealBugScanScreen({ user, onBack }: Props) {
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>BUGSCAN</Text>
-          <Text style={styles.title}>Scan een echte bug</Text>
+          <Text style={styles.title}>{t("bugScan.title")}</Text>
         </View>
         <View style={[styles.counter, remainingScans === 0 && styles.counterEmpty]}>
           <Text style={styles.counterValue}>{remainingScans}/3</Text>
-          <Text style={styles.counterLabel}>vandaag</Text>
+          <Text style={styles.counterLabel}>{t("bugScan.today")}</Text>
         </View>
       </View>
 
@@ -251,23 +262,23 @@ export function RealBugScanScreen({ user, onBack }: Props) {
               onMountError={(event) => {
                 setCameraOpen(false);
                 setCameraReady(false);
-                setError(event.message || "De camera kon niet worden gestart.");
+                setError(event.message || t("bugScan.error.cameraStart"));
               }}
               style={styles.cameraView}
             />
             <View pointerEvents="none" style={styles.cameraGuide}>
               <View style={styles.cameraGuideBox} />
-              <Text style={styles.cameraGuideText}>Plaats één bug binnen het kader</Text>
+              <Text style={styles.cameraGuideText}>{t("bugScan.camera.place")}</Text>
             </View>
           </View>
           <Pressable accessibilityRole="button" disabled={!cameraReady || capturing} onPress={() => void capturePhoto()} style={({ pressed }) => [styles.primaryButton, (!cameraReady || capturing) && styles.disabledButton, pressed && styles.pressed]}>
-            {capturing ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryButtonText}>Maak foto</Text>}
+            {capturing ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryButtonText}>{t("bugScan.camera.take")}</Text>}
           </Pressable>
           <Pressable accessibilityRole="button" disabled={capturing} onPress={() => {
             setCameraOpen(false);
             setCameraReady(false);
           }} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-            <Text style={styles.secondaryButtonText}>Sluit camera</Text>
+            <Text style={styles.secondaryButtonText}>{t("bugScan.camera.close")}</Text>
           </Pressable>
         </View>
       )}
@@ -278,23 +289,23 @@ export function RealBugScanScreen({ user, onBack }: Props) {
             <View style={styles.scannerRing}>
               <Text style={styles.scannerIcon}>⌖</Text>
             </View>
-            <Text style={styles.heroTitle}>Zet de bug groot in beeld</Text>
-            <Text style={styles.heroBody}>Gebruik daglicht, houd je telefoon stil en fotografeer bij voorkeur één bug tegelijk.</Text>
+            <Text style={styles.heroTitle}>{t("bugScan.hero.title")}</Text>
+            <Text style={styles.heroBody}>{t("bugScan.hero.body")}</Text>
             <View style={styles.stepsRow}>
-              <View style={styles.stepChip}><Text style={styles.stepNumber}>1</Text><Text style={styles.stepText}>Foto</Text></View>
+              <View style={styles.stepChip}><Text style={styles.stepNumber}>1</Text><Text style={styles.stepText}>{t("bugScan.step.photo")}</Text></View>
               <Text style={styles.stepArrow}>›</Text>
-              <View style={styles.stepChip}><Text style={styles.stepNumber}>2</Text><Text style={styles.stepText}>AI-check</Text></View>
+              <View style={styles.stepChip}><Text style={styles.stepNumber}>2</Text><Text style={styles.stepText}>{t("bugScan.step.check")}</Text></View>
               <Text style={styles.stepArrow}>›</Text>
-              <View style={styles.stepChip}><Text style={styles.stepNumber}>3</Text><Text style={styles.stepText}>Reward</Text></View>
+              <View style={styles.stepChip}><Text style={styles.stepNumber}>3</Text><Text style={styles.stepText}>{t("bugScan.step.reward")}</Text></View>
             </View>
           </View>
 
           <Pressable accessibilityRole="button" disabled={busy || remainingScans <= 0} onPress={() => void openCamera()} style={({ pressed }) => [styles.primaryButton, (busy || remainingScans <= 0) && styles.disabledButton, pressed && styles.pressed]}>
             <Text style={styles.primaryButtonIcon}>◉</Text>
-            <Text style={styles.primaryButtonText}>{remainingScans > 0 ? "Open live camera" : "Daglimiet bereikt"}</Text>
+            <Text style={styles.primaryButtonText}>{remainingScans > 0 ? t("bugScan.openCamera") : t("bugScan.limitReached")}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" disabled={busy || remainingScans <= 0} onPress={() => void selectPhoto()} style={({ pressed }) => [styles.secondaryButton, (busy || remainingScans <= 0) && styles.disabledSecondaryButton, pressed && styles.pressed]}>
-            <Text style={styles.secondaryButtonText}>Kies foto uit galerij</Text>
+            <Text style={styles.secondaryButtonText}>{t("bugScan.chooseGallery")}</Text>
           </Pressable>
         </>
       )}
@@ -308,13 +319,13 @@ export function RealBugScanScreen({ user, onBack }: Props) {
             <View pointerEvents="none" style={styles.cornerBottomLeft} />
             <View pointerEvents="none" style={styles.cornerBottomRight} />
           </View>
-          <Text style={styles.previewTitle}>Foto klaar voor analyse</Text>
-          <Text style={styles.previewBody}>Controleer of de bug scherp zichtbaar is. De foto wordt verkleind voordat hij naar de AI wordt gestuurd.</Text>
+          <Text style={styles.previewTitle}>{t("bugScan.preview.title")}</Text>
+          <Text style={styles.previewBody}>{t("bugScan.preview.body")}</Text>
           <Pressable accessibilityRole="button" disabled={busy} onPress={() => void analyzePhoto()} style={({ pressed }) => [styles.primaryButton, busy && styles.disabledButton, pressed && styles.pressed]}>
-            {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryButtonText}>Analyseer bug</Text>}
+            {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryButtonText}>{t("bugScan.analyze")}</Text>}
           </Pressable>
           <Pressable accessibilityRole="button" disabled={busy} onPress={resetScan} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-            <Text style={styles.secondaryButtonText}>Nieuwe foto</Text>
+            <Text style={styles.secondaryButtonText}>{t("bugScan.newPhoto")}</Text>
           </Pressable>
         </View>
       )}
@@ -329,18 +340,19 @@ export function RealBugScanScreen({ user, onBack }: Props) {
           <Text style={styles.resultBody}>{copy.body}</Text>
           <View style={styles.identificationCard}>
             <View style={styles.identificationHeader}>
-              <Text style={styles.identificationLabel}>AI-herkenning</Text>
+              <Text style={styles.identificationLabel}>{t("bugScan.identification")}</Text>
               <Text style={styles.confidence}>{Math.round(result.identification.confidence * 100)}%</Text>
             </View>
-            <Text style={styles.identificationName}>{result.identification.commonName}</Text>
+            <Text style={styles.identificationName}>{localized?.name}</Text>
             {result.identification.scientificName ? <Text style={styles.scientificName}>{result.identification.scientificName}</Text> : null}
-            <Text style={styles.reason}>{result.identification.reason}</Text>
+            <Text style={styles.reason}>{localized?.reason}</Text>
+            {localized?.fact ? <Text style={styles.reason}>{t("bugScan.fact", { fact: localized.fact })}</Text> : null}
           </View>
           <Pressable accessibilityRole="button" disabled={remainingScans <= 0} onPress={resetScan} style={({ pressed }) => [styles.primaryButton, remainingScans <= 0 && styles.disabledButton, pressed && styles.pressed]}>
-            <Text style={styles.primaryButtonText}>{remainingScans > 0 ? "Scan nog een bug" : "Morgen weer scannen"}</Text>
+            <Text style={styles.primaryButtonText}>{remainingScans > 0 ? t("bugScan.scanAgain") : t("bugScan.scanTomorrow")}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={onBack} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-            <Text style={styles.secondaryButtonText}>Terug naar home</Text>
+            <Text style={styles.secondaryButtonText}>{t("bugScan.backHome")}</Text>
           </Pressable>
         </View>
       )}
@@ -348,16 +360,16 @@ export function RealBugScanScreen({ user, onBack }: Props) {
       {busy && !photo && (
         <View style={styles.loadingCard}>
           <ActivityIndicator color="#15724f" size="large" />
-          <Text style={styles.loadingText}>Foto voorbereiden…</Text>
+          <Text style={styles.loadingText}>{t("bugScan.preparing")}</Text>
         </View>
       )}
 
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
       <View style={styles.privacyCard}>
-        <Text style={styles.privacyTitle}>AI-herkenning</Text>
-        <Text style={styles.privacyText}>De foto wordt verkleind en beveiligd naar de herkenningsservice gestuurd. Alleen een kleine reviewfoto van een nog onbekende soort kan worden bewaard.</Text>
-        <Text style={styles.misuseWarning}>Nep- of hergebruikte foto's worden gecontroleerd. Bij vastgesteld misbruik kan een passende accountmaatregel volgen.</Text>
+        <Text style={styles.privacyTitle}>{t("bugScan.identification")}</Text>
+        <Text style={styles.privacyText}>{t("bugScan.privacy")}</Text>
+        <Text style={styles.misuseWarning}>{t("bugScan.misuse")}</Text>
       </View>
     </ScrollView>
   );

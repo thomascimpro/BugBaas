@@ -11,10 +11,17 @@ export type PendingBugDexDiscoveryRecord = {
   userEmail: string;
   organizationId: string;
   commonName: string;
+  commonNameEn: string;
+  commonNameFr: string;
   scientificName: string;
+  fact: string;
+  factEn: string;
+  factFr: string;
   normalizedSpeciesKey: string;
   confidence: number;
   reason: string;
+  reasonEn: string;
+  reasonFr: string;
   createdAt: string;
   updatedAt: string;
   status: "reward_owed";
@@ -59,8 +66,9 @@ export function buildPendingBugDexDiscoveryRecord({
 
   const commonName = identification.commonName.trim().slice(0, 120);
   const scientificName = identification.scientificName.trim().slice(0, 160);
+  const fact = identification.fact.trim().slice(0, 500);
   const normalizedSpeciesKey = normalizePendingSpeciesKey(scientificName || commonName);
-  if (!commonName || !normalizedSpeciesKey) throw new Error("De ontbrekende soort heeft geen bruikbare naam.");
+  if (!commonName || !normalizedSpeciesKey || !fact) throw new Error("De ontbrekende soort heeft geen bruikbare naam of feitje.");
 
   return {
     scanId,
@@ -69,10 +77,17 @@ export function buildPendingBugDexDiscoveryRecord({
     userEmail: user.email.trim().slice(0, 180),
     organizationId: String(user.organizationId || "public").slice(0, 120),
     commonName,
+    commonNameEn: identification.commonNameEn.trim().slice(0, 120) || commonName,
+    commonNameFr: identification.commonNameFr.trim().slice(0, 120) || commonName,
     scientificName,
+    fact,
+    factEn: identification.factEn.trim().slice(0, 500) || fact,
+    factFr: identification.factFr.trim().slice(0, 500) || fact,
     normalizedSpeciesKey,
     confidence: identification.confidence,
     reason: identification.reason.trim().slice(0, 500),
+    reasonEn: identification.reasonEn.trim().slice(0, 500) || identification.reason.trim().slice(0, 500),
+    reasonFr: identification.reasonFr.trim().slice(0, 500) || identification.reason.trim().slice(0, 500),
     createdAt: now,
     updatedAt: now,
     status: "reward_owed",

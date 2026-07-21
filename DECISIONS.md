@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-07-21 BugScan recognition and developer review
+
+- AI identifies the photographed subject independently before receiving the BugDex comparison requirement; catalog entries are never candidate labels for the first identification step.
+- AI input uses a 1536 px/0.90 JPEG and falls back to 1280 px/0.80 only above 4 MB, preserving small anatomical details while remaining below the 6 MB API data-URL limit.
+- Missing BugDex taxa are stored in `pendingBugDexDiscoveries` with finder identity and localized review context; developer/admin claims can resolve those records.
+- Existing live documents are not overwritten by review flows, and hidden test-account cleanup is scoped exclusively to `testAccount: true` users.
+
 ## 2026-07-19 web auth, rewards and Tower hold hotfix
 
 - Web Google authentication uses the Firebase JavaScript SDK directly; native token exchange remains unchanged for Android.

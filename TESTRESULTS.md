@@ -1,5 +1,28 @@
 # Test Results
 
+## 2026-07-21 release 2.10.18
+
+- `npm run test:real-bug-scan`: 59/59 passed; `npm run typecheck` and `npx expo install --check`: passed.
+- Direct Expo production webexport: passed with 365 assets; remote Vercel build is `READY` as deployment `dpl_2gwHfcpXmMgytVoMuSPsEhAJszGk`.
+- `https://bugbaas.vercel.app` serves bundle `AppEntry-2bdeb6a2572a9bb17aae412c175d82d1.js`; bundle checks confirm version 2.10.18, 1536/1280 image policy and `pendingBugDexDiscoveries`.
+- Production `/api/real-bug-identify` GET returns HTTP 405 as expected; a real authenticated OpenAI photo scan was not performed.
+- Firebase Rules deployed successfully to project `thomascimpro-6266f` after compilation.
+- Android `assembleRelease`: `BUILD SUCCESSFUL`; APK package `nl.cimpro.bugbaas`, versionCode 198, versionName 2.10.18, minSdk 26, targetSdk 36, native ABI `arm64-v8a`.
+- APK `dist/BugBaas-2.10.18.apk`: 109,088,862 bytes; SHA-256 `8F47355E41DAF5678F12AE60DCF5C772A4ED0DFF2C5B4F35AB7C5966819A676B`.
+- APK Signature Scheme v2 passed; certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- `adb devices -l` returned no connected device, so physical install/camera quality and control-feel remain unverified.
+- Local `vercel build --prod` failed with Windows CLI error `spawn cmd.exe ENOENT`; direct Expo export and Vercel's remote production build both passed.
+
+## 2026-07-21 BugScan missing-species correction
+
+- `npm run typecheck`: passed.
+- BugScan client/server tests: 59/59 passed, including forced-nearest-match rejection and localized developer records.
+- Image-policy tests confirm 1536 px/0.90 primary input, 1280 px/0.80 fallback and the 4 MB fallback boundary.
+- Translation audit: 52 BugScan keys are present in Dutch, English, and French.
+- Firestore rules dry run: compiled successfully for project `thomascimpro-6266f`.
+- Live cleanup verification: 37 hidden Auth accounts and 477 related Firestore documents deleted; query for `testAccount: true` returns 0.
+- No production deployment or live OpenAI photo scan was performed in this change set.
+
 ## 2026-07-21 release 2.10.17
 
 - `npm run typecheck`: geslaagd.
