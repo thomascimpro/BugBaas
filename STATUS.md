@@ -6,7 +6,8 @@
 - Version metadata is aligned at 2.10.18 / Android versionCode 198.
 - Firebase Rules are live on `thomascimpro-6266f` and Vercel production deployment `dpl_2gwHfcpXmMgytVoMuSPsEhAJszGk` is `READY` on `https://bugbaas.vercel.app`.
 - Signed APK `dist/BugBaas-2.10.18.apk` is built and verified; physical-device smoke testing was not possible because ADB reported no connected device.
-- Commit/tag publication is in progress; GitHub Release asset upload is blocked because GitHub CLI is not logged in.
+- Release commit `d479d4f` is pushed to `origin/codex/BugBaas` and tag `v2.10.18` is published; GitHub Release asset upload is blocked because GitHub CLI is not logged in.
+- `origin/master` is not updated yet: it has a separately diverged history and cannot receive the current release as a fast-forward.
 
 ## 2026-07-21 BugScan missing-species correction
 
