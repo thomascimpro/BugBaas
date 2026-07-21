@@ -30,6 +30,7 @@ module.exports = () => ({
   extra: {
     ...(appConfig.expo.extra ?? {}),
     ...readExtra(),
-    fitnessSyncerApiBaseUrl: process.env.FITNESSSYNCER_API_BASE_URL ?? "https://us-central1-thomascimpro-6266f.cloudfunctions.net"
+    fitnessSyncerApiBaseUrl: process.env.FITNESSSYNCER_API_BASE_URL ?? "https://us-central1-thomascimpro-6266f.cloudfunctions.net",
+    realBugScanApiBaseUrl: process.env.REAL_BUG_SCAN_API_BASE_URL ?? "https://bugbaas.vercel.app"
   }
 });

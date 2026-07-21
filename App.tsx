@@ -18,6 +18,7 @@ import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { BugDexScreen } from "./src/screens/BugDexScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { BugSmashDuelScreen } from "./src/screens/BugSmashDuelScreen";
+import { RealBugScanScreen } from "./src/screens/RealBugScanScreen";
 import { AppBackground } from "./src/components/AppBackground";
 import { BottomNav } from "./src/components/BottomNav";
 import { WalkingBugsLayer } from "./src/components/WalkingBugsLayer";
@@ -62,7 +63,7 @@ import { setRadarRequestCounts } from "./src/services/movementRadarService";
 import { getOwnDuelSeasonClaim, previousDuelSeasonId } from "./src/services/duelSeasonService";
 import { subscribeIncomingTradeRequestCount } from "./src/services/tradeService";
 
-export type RouteName = "home" | "bugs" | "new" | "detail" | "leaderboard" | "profile" | "userProfile" | "bugdex" | "settings" | "duel";
+export type RouteName = "home" | "bugs" | "realBugScan" | "new" | "detail" | "leaderboard" | "profile" | "userProfile" | "bugdex" | "settings" | "duel";
 
 const helpTourVersion = "full-help-v2";
 const helpTourVersionKey = (uid: string) => `bugbaas:helpTour:${helpTourVersion}:${uid}`;
@@ -1185,7 +1186,7 @@ function AppContent() {
     setRoute("duel");
   }
 
-  function navigateMain(nextRoute: "home" | "bugs" | "duel" | "bugdex" | "leaderboard") {
+  function navigateMain(nextRoute: "home" | "realBugScan" | "duel" | "bugdex" | "leaderboard") {
     if (duelFullscreen) return;
     setSelectedBug(null);
     setSelectedUser(null);
@@ -1275,6 +1276,7 @@ function AppContent() {
             onUserUpdated={setUser}
           />
         )}
+        {route === "realBugScan" && <RealBugScanScreen user={user} onBack={() => setRoute("home")} />}
         {route === "bugs" && (
           <BugListScreen
             onBack={() => setRoute("home")}

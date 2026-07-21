@@ -2,7 +2,8 @@
   "expo": {
     "name": "BugBaas",
     "slug": "bugbaas",
-    "version": "2.10.11",
+    "scheme": "bugbaas",
+    "version": "2.10.16",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -24,7 +25,6 @@
     "android": {
       "package": "nl.cimpro.bugbaas",
       "blockedPermissions": [
-        "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW",
@@ -51,6 +51,22 @@
         "backgroundColor": "#102018"
       }
     },
-    "plugins": []
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "BugBaas gebruikt de camera om echte bugs voor de BugDex te fotograferen.",
+          "photosPermission": "BugBaas gebruikt je foto's om een bestaande bugfoto te analyseren.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "BugBaas gebruikt de camera om echte bugs voor de BugDex te fotograferen.",
+          "recordAudioAndroid": false
+        }
+      ]
+    ]
   }
 }

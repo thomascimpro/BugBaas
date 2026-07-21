@@ -1,0 +1,19 @@
+{
+  "buildCommand": "npx expo export --platform web --output-dir dist",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/real-bug-identify.js": {
+      "includeFiles": "src/services/pointsService.ts",
+      "maxDuration": 60
+    }
+  },
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
+    }
+  ]
+}

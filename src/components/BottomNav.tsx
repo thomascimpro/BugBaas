@@ -5,7 +5,7 @@ import { BugArtId } from "../services/bugArt";
 import { useI18n } from "../services/i18n";
 import { BugArtImage } from "./BugArtImage";
 
-type NavRoute = "home" | "bugs" | "duel" | "bugdex" | "leaderboard";
+type NavRoute = "home" | "realBugScan" | "duel" | "bugdex" | "leaderboard";
 type NavBadges = Partial<Record<NavRoute, number>>;
 
 type Props = {
@@ -16,7 +16,7 @@ type Props = {
 
 const items: Array<{ route: NavRoute; labelKey: string; bugId: BugArtId }> = [
   { route: "home", labelKey: "nav.home", bugId: "zilvervisje" },
-  { route: "bugs", labelKey: "nav.bugs", bugId: "pissebed" },
+  { route: "realBugScan", labelKey: "nav.bugScan", bugId: "springspin" },
   { route: "duel", labelKey: "nav.arena", bugId: "neushoornkever" },
   { route: "bugdex", labelKey: "nav.bugdex", bugId: "lieveheersbeestje" },
   { route: "leaderboard", labelKey: "nav.rank", bugId: "goliathkever" }
