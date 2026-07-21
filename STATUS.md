@@ -7,7 +7,8 @@
 - Firebase Rules are live on `thomascimpro-6266f` and Vercel production deployment `dpl_2gwHfcpXmMgytVoMuSPsEhAJszGk` is `READY` on `https://bugbaas.vercel.app`.
 - Signed APK `dist/BugBaas-2.10.18.apk` is built and verified; physical-device smoke testing was not possible because ADB reported no connected device.
 - Release commit `d479d4f` is pushed to `origin/codex/BugBaas` and tag `v2.10.18` is published; GitHub Release asset upload is blocked because GitHub CLI is not logged in.
-- `origin/master` is not updated yet: it has a separately diverged history and cannot receive the current release as a fast-forward.
+- `origin/master` now points to history-preserving merge `2d87f0e`, with the 2.10.18 release tree authoritative and the former remote master retained as its second parent.
+- The working branch is `master`; the former local master tip remains recoverable as `codex/backup-master-before-2.10.18`.
 
 ## 2026-07-21 BugScan missing-species correction
 

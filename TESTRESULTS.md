@@ -12,7 +12,8 @@
 - APK Signature Scheme v2 passed; certificate SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
 - `adb devices -l` returned no connected device, so physical install/camera quality and control-feel remain unverified.
 - Local `vercel build --prod` failed with Windows CLI error `spawn cmd.exe ENOENT`; direct Expo export and Vercel's remote production build both passed.
-- Release commit `d479d4f` and tag `v2.10.18` are present on GitHub; `origin/master` remains unchanged because its history diverges from the release line.
+- Release commit `d479d4f` and tag `v2.10.18` are present on GitHub.
+- History-preserving merge `2d87f0e` promoted the 2.10.18 tree to `origin/master` without force-push; both the former remote master and release tag are verified ancestors.
 - GitHub CLI authentication is absent, so no GitHub Release page or APK asset upload was performed.
 
 ## 2026-07-21 BugScan missing-species correction
