@@ -2,6 +2,7 @@
 
 ## 2.10.18
 
+- BugScan voorkomt afgebroken AI-resultaten met een ruimer outputbudget, compacte meertalige velden en precies één automatische herstelpoging.
 - BugScan stuurt een scherpere 1536 px-foto naar de herkennings-AI en toont altijd wat volgens de AI op de foto staat.
 - Herkenning benoemt eerst de werkelijke soort en vergelijkt die daarna pas met BugDex, zodat geen dichtstbijzijnde catalogusbug wordt geforceerd.
 - Soorten buiten BugDex worden met vinder, soortnamen, confidence, uitleg, feitje en reviewfoto voor developer-review opgeslagen.

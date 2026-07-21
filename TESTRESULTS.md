@@ -1,5 +1,14 @@
 # Test Results
 
+## 2026-07-21 BugScan analysis hotfix 2.10.18
+
+- `npm run test:real-bug-scan`: 62/62 passed, including incomplete response, truncated JSON, single retry limit and no retry on HTTP 429.
+- `npm run typecheck`: passed; production Expo webexport passed with 365 assets.
+- Vercel production deployment `dpl_89VffjN5sPH1twe4egfGqfcc9SRT`: `READY`; `https://bugbaas.vercel.app` returns HTTP 200 and `/api/real-bug-identify` returns the expected HTTP 405 for GET.
+- A direct local request with `4-oak-treehopper-1.webp` could not authenticate because Vercel downloads the protected OpenAI production value as a placeholder; no secret or production auth setting was changed. The authenticated end-to-end photo result still needs one live logged-in scan.
+- Android `assembleRelease`: `BUILD SUCCESSFUL`; package `nl.cimpro.bugbaas`, versionCode 198, versionName 2.10.18, targetSdk 36 and APK Signature Scheme v2 verified.
+- Rebuilt APK `dist/BugBaas-2.10.18.apk`: 109,088,862 bytes; SHA-256 `8F47355E41DAF5678F12AE60DCF5C772A4ED0DFF2C5B4F35AB7C5966819A676B` (unchanged because the fix is server-only).
+
 ## 2026-07-21 release 2.10.18
 
 - `npm run test:real-bug-scan`: 59/59 passed; `npm run typecheck` and `npx expo install --check`: passed.

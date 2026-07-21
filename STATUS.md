@@ -1,5 +1,12 @@
 # Status
 
+## 2026-07-21 BugScan analysis hotfix 2.10.18
+
+- Production failures were caused by the 1200-token response limit truncating the expanded 15-field multilingual JSON result, not by image quality.
+- The first request now uses 3200 output tokens with low reasoning effort and concise fields; incomplete, missing or truncated JSON receives exactly one 5000-token retry.
+- Vercel deployment `dpl_89VffjN5sPH1twe4egfGqfcc9SRT` is `READY` and `https://bugbaas.vercel.app` points to it.
+- The signed APK was rebuilt and replaced at `dist/BugBaas-2.10.18.apk`; it is byte-identical because this hotfix changes only server-side Vercel code.
+
 ## 2026-07-21 release 2.10.18
 
 - Release scope: sharper BugScan input, honest subject-first identification, localized missing-species developer records and hidden test-account cleanup.

@@ -1,5 +1,10 @@
 # Decisions
 
+## 2026-07-21 BugScan structured-output recovery
+
+- Incomplete or syntactically truncated structured AI output is retried exactly once with a larger budget; upstream HTTP failures are not automatically duplicated.
+- The recognition model stays unchanged. Low reasoning effort and concise localized fields reserve more of the response budget for the required JSON contract.
+
 ## 2026-07-21 BugScan recognition and developer review
 
 - AI identifies the photographed subject independently before receiving the BugDex comparison requirement; catalog entries are never candidate labels for the first identification step.
