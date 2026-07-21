@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, AppState, Easing, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Animated, AppState, Easing, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { allBugArtIds, BugArtId } from "../services/bugArt";
 import { bugDexEntries } from "../services/pointsService";
+import { resolveForegroundCatchViewport } from "../services/foregroundCatchLayout";
 import { foregroundCatchXpByRarity } from "../services/rewardBalanceService";
 import { playBugSound } from "../services/soundService";
 import { BugArtImage } from "./BugArtImage";
@@ -89,7 +90,9 @@ const bugPools = (Object.keys(rarityLabels) as SpawnRarity[]).reduce((pools, rar
 }, {} as Record<SpawnRarity, BugArtId[]>);
 
 export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enabled, forcedBugIds = [], onCaught, onForcedBugConsumed, onForcedBugMissed }: Props) {
-  const { height, width } = useWindowDimensions();
+  const windowViewport = useWindowDimensions();
+  const [measuredViewport, setMeasuredViewport] = useState({ height: 0, width: 0 });
+  const { height, width } = resolveForegroundCatchViewport(windowViewport, measuredViewport, Platform.OS === "web");
   const [activeBug, setActiveBug] = useState<ActiveBug | null>(null);
   const [hits, setHits] = useState(0);
   const [caught, setCaught] = useState(false);
@@ -377,7 +380,17 @@ export function ForegroundCatchBug({ catchAssist = 0, catchTimeBonus = 0, enable
   const timerSize = 24;
 
   return (
-    <View pointerEvents="box-none" style={styles.layer}>
+    <View
+      pointerEvents="box-none"
+      style={styles.layer}
+      onLayout={(event) => {
+        if (Platform.OS !== "web") return;
+        const { height: nextHeight, width: nextWidth } = event.nativeEvent.layout;
+        setMeasuredViewport((current) => current.height === nextHeight && current.width === nextWidth
+          ? current
+          : { height: nextHeight, width: nextWidth });
+      }}
+    >
       <Animated.View
         style={[
           styles.bug,

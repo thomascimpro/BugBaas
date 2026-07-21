@@ -1,6 +1,6 @@
 import { ImageSourcePropType } from "react-native";
 import { User } from "../types";
-import { bugDexSetById } from "./bugDexSetService";
+import { bugDexSetBadgeBugIds, bugDexSetById } from "./bugDexSetService";
 import { badgeDefinitions } from "./pointsService";
 
 export type CharacterId =
@@ -115,7 +115,7 @@ function isCharacterBadgeUnlocked(badgeId: string, context: CharacterUnlockConte
     if (!set) return false;
     const unlockedBugDexIds = context.unlockedBugDexIds ?? context.ownedBugDexIds;
     if (!unlockedBugDexIds) return context.allowUnknownSetBadges === true;
-    return set.bugIds.every((bugId) => unlockedBugDexIds.has(bugId));
+    return bugDexSetBadgeBugIds(set).every((bugId) => unlockedBugDexIds.has(bugId));
   }
   const user = context.user;
   if (!user) return false;

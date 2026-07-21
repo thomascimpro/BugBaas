@@ -10,6 +10,7 @@ import { BugDexRarity } from "../services/pointsService";
 import { defaultOrganizationId, organizationIdsForUser, organizationNamesForUser } from "../services/organizationService";
 import { presenceLabel } from "../services/presenceService";
 import { currentDuelSeasonId, duelSeasonEndLabel, duelSeasonRank, duelSeasonRewardForRank, effectiveDuelRating, getDuelSeasonSummary } from "../services/duelSeasonService";
+import { visibleRankUsers } from "../services/leaderboardRank";
 import { listLeaderboardUsers } from "../services/userService";
 import { User } from "../types";
 import { sharedStyles } from "./sharedStyles";
@@ -70,9 +71,10 @@ export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }
     ...organizationIds.map((id) => ({ id, name: organizationNames[id] ?? id }))
   ];
   const selectedOrganizationName = organizationOptions.find((item) => item.id === selectedOrganizationId)?.name ?? t("leaderboard.globalRank");
+  const scopedUsers = visibleRankUsers(users, currentUser);
   const filteredUsers = selectedOrganizationId === defaultOrganizationId
-    ? users
-    : users.filter((item) => organizationIdsForUser(item).includes(selectedOrganizationId));
+    ? scopedUsers
+    : scopedUsers.filter((item) => organizationIdsForUser(item).includes(selectedOrganizationId));
   const visibleUsers = [...filteredUsers].sort((a, b) => rankingMode === "duel" ? duelRating(b) - duelRating(a) : b.totalPoints - a.totalPoints);
   const ownDuelRank = duelSeasonRank(filteredUsers, currentUser.uid, currentDuelSeasonId());
   const ownSeasonReward = ownDuelRank ? duelSeasonRewardForRank(ownDuelRank) : null;
@@ -82,7 +84,7 @@ export function LeaderboardScreen({ currentUser, onBack: _onBack, onSelectUser }
   useEffect(() => {
     let active = true;
     async function load() {
-      const [nextUsers, previousSeason] = await Promise.all([listLeaderboardUsers(), getDuelSeasonSummary().catch(() => null)]);
+      const [nextUsers, previousSeason] = await Promise.all([listLeaderboardUsers({ complete: true, fresh: true }), getDuelSeasonSummary().catch(() => null)]);
       const catchUsers = nextUsers;
       const catchPairs = await Promise.all(catchUsers.map(async (item) => [item.uid, await latestCatchForUser(item)] as const));
       if (!active) return;

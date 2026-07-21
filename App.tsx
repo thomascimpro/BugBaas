@@ -17,6 +17,7 @@ import { LeaderboardScreen } from "./src/screens/LeaderboardScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { BugDexScreen } from "./src/screens/BugDexScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { RealBugScanScreen } from "./src/screens/RealBugScanScreen";
 import { BugSmashDuelScreen } from "./src/screens/BugSmashDuelScreen";
 import { AppBackground } from "./src/components/AppBackground";
 import { BottomNav } from "./src/components/BottomNav";
@@ -35,7 +36,9 @@ import { bugDexEntryName, LanguageProvider, rarityLabel, useI18n } from "./src/s
 import { listBugs } from "./src/services/bugService";
 import { BugDexDropResult, BugDexDropSource, claimDailyLoginBug, entryByBugId, grantBugDexReward, hasBugDexRewardAvailable, pickBugDexRewardEntry, pickQueuedBugDexRewardEntry, prepareDailyLoginBug, rollSpecificBugDexDrop } from "./src/services/bugDexService";
 import { badgeDefinitions, getTierForPoints, userTiers, type BadgeDefinition, type BugDexEntry, type UserTier } from "./src/services/pointsService";
+import { getFitnessSyncerStatus } from "./src/services/fitnessSyncerService";
 import { claimMovementRadarBonuses, claimMovementRadarBonusesForApp, claimQueuedRadarBugs, requestHealthConnectPermissions } from "./src/services/movementRadarService";
+import { canRegisterMovementSource, MovementSyncSource } from "./src/services/movementSyncSource";
 import { movementRadarXpPerBug } from "./src/services/rewardBalanceService";
 import { checkLatestVersion, VersionNotice } from "./src/services/versionService";
 import { isStarterBoostActive } from "./src/services/starterBoostService";
@@ -60,9 +63,11 @@ import {
 import { subscribeIncomingBugSmashDuelActionCount } from "./src/services/bugSmashDuelService";
 import { setRadarRequestCounts } from "./src/services/movementRadarService";
 import { getOwnDuelSeasonClaim, previousDuelSeasonId } from "./src/services/duelSeasonService";
+import { installWebUiSounds } from "./src/services/soundService";
+import { shouldPresentBugDexDropImmediately } from "./src/services/rewardPresentation";
 import { subscribeIncomingTradeRequestCount } from "./src/services/tradeService";
 
-export type RouteName = "home" | "bugs" | "new" | "detail" | "leaderboard" | "profile" | "userProfile" | "bugdex" | "settings" | "duel";
+export type RouteName = "home" | "bugs" | "new" | "detail" | "leaderboard" | "profile" | "userProfile" | "bugdex" | "realBugScan" | "settings" | "duel";
 
 const helpTourVersion = "full-help-v2";
 const helpTourVersionKey = (uid: string) => `bugbaas:helpTour:${helpTourVersion}:${uid}`;
@@ -77,6 +82,13 @@ const startupMovementCheckDelayMs = 2500;
 const startupNotificationRegistrationDelayMs = 3500;
 const startupVersionCheckDelayMs = 5000;
 const reportActionRewardSources = new Set<BugDexDropSource>(["bug_reported", "comment", "status_update", "bug_fixed", "upvote_given"]);
+
+function initialRoute(): RouteName {
+  if (Platform.OS !== "web" || typeof window === "undefined") return "home";
+  const normalizedPath = window.location.pathname.replace(/\/+$/, "");
+  const search = new URLSearchParams(window.location.search);
+  return normalizedPath === "/real-bug-scan" || search.has("real-bug-scan") ? "realBugScan" : "home";
+}
 
 function localDayId(date = new Date()): string {
   const year = date.getFullYear();
@@ -113,6 +125,11 @@ type ChangelogFeature = {
 };
 
 const usefulChangelogByVersion: Record<string, ChangelogFeature[]> = {
+  "2.10.17": [
+    { key: "changelog.2.10.17.art", image: require("./assets/bugdex/grote-wegslak.png"), tone: "gold" },
+    { key: "changelog.2.10.17.scan", image: require("./assets/bugdex/lieveheersbeestje.png"), tone: "green" },
+    { key: "changelog.2.10.17.fitness", image: require("./assets/badges/kilometer-colony.png"), tone: "purple" }
+  ],
   "2.10.11": [
     { key: "changelog.2.10.11.nest", image: require("./assets/bugdex/houtmier.png"), tone: "gold" },
     { key: "changelog.2.10.11.fitness", image: require("./assets/generated/bug-radar-request-signal-hd.png"), tone: "green" },
@@ -258,7 +275,7 @@ export default function App() {
 
 function AppContent() {
   const { t } = useI18n();
-  const [route, setRoute] = useState<RouteName>("home");
+  const [route, setRoute] = useState<RouteName>(initialRoute);
   const [user, setUser] = useState<User | null>(null);
   const [selectedBug, setSelectedBug] = useState<BugReport | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -298,6 +315,9 @@ function AppContent() {
   const handledNotificationResponses = useRef(new Set<string>());
   const dailyLoginClaimedForUsers = useRef(new Set<string>());
   const reportActionRewardQueuedDay = useRef("");
+
+  useEffect(() => installWebUiSounds(), []);
+
   const foregroundUiClear = Boolean(
     user
     && user.nameSet === true
@@ -543,7 +563,16 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    const openRadarBug = (url: string | null) => {
+    const openAppUrl = (url: string | null) => {
+      const fitnessSyncerResult = fitnessSyncerResultFromUrl(url);
+      if (fitnessSyncerResult) {
+        setSelectedBug(null);
+        setSelectedUser(null);
+        setRoute("settings");
+        if (Platform.OS === "web" && typeof window !== "undefined") window.history.replaceState({}, "", window.location.pathname);
+        return;
+      }
+
       const bugId = radarBugIdFromUrl(url);
       if (!bugId) return;
       setSelectedBug(null);
@@ -559,8 +588,8 @@ function AppContent() {
       });
     };
 
-    void Linking.getInitialURL().then(openRadarBug).catch(() => undefined);
-    const subscription = Linking.addEventListener("url", (event) => openRadarBug(event.url));
+    void Linking.getInitialURL().then(openAppUrl).catch(() => undefined);
+    const subscription = Linking.addEventListener("url", (event) => openAppUrl(event.url));
     return () => subscription.remove();
   }, []);
 
@@ -814,6 +843,10 @@ function AppContent() {
   }
 
   function showBugDexDrop(drop: BugDexDropResult) {
+    if (drop.rewardType === "bug" && shouldPresentBugDexDropImmediately(drop.source)) {
+      presentBugDexDrop(drop, true);
+      return;
+    }
     if (drop.rewardType === "bug") {
       queueForegroundReward({
         bugId: drop.entry.id as BugArtId,
@@ -828,11 +861,11 @@ function AppContent() {
     presentBugDexDrop(drop);
   }
 
-  function presentBugDexDrop(drop: BugDexDropResult) {
+  function presentBugDexDrop(drop: BugDexDropResult, forceImmediate = false) {
     if (drop.rewardType === "bug" && drop.isNew && notificationSettingsRef.current.bugdex) {
       void showBugDexUnlockNotification(bugDexEntryName(drop.entry, t), rarityLabel(drop.entry.rarity, t)).catch(() => undefined);
     }
-    if (route !== "duel" && (activeForegroundRewardRef.current || pendingForegroundRewardsRef.current.length > 0)) {
+    if (!forceImmediate && route !== "duel" && (activeForegroundRewardRef.current || pendingForegroundRewardsRef.current.length > 0)) {
       setBugDexDropQueue((queue) => [...queue, drop]);
       return;
     }
@@ -1078,9 +1111,11 @@ function AppContent() {
     }
   }
 
-  async function registerMovementKilometers(estimatedKm: number, estimatedWeekKm?: number) {
+  async function registerMovementKilometers(estimatedKm: number, estimatedWeekKm?: number, source: MovementSyncSource = "health_connect") {
     const currentUser = userRef.current;
     if (!currentUser || (estimatedKm <= 0 && (estimatedWeekKm ?? 0) <= 0)) return;
+    const fitnessSyncerConnected = source === "fitness_syncer" || Boolean((await getFitnessSyncerStatus())?.connected);
+    if (!canRegisterMovementSource(source, fitnessSyncerConnected)) return;
     const updated = await syncMovementKilometers(currentUser, estimatedKm, estimatedWeekKm);
     setUser(updated);
     userRef.current = updated;
@@ -1185,7 +1220,7 @@ function AppContent() {
     setRoute("duel");
   }
 
-  function navigateMain(nextRoute: "home" | "bugs" | "duel" | "bugdex" | "leaderboard") {
+  function navigateMain(nextRoute: "home" | "realBugScan" | "duel" | "bugdex" | "leaderboard") {
     if (duelFullscreen) return;
     setSelectedBug(null);
     setSelectedUser(null);
@@ -1199,7 +1234,7 @@ function AppContent() {
     setHelpVisible(true);
   }
 
-  function navigateHelp(routeName: "home" | "bugs" | "duel" | "bugdex" | "leaderboard" | "settings") {
+  function navigateHelp(routeName: "home" | "realBugScan" | "duel" | "bugdex" | "leaderboard" | "settings") {
     setSelectedBug(null);
     setSelectedUser(null);
     setRoute(routeName);
@@ -1252,12 +1287,13 @@ function AppContent() {
   }
 
   const duelRouteActive = route === "duel";
+  const realBugScanRouteActive = route === "realBugScan";
 
   return (
     <View style={styles.webStage}>
       <AppBackground />
       <SafeAreaView style={[styles.shell, duelFullscreen && styles.gameShell]}>
-        {!duelRouteActive && <WalkingBugsLayer onSplat={() => void handleBugSplat()} />}
+        {!duelRouteActive && !realBugScanRouteActive && <WalkingBugsLayer onSplat={() => void handleBugSplat()} />}
         <View style={styles.content}>
         {route === "home" && (
           <HomeScreen
@@ -1365,6 +1401,7 @@ function AppContent() {
           />
         )}
         {route === "bugdex" && <BugDexScreen openTradeRequest={openBugDexTradeRequest} user={user} onBack={() => setRoute("home")} onUserUpdated={setUser} />}
+        {route === "realBugScan" && <RealBugScanScreen user={user} onBack={() => setRoute("home")} />}
         {route === "duel" && (
           <BugSmashDuelScreen
             initialDuelId={openDuelId}
@@ -1485,6 +1522,16 @@ function VersionToast({ notice, onDismiss }: { notice: VersionNotice | null; onD
       </View>
     </View>
   );
+}
+
+function fitnessSyncerResultFromUrl(url: string | null): "connected" | "error" | null {
+  if (!url) return null;
+  try {
+    const result = new URL(url).searchParams.get("fitnessSyncer");
+    return result === "connected" || result === "error" ? result : null;
+  } catch {
+    return null;
+  }
 }
 
 function radarBugIdFromUrl(url: string | null): BugArtId | null {

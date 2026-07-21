@@ -9,7 +9,7 @@ import { TierBadge } from "../components/TierBadge";
 import { getBadgeArtSource } from "../services/badgeArt";
 import { listBugs } from "../services/bugService";
 import { entryByBugId, listBugDexInventory, listBugDexUnlocks } from "../services/bugDexService";
-import { bugDexSetById } from "../services/bugDexSetService";
+import { bugDexSetBadgeBugIds, bugDexSetById } from "../services/bugDexSetService";
 import { listBugMastery, normalizeBugMastery } from "../services/bugMasteryService";
 import { bugSquadBonusForEntry, BugSquadBonusCategory, maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSquadService";
 import { bugDexEntryName, rarityLabel, useI18n } from "../services/i18n";
@@ -883,7 +883,7 @@ function badgeUnlocked(
 ): boolean {
   if (badge.bugDexSetId) {
     const set = bugDexSetById(badge.bugDexSetId);
-    return Boolean(set && set.bugIds.every((bugId) => unlockedBugDexIds.has(bugId)));
+    return Boolean(set && bugDexSetBadgeBugIds(set).every((bugId) => unlockedBugDexIds.has(bugId)));
   }
   return (badge.minBugReports === undefined || user.bugCount >= badge.minBugReports) &&
     (badge.minBugDexCaught === undefined || unlockedBugDexStats.count >= badge.minBugDexCaught) &&
@@ -901,7 +901,7 @@ function badgeUnlocked(
 function badgeRequirementText(badge: BadgeDefinition, t: (key: string, params?: Record<string, string | number>) => string): string {
   if (badge.bugDexSetId) {
     const set = bugDexSetById(badge.bugDexSetId);
-    return t("profile.badgeNeedBugDexSet", { count: set?.bugIds.length ?? 0 });
+    return t("profile.badgeNeedBugDexSet", { count: set ? bugDexSetBadgeBugIds(set).length : 0 });
   }
   if (badge.minBugReports !== undefined) return t("profile.badgeNeedBugs", { count: badge.minBugReports });
   if (badge.minBugDexCaught !== undefined) return t("profile.badgeNeedBugDex", { count: badge.minBugDexCaught });

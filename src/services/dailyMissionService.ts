@@ -29,6 +29,7 @@ type DailyMissionTemplate = {
 type DailyMissionContext = {
   bossProgress: SoloCampaignBossProgress;
   duels: BugSmashDuel[];
+  realBugScanProgress: number;
 };
 
 const dailyMissionXp = 10;
@@ -44,6 +45,15 @@ const dailyMissionTemplates: DailyMissionTemplate[] = [
     rewardSource: "daily_mission_bonus",
     rewardXp: dailyMissionXp,
     progressFor: (user, { duels }, day) => duels.filter((duel) => isUserDuel(duel, user) && isThisDay(duel.scores?.[user.uid]?.submittedAt ?? "", day)).length
+  },
+  {
+    id: "real-bug-scan",
+    title: "mission.dailyRealBugScan",
+    target: 1,
+    reward: "mission.rewardXp10",
+    rewardSource: "daily_mission_bonus",
+    rewardXp: dailyMissionXp,
+    progressFor: (_user, { realBugScanProgress }) => realBugScanProgress
   },
   {
     id: "play-all-game-types",
@@ -88,11 +98,12 @@ const dailyMissionTemplates: DailyMissionTemplate[] = [
   }
 ];
 
-export function dailyMissionSet(user: User, options: { bossProgress: SoloCampaignBossProgress; duels?: BugSmashDuel[]; now?: Date }): DailyMission[] {
+export function dailyMissionSet(user: User, options: { bossProgress: SoloCampaignBossProgress; duels?: BugSmashDuel[]; now?: Date; realBugScanProgress?: number }): DailyMission[] {
   const day = localDayId(options.now);
   const context: DailyMissionContext = {
     bossProgress: options.bossProgress,
-    duels: options.duels ?? []
+    duels: options.duels ?? [],
+    realBugScanProgress: Math.max(0, Math.min(1, Math.floor(options.realBugScanProgress ?? 0)))
   };
   return dailyMissionTemplates.map((template) => {
     const progress = Math.min(template.target, template.progressFor(user, context, day));

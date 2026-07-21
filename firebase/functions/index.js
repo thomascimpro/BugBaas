@@ -3,12 +3,14 @@ const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { FieldValue, Timestamp, getFirestore } = require("firebase-admin/firestore");
 const { logger } = require("firebase-functions");
+const { defineSecret } = require("firebase-functions/params");
 const { onRequest } = require("firebase-functions/v2/https");
-const { activityDistanceKm, activityImportId, activityTimestamp, tokenExpiryMs } = require("./fitnessSyncerCore");
+const { activityImportId, activityMovement, aggregateActivityMovement, fitnessServerConfigurationStatus, fitnessUserConfigurationStatus, tokenExpiryMs } = require("./fitnessSyncerCore");
 
 initializeApp();
 
 const db = getFirestore();
+const fitnessSyncerTokenKey = defineSecret("FITNESSSYNCER_TOKEN_KEY");
 const oauthStateCollection = "fitnessSyncerOauthStates";
 const scopes = "source_read source_data_activity_read";
 const allowedOrigins = new Set([
@@ -17,15 +19,23 @@ const allowedOrigins = new Set([
   "http://localhost:19006"
 ]);
 
-exports.fitnessSyncerStatus = onRequest({ cors: false, region: "us-central1" }, async (req, res) => {
+exports.fitnessSyncerStatus = onRequest({ cors: false, invoker: "public", region: "us-central1", secrets: [fitnessSyncerTokenKey] }, async (req, res) => {
   if (!setCors(req, res) || req.method === "OPTIONS") return;
   try {
     const uid = await authenticatedUid(req);
     const snapshot = await integrationRef(uid).get();
     const data = snapshot.data() || {};
+    const serverConfiguration = fitnessServerConfigurationStatus(process.env);
+    const credentialsConfigured = hasEncryptedValue(data.oauthApp);
     res.json({
-      configured: configurationReady(),
-      connected: snapshot.exists,
+      configured: serverConfiguration.configured && credentialsConfigured,
+      connected: hasEncryptedValue(data.token),
+      credentialsConfigured,
+      serverReady: serverConfiguration.configured,
+      missingConfiguration: [
+        ...serverConfiguration.missingConfiguration,
+        ...(credentialsConfigured ? [] : ["client_id", "client_secret"])
+      ],
       lastError: data.lastError || undefined,
       lastSyncAt: data.lastSyncAt?.toDate?.().toISOString?.() || undefined
     });
@@ -34,37 +44,123 @@ exports.fitnessSyncerStatus = onRequest({ cors: false, region: "us-central1" }, 
   }
 });
 
-exports.fitnessSyncerStart = onRequest({ cors: false, region: "us-central1" }, async (req, res) => {
+exports.fitnessSyncerConfigure = onRequest({ cors: false, invoker: "public", region: "us-central1", secrets: [fitnessSyncerTokenKey] }, async (req, res) => {
   if (!setCors(req, res) || req.method === "OPTIONS") return;
   try {
     requirePost(req);
-    requireConfiguration();
     const uid = await authenticatedUid(req);
+    requireServerConfiguration();
+    const credentials = normalizeOAuthAppCredentials(req.body);
+    const configuration = fitnessUserConfigurationStatus(credentials);
+    if (!configuration.configured) throw httpError(400, "Enter both FitnessSyncer Client ID and Client Secret.");
+    if (credentials.clientId.length > 512 || credentials.clientSecret.length > 512) throw httpError(400, "FitnessSyncer credentials are too long.");
+    const ref = integrationRef(uid);
+    const snapshot = await ref.get();
+    const current = snapshot.data() || {};
+    if (hasEncryptedValue(current.oauthApp) && hasEncryptedValue(current.token)) {
+      try {
+        await revokeFitnessSyncerToken(decryptJson(current.token).accessToken, oauthAppCredentials(current));
+      } catch {
+        // Replacing credentials must remain possible when the old token is already invalid.
+      }
+    }
+    await ref.set({
+      connectedAt: FieldValue.delete(),
+      expiresAt: FieldValue.delete(),
+      lastError: FieldValue.delete(),
+      lastSyncAt: FieldValue.delete(),
+      oauthApp: encryptJson(credentials),
+      scope: FieldValue.delete(),
+      token: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    res.json({ configured: true, connected: false, credentialsConfigured: true, serverReady: true, missingConfiguration: [] });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+exports.fitnessSyncerClearConfiguration = onRequest({ cors: false, invoker: "public", region: "us-central1", secrets: [fitnessSyncerTokenKey] }, async (req, res) => {
+  if (!setCors(req, res) || req.method === "OPTIONS") return;
+  try {
+    requirePost(req);
+    const uid = await authenticatedUid(req);
+    const ref = integrationRef(uid);
+    const snapshot = await ref.get();
+    const serverReady = fitnessServerConfigurationStatus(process.env).configured;
+    if (!snapshot.exists) {
+      res.json({
+        configured: false,
+        connected: false,
+        credentialsConfigured: false,
+        serverReady,
+        missingConfiguration: [...(serverReady ? [] : ["token_key"]), "client_id", "client_secret"]
+      });
+      return;
+    }
+    const data = snapshot.data() || {};
+    if (serverReady && hasEncryptedValue(data.oauthApp) && hasEncryptedValue(data.token)) {
+      const credentials = oauthAppCredentials(data);
+      const tokens = decryptJson(data.token);
+      await revokeFitnessSyncerToken(tokens.accessToken, credentials).catch(() => undefined);
+    }
+    await ref.set({
+      connectedAt: FieldValue.delete(),
+      expiresAt: FieldValue.delete(),
+      lastError: FieldValue.delete(),
+      lastSyncAt: FieldValue.delete(),
+      oauthApp: FieldValue.delete(),
+      scope: FieldValue.delete(),
+      token: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    res.json({
+      configured: false,
+      connected: false,
+      credentialsConfigured: false,
+      serverReady,
+      missingConfiguration: [...(serverReady ? [] : ["token_key"]), "client_id", "client_secret"]
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+exports.fitnessSyncerStart = onRequest({ cors: false, invoker: "public", region: "us-central1", secrets: [fitnessSyncerTokenKey] }, async (req, res) => {
+  if (!setCors(req, res) || req.method === "OPTIONS") return;
+  try {
+    requirePost(req);
+    const uid = await authenticatedUid(req);
+    requireServerConfiguration();
+    const credentials = await loadOAuthAppCredentials(uid);
+    const returnUrl = normalizeAppReturnUrl(req.body?.returnUrl);
     const state = randomBytes(32).toString("base64url");
     const verifier = randomBytes(48).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");
     await db.collection(oauthStateCollection).doc(hash(state)).set({
       createdAt: FieldValue.serverTimestamp(),
       expiresAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
+      returnUrl,
       uid,
       verifier
     });
     const url = new URL("https://www.fitnesssyncer.com/api/oauth/authorize");
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("client_id", process.env.FITNESSSYNCER_CLIENT_ID);
+    url.searchParams.set("client_id", credentials.clientId);
     url.searchParams.set("redirect_uri", redirectUri());
     url.searchParams.set("scope", scopes);
     url.searchParams.set("state", state);
     url.searchParams.set("code_challenge", challenge);
+    url.searchParams.set("code_challenge_method", "S256");
     res.json({ authorizationUrl: url.toString() });
   } catch (error) {
     sendError(res, error);
   }
 });
 
-exports.fitnessSyncerCallback = onRequest({ cors: false, region: "us-central1" }, async (req, res) => {
+exports.fitnessSyncerCallback = onRequest({ cors: false, invoker: "public", region: "us-central1", secrets: [fitnessSyncerTokenKey] }, async (req, res) => {
   try {
-    requireConfiguration();
+    requireServerConfiguration();
     const code = String(req.query.code || "");
     const state = String(req.query.state || "");
     if (!code || !state || code === "error") throw httpError(400, "FitnessSyncer authorization was not completed.");
@@ -75,7 +171,8 @@ exports.fitnessSyncerCallback = onRequest({ cors: false, region: "us-central1" }
       throw httpError(400, "FitnessSyncer authorization state expired.");
     }
     await stateRef.delete();
-    const token = await exchangeToken({
+    const credentials = await loadOAuthAppCredentials(stateData.uid);
+    const token = await exchangeToken(credentials, {
       code,
       code_verifier: stateData.verifier,
       grant_type: "authorization_code"
@@ -87,26 +184,27 @@ exports.fitnessSyncerCallback = onRequest({ cors: false, region: "us-central1" }
       token: encryptJson({ accessToken: token.access_token, refreshToken: token.refresh_token }),
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
-    res.redirect(302, `${appReturnUrl()}?fitnessSyncer=connected`);
+    res.redirect(302, fitnessSyncerResultUrl(stateData.returnUrl, "connected"));
   } catch (error) {
     logger.error("FitnessSyncer callback failed", safeError(error));
-    res.redirect(302, `${appReturnUrl()}?fitnessSyncer=error`);
+    res.redirect(302, fitnessSyncerResultUrl(appReturnUrl(), "error"));
   }
 });
 
-exports.fitnessSyncerSync = onRequest({ cors: false, region: "us-central1", timeoutSeconds: 60 }, async (req, res) => {
+exports.fitnessSyncerSync = onRequest({ cors: false, invoker: "public", region: "us-central1", secrets: [fitnessSyncerTokenKey], timeoutSeconds: 60 }, async (req, res) => {
   if (!setCors(req, res) || req.method === "OPTIONS") return;
   try {
     requirePost(req);
-    requireConfiguration();
     const uid = await authenticatedUid(req);
+    requireServerConfiguration();
     const integration = await integrationRef(uid).get();
-    if (!integration.exists) throw httpError(409, "FitnessSyncer is not connected.");
-    const data = integration.data();
+    const data = integration.data() || {};
+    if (!integration.exists || !hasEncryptedValue(data.token)) throw httpError(409, "FitnessSyncer is not connected.");
+    const credentials = oauthAppCredentials(data);
     let tokens = decryptJson(data.token);
     let expiresAt = Number(data.expiresAt || 0);
     if (expiresAt <= Date.now() + 60000) {
-      const refreshed = await exchangeToken({ grant_type: "refresh_token", refresh_token: tokens.refreshToken });
+      const refreshed = await exchangeToken(credentials, { grant_type: "refresh_token", refresh_token: tokens.refreshToken });
       tokens = { accessToken: refreshed.access_token, refreshToken: refreshed.refresh_token || tokens.refreshToken };
       expiresAt = tokenExpiryMs(refreshed.expires_in);
       await integration.ref.set({ expiresAt, token: encryptJson(tokens), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -120,21 +218,32 @@ exports.fitnessSyncerSync = onRequest({ cors: false, region: "us-central1", time
   }
 });
 
-exports.fitnessSyncerDisconnect = onRequest({ cors: false, region: "us-central1" }, async (req, res) => {
+exports.fitnessSyncerDisconnect = onRequest({ cors: false, invoker: "public", region: "us-central1", secrets: [fitnessSyncerTokenKey] }, async (req, res) => {
   if (!setCors(req, res) || req.method === "OPTIONS") return;
   try {
     requirePost(req);
     const uid = await authenticatedUid(req);
     const ref = integrationRef(uid);
     const snapshot = await ref.get();
-    if (snapshot.exists && configurationReady()) {
-      const tokens = decryptJson(snapshot.data().token);
-      await fetch("https://api.fitnesssyncer.com/api/oauth/revoke_token", {
-        headers: { Authorization: `Bearer ${tokens.accessToken}` },
-        method: "POST"
-      }).catch(() => undefined);
+    if (!snapshot.exists) {
+      res.json({ disconnected: true });
+      return;
     }
-    await ref.delete();
+    const data = snapshot.data() || {};
+    if (fitnessServerConfigurationStatus(process.env).configured && hasEncryptedValue(data.oauthApp) && hasEncryptedValue(data.token)) {
+      const credentials = oauthAppCredentials(data);
+      const tokens = decryptJson(data.token);
+      await revokeFitnessSyncerToken(tokens.accessToken, credentials).catch(() => undefined);
+    }
+    await ref.set({
+      connectedAt: FieldValue.delete(),
+      expiresAt: FieldValue.delete(),
+      lastError: FieldValue.delete(),
+      lastSyncAt: FieldValue.delete(),
+      scope: FieldValue.delete(),
+      token: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
     res.json({ disconnected: true });
   } catch (error) {
     sendError(res, error);
@@ -148,9 +257,7 @@ async function readActivityDistances(accessToken, uid) {
   const queryStart = Math.min(todayStart, weekStart) - 24 * 60 * 60 * 1000;
   const sourcesResponse = await fitnessSyncerGet("/providers/sources/", accessToken);
   const sources = arrayItems(sourcesResponse).map(unwrap).filter((source) => String(source.type || source.taskType || "").toLowerCase() === "activity");
-  let todayKm = 0;
-  let weekKm = 0;
-  let importedActivities = 0;
+  const activityRecords = [];
   const importWrites = [];
 
   for (const source of sources) {
@@ -159,23 +266,29 @@ async function readActivityDistances(accessToken, uid) {
     for (let offset = 0; offset < 1000; offset += 100) {
       const response = await fitnessSyncerGet(`/providers/sources/${encodeURIComponent(sourceId)}/items/?startDate=${queryStart}&endDate=${Date.now()}&offset=${offset}&limit=100`, accessToken);
       const items = arrayItems(response);
-      for (const value of items) {
-        const distanceKm = activityDistanceKm(value);
-        const timestamp = activityTimestamp(value);
-        if (!distanceKm || !timestamp) continue;
-        if (timestamp >= weekStart) weekKm += distanceKm;
-        if (timestamp >= todayStart) todayKm += distanceKm;
-        importedActivities += 1;
-        importWrites.push({ distanceKm, id: activityImportId(sourceId, value), sourceId, timestamp });
+      for (const listEntry of items) {
+        const itemId = String(unwrap(listEntry)?.itemId || "");
+        if (!itemId) continue;
+        const detailResponse = await fitnessSyncerGet(`/providers/sources/${encodeURIComponent(sourceId)}/items/${encodeURIComponent(itemId)}`, accessToken);
+        const value = { ...unwrap(detailResponse), itemId };
+        const movement = activityMovement(value);
+        if (!movement?.timestamp) continue;
+        activityRecords.push({ sourceId, value });
+        importWrites.push({
+          distanceKm: Math.round(Math.max(movement.distanceKm, movement.steps * 0.00075) * 1000) / 1000,
+          id: activityImportId(sourceId, value),
+          sourceId,
+          steps: movement.steps,
+          timestamp: movement.timestamp
+        });
       }
       if (items.length < 100) break;
     }
   }
   await recordImports(uid, importWrites);
   return {
-    importedActivities,
-    todayKm: Math.round(todayKm * 100) / 100,
-    weekKm: Math.round(weekKm * 100) / 100
+    importedActivities: activityRecords.length,
+    ...aggregateActivityMovement(activityRecords, todayStart, weekStart)
   };
 }
 
@@ -188,17 +301,18 @@ async function recordImports(uid, imports) {
         distanceKm: item.distanceKm,
         importedAt: FieldValue.serverTimestamp(),
         providerActivityAt: Timestamp.fromMillis(item.timestamp),
-        sourceId: item.sourceId
+        sourceId: item.sourceId,
+        steps: item.steps
       }, { merge: true });
     });
     await batch.commit();
   }
 }
 
-async function exchangeToken(values) {
+async function exchangeToken(credentials, values) {
   const body = new URLSearchParams({
-    client_id: process.env.FITNESSSYNCER_CLIENT_ID,
-    client_secret: process.env.FITNESSSYNCER_CLIENT_SECRET,
+    client_id: credentials.clientId,
+    client_secret: credentials.clientSecret,
     redirect_uri: redirectUri(),
     ...values
   });
@@ -210,6 +324,19 @@ async function exchangeToken(values) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.access_token) throw httpError(502, payload.error_description || "FitnessSyncer token exchange failed.");
   return payload;
+}
+
+async function revokeFitnessSyncerToken(accessToken, credentials) {
+  return fetch("https://api.fitnesssyncer.com/api/oauth/revoke_token", {
+    body: new URLSearchParams({
+      client_id: credentials.clientId,
+      client_secret: credentials.clientSecret,
+      token: accessToken,
+      token_type_hint: "access_token"
+    }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    method: "POST"
+  });
 }
 
 async function fitnessSyncerGet(path, accessToken) {
@@ -231,12 +358,31 @@ function integrationRef(uid) {
   return db.doc(`users/${uid}/privateIntegrations/fitnesssyncer`);
 }
 
-function configurationReady() {
-  return Boolean(process.env.FITNESSSYNCER_CLIENT_ID && process.env.FITNESSSYNCER_CLIENT_SECRET && process.env.FITNESSSYNCER_TOKEN_KEY);
+async function loadOAuthAppCredentials(uid) {
+  const snapshot = await integrationRef(uid).get();
+  return oauthAppCredentials(snapshot.data() || {});
 }
 
-function requireConfiguration() {
-  if (!configurationReady()) throw httpError(503, "FitnessSyncer configuration is not active yet.");
+function oauthAppCredentials(data) {
+  if (!hasEncryptedValue(data.oauthApp)) throw httpError(409, "Enter your FitnessSyncer Client ID and Client Secret first.");
+  const credentials = normalizeOAuthAppCredentials(decryptJson(data.oauthApp));
+  if (!fitnessUserConfigurationStatus(credentials).configured) throw httpError(409, "Enter your FitnessSyncer Client ID and Client Secret first.");
+  return credentials;
+}
+
+function normalizeOAuthAppCredentials(value = {}) {
+  return {
+    clientId: String(value.clientId || "").trim(),
+    clientSecret: String(value.clientSecret || "").trim()
+  };
+}
+
+function hasEncryptedValue(value) {
+  return Boolean(value?.ciphertext && value?.iv && value?.tag);
+}
+
+function requireServerConfiguration() {
+  if (!fitnessServerConfigurationStatus(process.env).configured) throw httpError(503, "FitnessSyncer server encryption is not active yet.");
 }
 
 function redirectUri() {
@@ -245,6 +391,26 @@ function redirectUri() {
 
 function appReturnUrl() {
   return process.env.FITNESSSYNCER_APP_RETURN_URL || "https://bugbaas.vercel.app/";
+}
+
+function normalizeAppReturnUrl(value) {
+  const fallback = appReturnUrl();
+  if (!value) return fallback;
+  try {
+    const url = new URL(String(value));
+    const isBugBaasWeb = url.protocol === "https:" && url.hostname === "bugbaas.vercel.app";
+    const isBugBaasApp = url.protocol === "bugbaas:";
+    const isLocalWeb = url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname);
+    return isBugBaasWeb || isBugBaasApp || isLocalWeb ? url.toString() : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function fitnessSyncerResultUrl(returnUrl, result) {
+  const url = new URL(normalizeAppReturnUrl(returnUrl));
+  url.searchParams.set("fitnessSyncer", result);
+  return url.toString();
 }
 
 function encryptJson(value) {

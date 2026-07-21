@@ -184,7 +184,7 @@ service cloud.firestore {
     }
 
     function validArcadeMode(mode) {
-      return mode in ['web_runner', 'nest_defense', 'bug_glide', 'bug_tower'];
+      return mode in ['web_runner', 'nest_defense', 'bug_glide', 'bug_tower', 'bubble_swarm'];
     }
 
     function validArcadeResultMode(mode) {
@@ -192,7 +192,7 @@ service cloud.firestore {
     }
 
     function validDuelMode(mode) {
-      return mode in ['tap_duel', 'web_runner', 'nest_defense', 'bug_glide', 'bug_tower'];
+      return mode in ['tap_duel', 'web_runner', 'nest_defense', 'bug_glide', 'bug_tower', 'bubble_swarm'];
     }
 
     function isTaggedTapDuel(data) {
@@ -922,6 +922,57 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      match /realBugScanUsage/{dayId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create, update, delete: if false;
+      }
+
+      match /realBugScanServerUsage/{dayId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if signedIn()
+          && request.auth.uid == userId
+          && dayId.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          && request.resource.data.keys().hasOnly(['day', 'used', 'scanIds', 'updatedAt'])
+          && request.resource.data.day == dayId
+          && request.resource.data.used == 1
+          && request.resource.data.scanIds is list
+          && request.resource.data.scanIds.size() == 1
+          && request.resource.data.scanIds[0] is string
+          && request.resource.data.scanIds[0].matches('[a-zA-Z0-9_-]{8,100}')
+          && request.resource.data.updatedAt is string;
+        allow update: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['day', 'used', 'scanIds', 'updatedAt'])
+          && request.resource.data.day == dayId
+          && request.resource.data.used is int
+          && request.resource.data.used == resource.data.used + 1
+          && request.resource.data.used <= 3
+          && request.resource.data.scanIds is list
+          && request.resource.data.scanIds.size() == resource.data.scanIds.size() + 1
+          && request.resource.data.scanIds.size() == request.resource.data.used
+          && request.resource.data.scanIds.hasAll(resource.data.scanIds)
+          && request.resource.data.scanIds[request.resource.data.scanIds.size() - 1] is string
+          && request.resource.data.scanIds[request.resource.data.scanIds.size() - 1].matches('[a-zA-Z0-9_-]{8,100}')
+          && request.resource.data.updatedAt is string;
+        allow delete: if false;
+      }
+
+      match /realBugScanProgress/{dayId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if signedIn()
+          && request.auth.uid == userId
+          && dayId.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          && request.resource.data.keys().hasOnly(['completed', 'completedAt', 'day', 'scanId', 'status', 'userId'])
+          && request.resource.data.completed == true
+          && request.resource.data.completedAt is string
+          && request.resource.data.day == dayId
+          && request.resource.data.scanId is string
+          && request.resource.data.scanId.matches('[a-zA-Z0-9_-]{8,100}')
+          && request.resource.data.status in ['matched', 'already_spotted', 'not_in_catalog', 'pending_review']
+          && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if false;
+      }
+
       match /duelRewardEvents/{eventId} {
         allow read: if signedIn() && request.auth.uid == userId;
         allow create: if signedIn()
@@ -1187,6 +1238,74 @@ service cloud.firestore {
           );
         allow update, delete: if organizationAdmin(organizationId);
       }
+    }
+
+    match /pendingBugDexDiscoveries/{scanId} {
+      allow create: if signedIn()
+        && scanId.matches('[a-zA-Z0-9_-]{8,100}')
+        && request.resource.data.keys().hasOnly([
+          'scanId',
+          'userId',
+          'userDisplayName',
+          'userEmail',
+          'organizationId',
+          'commonName',
+          'scientificName',
+          'normalizedSpeciesKey',
+          'confidence',
+          'reason',
+          'createdAt',
+          'updatedAt',
+          'status',
+          'bugDexBugId',
+          'reviewThumbnailDataUrl'
+        ])
+        && request.resource.data.keys().hasAll([
+          'scanId',
+          'userId',
+          'userDisplayName',
+          'userEmail',
+          'organizationId',
+          'commonName',
+          'scientificName',
+          'normalizedSpeciesKey',
+          'confidence',
+          'reason',
+          'createdAt',
+          'updatedAt',
+          'status',
+          'bugDexBugId',
+          'reviewThumbnailDataUrl'
+        ])
+        && request.resource.data.scanId == scanId
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.userDisplayName is string
+        && request.resource.data.userDisplayName.size() <= 120
+        && request.resource.data.userEmail is string
+        && request.resource.data.userEmail.size() <= 180
+        && request.resource.data.organizationId is string
+        && request.resource.data.organizationId.size() <= 120
+        && request.resource.data.commonName is string
+        && request.resource.data.commonName.size() > 0
+        && request.resource.data.commonName.size() <= 120
+        && request.resource.data.scientificName is string
+        && request.resource.data.scientificName.size() <= 160
+        && request.resource.data.normalizedSpeciesKey is string
+        && request.resource.data.normalizedSpeciesKey.matches('[a-z0-9][a-z0-9-]{0,99}')
+        && request.resource.data.confidence is number
+        && request.resource.data.confidence >= 0.75
+        && request.resource.data.confidence <= 1
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 500
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt == request.resource.data.createdAt
+        && request.resource.data.status == 'reward_owed'
+        && request.resource.data.bugDexBugId == null
+        && request.resource.data.reviewThumbnailDataUrl is string
+        && request.resource.data.reviewThumbnailDataUrl.size() <= 220000
+        && request.resource.data.reviewThumbnailDataUrl.matches('data:image/jpeg;base64,[A-Za-z0-9+/=]+');
+      allow read, update, delete: if false;
     }
 
     match /organizationInvites/{inviteId} {

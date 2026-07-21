@@ -1,4 +1,4 @@
-import { BugSeverity, BugStatus, User } from "../types";
+import type { BugSeverity, BugStatus, User } from "../types";
 
 export type InsectVariant = "larva" | "beetle" | "grasshopper" | "dragonfly" | "ladybug" | "crawler";
 export type TierPrestige = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond" | "Master" | "Mythic" | "Cosmic";
@@ -21,6 +21,7 @@ export type UserTier = {
 };
 
 export type BugDexRarity = "Gewoon" | "Zeldzaam" | "Episch" | "Legendarisch" | "Mythisch";
+export type BugDexUnlockMode = "rank" | "drop";
 
 export type BugDexEntry = {
   id: string;
@@ -32,6 +33,7 @@ export type BugDexEntry = {
   insect: InsectVariant;
   evolutionLevel: number;
   note: string;
+  unlockMode?: BugDexUnlockMode;
 };
 
 export const userTiers: UserTier[] = [
@@ -412,7 +414,55 @@ export const bugDexEntries: BugDexEntry[] = [
   { id: "roze-sprinkhaan", name: "Roze sprinkhaan", title: "Pink Hopper", minPoints: 5900, minBugs: 184, rarity: "Episch", insect: "grasshopper", evolutionLevel: 4, note: "Onverwacht roze en daardoor direct bijzonder." },
   { id: "gouden-vogelvlinder", name: "Gouden vogelvlinder", title: "Golden Flight", minPoints: 5910, minBugs: 185, rarity: "Legendarisch", insect: "dragonfly", evolutionLevel: 5, note: "Grote goudgele vleugels met koninklijke lijnen." },
   { id: "pauwoogpijlstaart", name: "Pauwoogpijlstaart", title: "Hidden Eyes", minPoints: 5920, minBugs: 186, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Verborgen oogvlekken verschijnen bij gevaar." },
-  { id: "smaragd-springspin", name: "Smaragd-springspin", title: "Emerald Jumper", minPoints: 5930, minBugs: 187, rarity: "Episch", insect: "crawler", evolutionLevel: 4, note: "Metallic groen en klaar voor een precieze sprong." }
+  { id: "smaragd-springspin", name: "Smaragd-springspin", title: "Emerald Jumper", minPoints: 5930, minBugs: 187, rarity: "Episch", insect: "crawler", evolutionLevel: 4, note: "Metallic groen en klaar voor een precieze sprong." },
+  { id: "papiervisje", name: "Papiervisje", title: "Paper Runner", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "larva", evolutionLevel: 3, note: "Razendsnelle bewoner van warme, droge hoekjes.", unlockMode: "drop" },
+  { id: "ovenvisje", name: "Ovenvisje", title: "Heat Skater", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "larva", evolutionLevel: 4, note: "Glanzende warmteliefhebber met lange sprieten.", unlockMode: "drop" },
+  { id: "bedwants", name: "Bedwants", title: "Night Hitchhiker", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "beetle", evolutionLevel: 3, note: "Platte nachtelijke verstekeling uit kieren en bagage.", unlockMode: "drop" },
+  { id: "varenrouwmug", name: "Varenrouwmug", title: "Potgrond Pilot", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "dragonfly", evolutionLevel: 3, note: "Kleine donkere vlieger rond vochtige potgrond.", unlockMode: "drop" },
+  { id: "trips", name: "Trips", title: "Leaf Scraper", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "larva", evolutionLevel: 3, note: "Smalle plantenscanner die zilveren sporen achterlaat.", unlockMode: "drop" },
+  { id: "spintmijt", name: "Spintmijt", title: "Micro Webber", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "crawler", evolutionLevel: 4, note: "Miniwever tussen bladnerven en fijne draadjes.", unlockMode: "drop" },
+  { id: "wolluis", name: "Wolluis", title: "Cotton Crawler", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "larva", evolutionLevel: 4, note: "Witte pluizenbol die zich op kamerplanten verstopt.", unlockMode: "drop" },
+  { id: "schildluis", name: "Schildluis", title: "Leaf Shield", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "beetle", evolutionLevel: 3, note: "Klein plantschild dat bijna op een bobbeltje lijkt.", unlockMode: "drop" },
+  { id: "grote-huisspin", name: "Grote huisspin", title: "Hallway Hunter", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "crawler", evolutionLevel: 4, note: "Lange snelle jager uit schuren en donkere kamers.", unlockMode: "drop" },
+  { id: "trilspin", name: "Trilspin", title: "Corner Shaker", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "crawler", evolutionLevel: 3, note: "Ultradunne hoekbewoner die zijn web laat trillen.", unlockMode: "drop" },
+  { id: "klein-koolwitje", name: "Klein koolwitje", title: "Garden White", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "dragonfly", evolutionLevel: 3, note: "Bekende witte tuinvlinder met donkere vleugelpunt.", unlockMode: "drop" },
+  { id: "klein-geaderd-witje", name: "Klein geaderd witje", title: "Veined White", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "dragonfly", evolutionLevel: 4, note: "Licht witje met duidelijk getekende aders.", unlockMode: "drop" },
+  { id: "citroenvlinder", name: "Citroenvlinder", title: "Lemon Wing", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Felgele voorjaarsvleugel met bladvormig silhouet.", unlockMode: "drop" },
+  { id: "bont-zandoogje", name: "Bont zandoogje", title: "Woodland Eyes", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "dragonfly", evolutionLevel: 4, note: "Bruine bosvlinder met lichte vlekken en oogjes.", unlockMode: "drop" },
+  { id: "icarusblauwtje", name: "Icarusblauwtje", title: "Meadow Azure", minPoints: 0, minBugs: 0, rarity: "Legendarisch", insect: "dragonfly", evolutionLevel: 5, note: "Helderblauwe graslandparel met fijne vleugelrand.", unlockMode: "drop" },
+  { id: "kleine-vos", name: "Kleine vos", title: "Ember Wing", minPoints: 0, minBugs: 0, rarity: "Legendarisch", insect: "dragonfly", evolutionLevel: 5, note: "Oranje klassieker met blauwe maantjes langs de rand.", unlockMode: "drop" },
+  { id: "landkaartje", name: "Landkaartje", title: "Map Wing", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Seizoensvlinder met een opvallend landkaartpatroon.", unlockMode: "drop" },
+  { id: "boomblauwtje", name: "Boomblauwtje", title: "Canopy Blue", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Zachtblauwe vlinder die vaak rond struiken vliegt.", unlockMode: "drop" },
+  { id: "springstaart", name: "Springstaart", title: "Soil Jumper", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "grasshopper", evolutionLevel: 3, note: "Piepkleine bodemspringer uit vochtige potten en aarde.", unlockMode: "drop" },
+  { id: "miljoenpoot", name: "Miljoenpoot", title: "Coil Walker", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "crawler", evolutionLevel: 4, note: "Rustige veelpoot die zich bij gevaar oprolt.", unlockMode: "drop" },
+  { id: "kelderpissebed", name: "Kelderpissebed", title: "Cellar Roller", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "crawler", evolutionLevel: 3, note: "Grijze vochtzoeker uit kelders en onder stenen.", unlockMode: "drop" },
+  { id: "oprolpissebed", name: "Oprolpissebed", title: "Armor Ball", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "crawler", evolutionLevel: 4, note: "Compact pantser dat verandert in een bijna perfecte bal.", unlockMode: "drop" },
+  { id: "buxusmot", name: "Buxusmot", title: "Hedge Invader", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Witbruine nachtvlinder die bij buxushagen opvalt.", unlockMode: "drop" },
+  { id: "buxusrups", name: "Buxusrups", title: "Hedge Stripper", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "larva", evolutionLevel: 4, note: "Groenzwarte rups die buxusbladeren snel opeet.", unlockMode: "drop" },
+  { id: "leliehaantje", name: "Leliehaantje", title: "Scarlet Leaf", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "beetle", evolutionLevel: 4, note: "Lakrode tuinkever die direct tussen groene bladeren knalt.", unlockMode: "drop" },
+  { id: "engerling", name: "Engerling", title: "Root Grub", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "larva", evolutionLevel: 3, note: "C-vormige keverlarve die onder gras en aarde leeft.", unlockMode: "drop" },
+  { id: "emelt", name: "Emelt", title: "Lawn Larva", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "larva", evolutionLevel: 3, note: "Pootloze langpootmuglarve uit gazon en bodem.", unlockMode: "drop" },
+  { id: "gamma-uil", name: "Gamma-uil", title: "Silver Mark", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Bruine trekvlinder met een zilveren gammateken.", unlockMode: "drop" },
+  { id: "huismoeder", name: "Huismoeder", title: "Porch Moth", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "dragonfly", evolutionLevel: 4, note: "Grote bruine nachtvlinder die vaak bij buitenlampen zit.", unlockMode: "drop" },
+  { id: "agaatvlinder", name: "Agaatvlinder", title: "Marbled Wing", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Nachtvlinder met golvende lijnen als gepolijste steen.", unlockMode: "drop" },
+  { id: "windevedermot", name: "Windevedermot", title: "Feather Wing", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Slanke mot die zijn vleugels als een T uitstrekt.", unlockMode: "drop" },
+  { id: "jakobsvlinder", name: "Jakobsvlinder", title: "Crimson Warning", minPoints: 0, minBugs: 0, rarity: "Legendarisch", insect: "dragonfly", evolutionLevel: 5, note: "Zwartrode waarschuwingsvlinder met krachtige kleuren.", unlockMode: "drop" },
+  { id: "jakobsvlinderrups", name: "Jakobsvlinderrups", title: "Stripe Warning", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "larva", evolutionLevel: 4, note: "Geelzwarte rups die zijn giftige menu duidelijk toont.", unlockMode: "drop" },
+  { id: "distelvlinder", name: "Distelvlinder", title: "Global Traveler", minPoints: 0, minBugs: 0, rarity: "Legendarisch", insect: "dragonfly", evolutionLevel: 5, note: "Oranje wereldreiziger met sterk zwart-wit patroon.", unlockMode: "drop" },
+  { id: "groot-koolwitje", name: "Groot koolwitje", title: "Bold White", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "dragonfly", evolutionLevel: 4, note: "Groot wit silhouet met brede donkere vleugelpunten.", unlockMode: "drop" },
+  { id: "hooibeestje", name: "Hooibeestje", title: "Grassland Eye", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "dragonfly", evolutionLevel: 4, note: "Kleine bruine grasvlinder met een helder oogvlekje.", unlockMode: "drop" },
+  { id: "koevinkje", name: "Koevinkje", title: "Shadow Meadow", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Donkere graslandvlinder met subtiele oogjes.", unlockMode: "drop" },
+  { id: "geelpoothoornaar", name: "Geelpoothoornaar", title: "Yellow Leg Alert", minPoints: 0, minBugs: 0, rarity: "Legendarisch", insect: "dragonfly", evolutionLevel: 5, note: "Donkere hoornaar met opvallend gele uiteinden aan de poten.", unlockMode: "drop" },
+  { id: "daas", name: "Daas", title: "Heavy Biter", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "dragonfly", evolutionLevel: 4, note: "Stevige vlieg met grote ogen en een pijnlijke reputatie.", unlockMode: "drop" },
+  { id: "stadsreus", name: "Stadsreus", title: "Urban Hover", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Enorme zweefvlieg die op een hoornaar lijkt.", unlockMode: "drop" },
+  { id: "bijvlieg", name: "Bijvlieg", title: "Bee Mimic", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "dragonfly", evolutionLevel: 4, note: "Pluizige zweefvlieg in overtuigende bijenvermomming.", unlockMode: "drop" },
+  { id: "rosse-metselbij", name: "Rosse metselbij", title: "Brick Nest Builder", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "dragonfly", evolutionLevel: 4, note: "Roodharige solitaire bij die nestkamers dichtmetselt.", unlockMode: "drop" },
+  { id: "blauwzwarte-houtbij", name: "Blauwzwarte houtbij", title: "Midnight Carpenter", minPoints: 0, minBugs: 0, rarity: "Legendarisch", insect: "dragonfly", evolutionLevel: 5, note: "Grote donkere bij met blauw glanzende vleugels.", unlockMode: "drop" },
+  { id: "gewone-wolfspin", name: "Gewone wolfspin", title: "Ground Stalker", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "crawler", evolutionLevel: 4, note: "Snelle bodemjager die zonder vangweb rondsluipt.", unlockMode: "drop" },
+  { id: "venstersectorspin", name: "Venstersectorspin", title: "Window Webber", minPoints: 0, minBugs: 0, rarity: "Episch", insect: "crawler", evolutionLevel: 4, note: "Bouwt een herkenbaar web bij ramen en gevelhoeken.", unlockMode: "drop" },
+  { id: "grote-wegslak", name: "Grote wegslak", title: "Night Slider", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "crawler", evolutionLevel: 3, note: "Grote donkere tuinreiziger die een glanzend spoor achterlaat.", unlockMode: "drop" },
+  { id: "segrijnslak", name: "Segrijnslak", title: "Garden Spiral", minPoints: 0, minBugs: 0, rarity: "Zeldzaam", insect: "crawler", evolutionLevel: 4, note: "Bekende tuinslak met een warmbruin spiraalhuis.", unlockMode: "drop" },
+  { id: "regenworm", name: "Regenworm", title: "Soil Engineer", minPoints: 0, minBugs: 0, rarity: "Gewoon", insect: "larva", evolutionLevel: 3, note: "Onmisbare bodembouwer die gangen en lucht maakt.", unlockMode: "drop" }
 ];
 
 export const bugDexFacts: Record<string, string> = {
@@ -553,7 +603,55 @@ export const bugDexFacts: Record<string, string> = {
   "schorpioenvlieg": "Schorpioenvliegen danken hun naam aan het gekromde achterlijf van sommige mannetjes.",
   "voorraadmot": "Voorraadmotten leggen eitjes bij droge voedselvoorraden zoals meel, graan of noten.",
   "whitefly": "Whiteflies zitten vaak aan de onderkant van bladeren en zuigen plantensap.",
-  "witte-tijger": "De naam Witte tijger verwijst hier naar het lichte, gestreepte patroon van de BugDex-afbeelding."
+  "witte-tijger": "De naam Witte tijger verwijst hier naar het lichte, gestreepte patroon van de BugDex-afbeelding.",
+  "papiervisje": "Papiervisjes lijken op zilvervisjes, maar houden juist van warmere en drogere gebouwen.",
+  "ovenvisje": "Ovenvisjes zoeken zeer warme plekken op, bijvoorbeeld rond verwarmingsruimtes en leidingen.",
+  "bedwants": "Bedwantsen verstoppen zich overdag in smalle kieren en komen meestal in de nacht tevoorschijn.",
+  "varenrouwmug": "Varenrouwmuglarven leven in vochtige potgrond en eten vooral schimmels en zacht plantenmateriaal.",
+  "trips": "Tripsen zijn smalle insecten die bladeren beschadigen door plantencellen leeg te schrapen.",
+  "spintmijt": "Spintmijten zijn spinachtigen en maken bij grotere aantallen fijne webjes rond bladeren.",
+  "wolluis": "Wolluizen beschermen zich met een witte waslaag die eruitziet als kleine plukjes katoen.",
+  "schildluis": "Schildluizen zitten vaak onbeweeglijk op stengels en bladeren onder een hard beschermend schildje.",
+  "grote-huisspin": "Grote huisspinnen rennen snel, maar gebruiken meestal een trechterweb als vaste schuilplaats.",
+  "trilspin": "Trilspinnen laten hun lichaam en web snel trillen wanneer ze worden verstoord.",
+  "klein-koolwitje": "Kleine koolwitjes zijn veel in tuinen te zien en leggen eitjes op planten uit de koolfamilie.",
+  "klein-geaderd-witje": "Bij het klein geaderd witje zijn de donkere aders vooral aan de onderkant goed zichtbaar.",
+  "citroenvlinder": "Citroenvlinders overwinteren als volwassen vlinder en kunnen vroeg in het voorjaar vliegen.",
+  "bont-zandoogje": "Bonte zandoogjes verdedigen zonnige plekjes langs bosranden en tussen struiken.",
+  "icarusblauwtje": "Mannetjes van het icarusblauwtje hebben opvallend blauwe bovenvleugels.",
+  "kleine-vos": "Kleine vossen overwinteren geregeld in schuren, zolders en andere koele gebouwen.",
+  "landkaartje": "Het landkaartje heeft een voorjaars- en zomervorm die sterk van kleur en patroon verschillen.",
+  "boomblauwtje": "Boomblauwtjes vliegen vaak hoger rond struiken en bomen dan veel andere blauwtjes.",
+  "springstaart": "Springstaarten gebruiken een gevorkt springorgaan onder hun lichaam om plots weg te schieten.",
+  "miljoenpoot": "Miljoenpoten hebben twee paar poten per zichtbaar lichaamssegment en eten vooral dood plantenmateriaal.",
+  "kelderpissebed": "Kelderpissebedden zoeken vochtige schuilplekken omdat hun kieuwachtige organen niet mogen uitdrogen.",
+  "oprolpissebed": "Oprolpissebedden kunnen kop en poten volledig beschermen door zich tot een bolletje op te rollen.",
+  "buxusmot": "Buxusmotten zijn witte nachtvlinders met vaak een brede bruine rand langs de vleugels.",
+  "buxusrups": "Buxusrupsen leven tussen spinsel in buxusplanten en kunnen veel blad wegvreten.",
+  "leliehaantje": "Leliehaantjes vallen op door hun glanzend rode dekschilden en eten aan leliebladeren.",
+  "engerling": "Engerlingen zijn larven van bladsprietkevers en liggen meestal gekromd in een C-vorm.",
+  "emelt": "Emelten zijn larven van langpootmuggen en leven vlak onder of op het bodemoppervlak.",
+  "gamma-uil": "De gamma-uil dankt zijn naam aan het zilverkleurige teken op iedere voorvleugel.",
+  "huismoeder": "Huismoeders rusten overdag verborgen en komen in de avond vaak op licht af.",
+  "agaatvlinder": "Agaatvlinders hebben een variabel marmerpatroon van bruine, crème en soms groenige tinten.",
+  "windevedermot": "Windevedermotten rollen hun smalle vleugels op en rusten daardoor in een herkenbare T-houding.",
+  "jakobsvlinder": "Jakobsvlinders tonen met hun zwartrode kleur dat ze voor veel roofdieren onaantrekkelijk zijn.",
+  "jakobsvlinderrups": "Jakobsvlinderrupsen slaan afweerstoffen uit hun waardplant op in hun lichaam.",
+  "distelvlinder": "Distelvlinders zijn trekvlinders die ieder jaar vanuit zuidelijkere gebieden naar Nederland vliegen.",
+  "groot-koolwitje": "Grote koolwitjes hebben bredere zwarte vleugelpunten dan het kleinere koolwitje.",
+  "hooibeestje": "Hooibeestjes rusten bijna altijd met gesloten vleugels en tonen dan hun kleine oogvlek.",
+  "koevinkje": "Koevinkjes vliegen laag door ruige graslanden en langs zonnige bosranden.",
+  "geelpoothoornaar": "De geelpoothoornaar is donker van kleur en heeft opvallend gele uiteinden aan de poten.",
+  "daas": "Dazen gebruiken hun grote facetogen om bewegende dieren en mensen snel te vinden.",
+  "stadsreus": "De stadsreus is een grote zweefvlieg die door zijn tekening sterk op een hoornaar lijkt.",
+  "bijvlieg": "Bijvliegen bootsen het uiterlijk van bijen na, maar hebben als vliegen slechts één paar vleugels.",
+  "rosse-metselbij": "Rosse metselbijen maken afzonderlijke broedcellen en sluiten die af met modder.",
+  "blauwzwarte-houtbij": "Blauwzwarte houtbijen knagen nestgangen in dood of verweerd hout.",
+  "gewone-wolfspin": "Wolfspinnen jagen lopend op prooi en bouwen geen vangweb om voedsel te vangen.",
+  "venstersectorspin": "Venstersectorspinnen maken vaak een web met een ontbrekende sector en een signaaldraad naar hun schuilplaats.",
+  "grote-wegslak": "Grote wegslakken zijn vooral bij vochtig weer en in de schemering actief.",
+  "segrijnslak": "Segrijnslakken hebben meestal een bruin gemarmerd huis met een duidelijke spiraal.",
+  "regenworm": "Regenwormen mengen organisch materiaal door de bodem en maken gangen waardoor lucht en water doordringen."
 };
 
 const severityBase: Record<BugSeverity, number> = {
@@ -677,7 +775,7 @@ export function badgesForUser(user: Partial<Pick<User,
 }
 
 export function isBugDexEntryUnlocked(entry: BugDexEntry, user: Pick<User, "totalPoints" | "bugCount">): boolean {
-  return user.totalPoints >= entry.minPoints && user.bugCount >= entry.minBugs;
+  return (entry.unlockMode ?? "rank") === "rank" && user.totalPoints >= entry.minPoints && user.bugCount >= entry.minBugs;
 }
 
 export function unlockedBugDexCount(user: Pick<User, "totalPoints" | "bugCount">): number {

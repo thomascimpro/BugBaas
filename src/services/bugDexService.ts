@@ -30,6 +30,7 @@ export type BugDexDropSource =
   | "buddy_common"
   | "buddy_rare"
   | "buddy_epic"
+  | "real_bug_scan"
   | "combine";
 
 export type BugDexDropResult = {
@@ -51,6 +52,7 @@ export type BugDexDropResult = {
   updatedUser?: User;
 };
 export type BugDexBugDropResult = Extract<BugDexDropResult, { rewardType: "bug" }>;
+export type RealBugScanRewardResult = BugDexBugDropResult & { awardedCopy: boolean; previousCount: number };
 
 const demoInventory = new Map<string, Map<string, BugDexInventoryItem>>();
 const demoUnlocks = new Map<string, Map<string, BugDexUnlock>>();
@@ -88,6 +90,7 @@ const dropChances: Record<BugDexDropSource, number> = {
   buddy_common: 1,
   buddy_rare: 1,
   buddy_epic: 1,
+  real_bug_scan: 1,
   combine: 1
 };
 
@@ -113,6 +116,7 @@ const rarityWeights: Record<BugDexDropSource, Array<[BugDexRarity, number]>> = {
   buddy_common: [["Gewoon", 100]],
   buddy_rare: [["Zeldzaam", 100]],
   buddy_epic: [["Episch", 100]],
+  real_bug_scan: [["Gewoon", 100]],
   combine: [["Zeldzaam", 100]]
 };
 
@@ -556,6 +560,53 @@ export async function grantBugDexRewardInTransaction(transaction: Transaction, u
   if (syncUnlock) await upsertBugDexUnlock(transaction, user.uid, entry, source, now);
   transaction.set(ref, item);
   return { rewardType: "bug", entry, item, isNew: !existing, source, previousCount };
+}
+
+export async function grantRealBugScanRewardOnce(user: User, bugId: string, eventId: string, now = new Date().toISOString()): Promise<RealBugScanRewardResult | null> {
+  const entry = entryByBugId(bugId);
+  if (!entry) throw new Error("BugDex item niet gevonden.");
+  const source: BugDexDropSource = "real_bug_scan";
+
+  if (!isFirebaseConfigured) {
+    const eventKey = `${user.uid}:${eventId}`;
+    if (demoEvents.has(eventKey)) return null;
+    const inventory = demoInventory.get(user.uid) ?? new Map<string, BugDexInventoryItem>();
+    const existing = inventory.get(entry.id) ?? null;
+    const previousCount = existing ? ownedCount(existing) : 0;
+    const item: BugDexInventoryItem = existing
+      ? { ...existing, count: previousCount + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
+      : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
+    inventory.set(entry.id, item);
+    demoInventory.set(user.uid, inventory);
+    updateDemoUnlock(user.uid, entry, source, now);
+    demoEvents.add(eventKey);
+    return { rewardType: "bug", entry, item, isNew: previousCount === 0, source, previousCount, awardedCopy: true };
+  }
+
+  const result = await runTransaction(db, async (transaction) => {
+    const eventRef = doc(db, "users", user.uid, "bugdexEvents", eventId);
+    const inventoryRef = doc(db, "users", user.uid, "bugdex", entry.id);
+    const unlockRef = doc(db, "users", user.uid, "bugdexUnlocks", entry.id);
+    const [eventSnapshot, inventorySnapshot, unlockSnapshot] = await Promise.all([
+      transaction.get(eventRef),
+      transaction.get(inventoryRef),
+      transaction.get(unlockRef)
+    ]);
+    if (eventSnapshot.exists()) return null;
+
+    const existing = inventorySnapshot.exists() ? normalizeInventoryItem(entry.id, inventorySnapshot.data() as Partial<BugDexInventoryItem>) : null;
+    const existingUnlock = unlockSnapshot.exists() ? unlockSnapshot.data() as BugDexUnlock : null;
+    const previousCount = existing ? ownedCount(existing) : 0;
+    const item: BugDexInventoryItem = existing
+      ? { ...existing, count: previousCount + 1, lastUnlockedAt: now, sources: Array.from(new Set([...existing.sources, source])) }
+      : { bugId: entry.id, count: 1, firstUnlockedAt: now, lastUnlockedAt: now, rarity: entry.rarity, sources: [source] };
+    transaction.set(inventoryRef, item);
+    transaction.set(unlockRef, bugDexUnlockItem(entry, source, now, existingUnlock));
+    transaction.set(eventRef, { id: eventId, source, createdAt: now });
+    return { rewardType: "bug", entry, item, isNew: previousCount === 0, source, previousCount, awardedCopy: true } as RealBugScanRewardResult;
+  });
+  if (result) clearBugDexInventoryCache(user.uid);
+  return result;
 }
 
 export async function repairBugDexRewardInTransaction(transaction: Transaction, user: User, bugId: string, source: BugDexDropSource, minimumCount: number, now = new Date().toISOString(), syncUnlock = true): Promise<BugDexBugDropResult & { repaired: boolean }> {

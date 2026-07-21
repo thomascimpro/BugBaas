@@ -14,12 +14,15 @@ import { maxActiveBugSquadSize, sanitizeActiveBugSquad } from "../services/bugSq
 import { dismissPhoneNotification, scheduleBuddyTaskNotification } from "../services/notificationService";
 import { listBugSmashDuels } from "../services/bugSmashDuelService";
 import { claimMovementRadarBonusesForApp, claimQueuedRadarBugs, getMovementRadarProgress, getQueuedRadarBugIds, MovementRadarProgress } from "../services/movementRadarService";
+import { MovementSyncSource } from "../services/movementSyncSource";
 import { disconnectFitnessSyncer, FitnessSyncerStatus, getFitnessSyncerStatus, startFitnessSyncerConnection, syncFitnessSyncerActivities } from "../services/fitnessSyncerService";
 import { bugDexEntries, BugDexRarity, getTierForPoints, userTiers } from "../services/pointsService";
 import { languages, useI18n } from "../services/i18n";
+import { rankForMetric, visibleRankUsers } from "../services/leaderboardRank";
 import { listLeaderboardUsers } from "../services/userService";
 import { loadSoloCampaignProgress } from "../services/soloCampaignProgressService";
 import { claimedDailyMissionIds as fetchClaimedDailyMissionIds, claimDailyMissionBonusWithReward, claimDailyMissionReward, dailyMissionSet, dailyMissionSetComplete, isDailyMissionBonusClaimed } from "../services/dailyMissionService";
+import { getDailyRealBugScanProgress } from "../services/realBugScanProgress";
 import { loadSoloCampaignBossProgress, SoloCampaignBossProgress } from "../services/missionProgressService";
 import { claimedWeeklyMissionIds, claimWeeklyMissionBonusWithReward, claimWeeklyMissionReward, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
 import { BugDexInventoryItem, BugDexUnlock, BugMastery, BugReport, BugSmashDuel, User } from "../types";
@@ -29,7 +32,7 @@ type Props = {
   movementBoost?: number;
   onActivateBugLamp?: () => Promise<void>;
   onMovementRadarClaimed?: (bugIds: BugArtId[]) => void;
-  onMovementRegistered?: (estimatedKm: number, estimatedWeekKm?: number) => Promise<void>;
+  onMovementRegistered?: (estimatedKm: number, estimatedWeekKm?: number, source?: MovementSyncSource) => Promise<void>;
   onOpenBugDexWorkshop?: () => void;
   onRewardDrop?: (drop: BugDexDropResult) => void;
   onUserUpdated?: (user: User) => void;
@@ -99,6 +102,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [fitnessSyncerMessage, setFitnessSyncerMessage] = useState("");
   const [soloCampaignWave, setSoloCampaignWave] = useState(1);
   const [bossProgress, setBossProgress] = useState<SoloCampaignBossProgress>({ dayCount: 0, dayId: "", updatedAt: "", weekCount: 0, weekId: "" });
+  const [realBugScanProgress, setRealBugScanProgress] = useState(0);
   const [claimedDailyIds, setClaimedDailyIds] = useState<Set<string>>(new Set());
   const [claimingDailyMissionId, setClaimingDailyMissionId] = useState("");
   const [dailyBonusClaimed, setDailyBonusClaimed] = useState(false);
@@ -122,11 +126,13 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [buddyNow, setBuddyNow] = useState(() => Date.now());
   const buddyAnim = useRef(new Animated.Value(0)).current;
   const buddyReadyPopupKeyRef = useRef("");
-  const scoreLeaders = users.slice(0, 3);
-  const duelRankedUsers = [...users].sort((a, b) => duelRating(b) - duelRating(a));
+  const rankedUsers = visibleRankUsers(users, user);
+  const scoreRankedUsers = [...rankedUsers].sort((a, b) => b.totalPoints - a.totalPoints);
+  const scoreLeaders = scoreRankedUsers.slice(0, 3);
+  const duelRankedUsers = [...rankedUsers].sort((a, b) => duelRating(b) - duelRating(a));
   const duelLeaders = duelRankedUsers.slice(0, 3);
-  const scoreRank = Math.max(1, users.findIndex((item) => item.uid === user.uid) + 1);
-  const duelRank = Math.max(1, duelRankedUsers.findIndex((item) => item.uid === user.uid) + 1);
+  const scoreRank = rankForMetric(rankedUsers, user.uid, (item) => item.totalPoints);
+  const duelRank = rankForMetric(rankedUsers, user.uid, duelRating);
   const unlockedDexCount = Math.max(user.bugDexCount ?? 0, inventory.length, unlockHistory.length);
   const activeSquadIds = sanitizeActiveBugSquad(user.activeBugSquad, inventory);
   const activeSquadEntries = activeSquadIds
@@ -157,7 +163,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const buddyMotionStyle = buddyBeeMotionStyle(buddyActiveTask?.action, buddyAnim);
   const buddyProgress = Math.min(100, Math.round((buddyMasteryProgressXp / buddyMasteryNextXp) * 100));
   const buddyLastAction = buddyCareState.lastAction ? buddyActionLabel(buddyCareState.lastAction, t) : t("buddy.noAction");
-  const dailyMissions = dailyMissionSet(user, { bossProgress, duels });
+  const dailyMissions = dailyMissionSet(user, { bossProgress, duels, realBugScanProgress });
   const dailyMissionIdsKey = dailyMissions.map((mission) => mission.id).join("|");
   const missions = weeklyMissionSet(user, bugs, { bossProgress, duels, inventory, soloCampaignWave });
   const missionIdsKey = missions.map((mission) => mission.id).join("|");
@@ -167,7 +173,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const showBugLamp = lampStatus.active || lampStatus.count > 0;
 
   useEffect(() => {
-    listLeaderboardUsers().then(setUsers);
+    listLeaderboardUsers({ complete: true, fresh: true }).then(setUsers);
     listBugs().then(setBugs);
     listBugSmashDuels(user).then(setDuels).catch(() => setDuels([]));
     listBugDexInventory(user).then(setInventory);
@@ -175,6 +181,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     listBugMastery(user).then((items) => setMasteryByBugId(Object.fromEntries(items.map((item) => [item.bugId, item])))).catch(() => setMasteryByBugId({}));
     loadSoloCampaignProgress(user.uid).then((progress) => setSoloCampaignWave(progress.wave)).catch(() => setSoloCampaignWave(1));
     loadSoloCampaignBossProgress(user.uid).then(setBossProgress).catch(() => undefined);
+    getDailyRealBugScanProgress(user).then(setRealBugScanProgress).catch(() => setRealBugScanProgress(0));
   }, [user.uid]);
 
   useEffect(() => {
@@ -325,8 +332,8 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     setFitnessSyncerMessage("");
     try {
       const result = await syncFitnessSyncerActivities();
-      if (result.todayKm > 0 || result.weekKm > 0) await onMovementRegistered?.(result.todayKm, result.weekKm);
-      setFitnessSyncerMessage(`${formatKm(result.weekKm)} km synced this week.`);
+      if (result.todayKm > 0 || result.weekKm > 0) await onMovementRegistered?.(result.todayKm, result.weekKm, "fitness_syncer");
+      setFitnessSyncerMessage(t("settings.fitnessSynced", { km: formatKm(result.weekKm), steps: result.weekSteps.toLocaleString() }));
       setFitnessSyncerStatus(await getFitnessSyncerStatus());
       await refreshMovementProgress();
     } catch (error) {
@@ -489,6 +496,10 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     setBuddyMessage(t("buddy.message.starting", { action: buddyActionLabel(actionId, t) }));
 
     try {
+      await saveBuddyState(user.uid, { bugId: target.id, care: nextState, updatedAt: new Date().toISOString() });
+      setBuddyActionsOpen(false);
+      setBuddyMessage(t("buddy.message.huntStarted"));
+
       const taskId = `buddy:${day}:${target.id}:${actionId}:${now}`;
       const notificationId = await scheduleBuddyTaskNotification({
         actionLabel: buddyActionLabel(actionId, t),
@@ -497,11 +508,11 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
         taskId,
         xp
       }).catch(() => "");
-      const savedState: BuddyCareState = { ...nextState, activeTask: { ...activeTask, notificationId } };
-      setBuddyCareState(savedState);
-      await saveBuddyState(user.uid, { bugId: target.id, care: savedState, updatedAt: new Date().toISOString() });
-      setBuddyActionsOpen(false);
-      setBuddyMessage(t("buddy.message.huntStarted"));
+      if (notificationId) {
+        const savedState: BuddyCareState = { ...nextState, activeTask: { ...activeTask, notificationId } };
+        setBuddyCareState(savedState);
+        await saveBuddyState(user.uid, { bugId: target.id, care: savedState, updatedAt: new Date().toISOString() }).catch(() => undefined);
+      }
     } catch {
       setBuddyMessage(t("buddy.message.syncPending"));
     } finally {
@@ -1215,6 +1226,16 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
           )}
         </View>
       )}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("home.reportCta")} style={styles.reportCard} onPress={() => onNavigate("bugs")}>
+        <View style={styles.reportBug}>
+          <BugArtImage bugId="pissebed" size={56} />
+        </View>
+        <View style={styles.reportText}>
+          <Text style={styles.reportTitle}>{t("home.reportTitle")}</Text>
+          <Text style={styles.reportBody}>{t("home.reportBody")}</Text>
+        </View>
+        <Text style={styles.reportCta}>{t("home.reportCta")}</Text>
+      </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={t("home.wikiCta")} style={styles.wikiCard} onPress={openBugBaasWiki}>
         <Image resizeMode="cover" source={wikiButtonImage} style={styles.wikiImage} />
         <View style={styles.wikiText}>
@@ -3137,6 +3158,51 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
     marginTop: 6
+  },
+  reportCard: {
+    alignItems: "center",
+    backgroundColor: "#eaf7f0",
+    borderColor: "#8cc5aa",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+    minHeight: 82,
+    padding: 12
+  },
+  reportBug: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderColor: "#b9dcca",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 62,
+    justifyContent: "center",
+    width: 70
+  },
+  reportText: {
+    flex: 1,
+    minWidth: 0
+  },
+  reportTitle: {
+    color: "#102018",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  reportBody: {
+    color: "#52665d",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
+    marginTop: 2
+  },
+  reportCta: {
+    color: "#15724f",
+    fontSize: 12,
+    fontWeight: "900",
+    maxWidth: 58,
+    textAlign: "right"
   },
   wikiCard: {
     alignItems: "center",

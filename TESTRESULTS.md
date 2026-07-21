@@ -1,5 +1,88 @@
 # Test Results
 
+## 2026-07-21 release 2.10.17
+
+- `npm run typecheck`: geslaagd.
+- BugScan: 58/58 gerichte client- en servertests geslaagd; FitnessSyncer Functions: 8/8 geslaagd.
+- `npx expo install --check`: alle dependencies actueel; productie-webexport geslaagd met 365 assets.
+- Android `assembleRelease`: `BUILD SUCCESSFUL`; package `nl.cimpro.bugbaas`, versionCode `197`, versionName `2.10.17`.
+- APK: `dist/BugBaas-2.10.17.apk`, 109.079.794 bytes, APK Signature Scheme v2 geldig.
+- APK SHA-256: `D9B7981B62DEA05D9B458A12058EEFF55FDBBF6F7FF17EA0991B32033C002C9E`.
+- Lokale browsercontrole bevestigde de nieuwe afbeeldingen, Google-weblogin en dat openen van de camera geen poging van 3/3 aftrekt. Een echte providerconsent en fysieke Android-installatie zijn niet uitgevoerd.
+
+## 2026-07-21 FitnessSyncer OAuth connect hotfix
+
+- Gerichte clienttests: 3/3 geslaagd voor actieve connect-policy en platformgerichte FitnessSyncer-uitleg.
+- `npm run typecheck`: geslaagd op actuele web/appbron 2.10.15.
+- FitnessSyncer Functions-tests: 7/7 geslaagd.
+- Verse lokale Expo-webexport: geslaagd.
+- Eerste Vercel-preview faalde terecht omdat `.vercelignore` het inmiddels gebruikte `assets/new bugs/cropped/bed-bug.png` uitsloot; de foutieve ignore-regel is verwijderd.
+- Vercel-productie `dpl_Gz5vb23fJx1rCCv6Uz2dELP8TqKo`: `READY`; vaste alias `https://bugbaas.vercel.app` wijst naar deze deployment.
+- `https://bugbaas.vercel.app/`: HTTP 200; bundle `AppEntry-149da9e01d13fbc13eb1ecbf9e3fcd45.js`: HTTP 200.
+- TypeScript-scope is hersteld: gegenereerde `dist*`-bundles worden niet meer als broncode meegenomen; regressietest geslaagd en `npm run typecheck` voltooit weer normaal.
+- `/api/real-bug-identify`: GET geeft correct HTTP 405, waarmee de serverless route actief blijft en niet naar `index.html` wordt herschreven.
+- Alle vijf FitnessSyncer Functions zijn succesvol gedeployed. `fitnessSyncerStart` CORS-preflight geeft HTTP 204; start en sync geven zonder Firebase-login HTTP 401; callback zonder geldige state geeft HTTP 302 naar `https://bugbaas.vercel.app/?fitnessSyncer=error`.
+- Productie-smoke op 390x844: pagina en login-UI laden met 0 console-errors. Een ingelogde Settings/FitnessSyncer-smoke is niet uitgevoerd omdat Google accountkeuze vereiste en geen testcredentials in de repo staan.
+- Volledige providerconsent en tokenexchange zijn niet uitgevoerd; geldige FitnessSyncer Client ID en Client Secret ontbreken nog.
+
+## 2026-07-20 BugScan reward release 2.10.15
+
+- `npm.cmd run test:real-bug-scan`: 51/51 tests geslaagd.
+- `npm.cmd run typecheck`: geslaagd.
+- Regressietest bevestigt dat elke unieke scan één extra owned kopie vereist en dat een herhaald event niet dubbel verwerkt wordt.
+- Fast Android releasebuild: `BUILD SUCCESSFUL in 1m 10s`.
+- APK: `dist/BugBaas-2.10.15.apk`, 100.060.605 bytes, package `nl.cimpro.bugbaas`, versionCode `195`, versionName `2.10.15`.
+- APK SHA-256: `00E0355F8A2F8FDF68A9A536FE5888069435A853F6CD7598B16F9FC9B009A8FF`.
+- APK-certificaat SHA-256: `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`, gelijk aan de vastgelegde 2.10.14 release.
+- Vercel productie: deployment `dpl_69KTPZko2Eyx1fsFLuwCUD9vquPv`, status `READY`.
+- `https://bugbaas.vercel.app/`: HTTP 200; bundle `AppEntry-167d3edc9a0761bf18ba854c17f600d5.js`: HTTP 200, 2.590.880 bytes.
+- `/api/real-bug-identify` CORS preflight: HTTP 204; serverless route actief.
+- Geen fysieke Android-installatietest uitgevoerd. GitHub CLI was niet ingelogd; geen nieuwe GitHub Release gepubliceerd.
+
+## 2026-07-20 BugScan release 2.10.14
+
+- `npx tsc --noEmit --pretty false`: geslaagd.
+- `npm run test:real-bug-scan`: 50/50 tests geslaagd.
+- Regressies afgedekt: oude API-response zonder `remainingScans`, `scientificName: null`, bestaande BugDex-unlock met `count: 0`, serverquota, duplicate scan-ID, cameraresultaat en structured OpenAI-output.
+- OpenAI `max_output_tokens` teruggezet van 300 naar 1200; 300 veroorzaakte productie-502's en onvolledige structured output.
+- Vercel productie `dpl_CwA5yrGgdPqZ4k2J5Ca3XT89ivwQ`: `READY`; vaste alias `https://bugbaas.vercel.app` wijst naar de deployment.
+- Productiebundle: `AppEntry-a08d0f5d881a01555d031e0f68c8d4a8.js`; root HTTP 200.
+- `/api/real-bug-identify` geeft zonder Firebase-login correct HTTP 401 met de BugBaas JSON-fout, dus de serverless route is actief en niet naar `index.html` herschreven.
+- Firestore rules voor serverquota en daily progress zijn succesvol gepubliceerd naar `thomascimpro-6266f`.
+- Volledige Android releasebuild: `BUILD SUCCESSFUL in 2m 31s`.
+- APK: `android/app/build/outputs/apk/release/app-release.apk`, circa 84 MB, package `nl.cimpro.bugbaas`, versionCode `194`, versionName `2.10.14`.
+- APK SHA-256: `572f062adc9df8cda12ddeeabe89635009d96fbf856f015434e1f2803f5a0f79`.
+- `apksigner verify --verbose --print-certs`: APK Signature Scheme v2 geslaagd; bestaand Android debugcertificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- Echte OpenAI-smoketest via lokale secretfile is niet uitgevoerd omdat de tool veiligheidscontrole secret-injectie blokkeerde. Geen fysieke Android-installatietest uitgevoerd.
+
+## 2026-07-20 daily rewards, buddy persistence and Tower jump hotfix
+
+- `npm run typecheck`: geslaagd.
+- Gerichte app-tests: 12/12 geslaagd voor directe daily rewardpresentatie, Buddy-savevolgorde, hidden/normal-rankscheiding en Tower-pressure/jumhoogte/MEGA-boost.
+- FitnessSyncer Functions-tests: 7/7 geslaagd, inclusief exacte veilige melding van ontbrekende configuratievelden.
+- Alle vijf FitnessSyncer Functions zijn succesvol bijgewerkt op Firebase-project `thomascimpro-6266f`.
+- Expo web export naar `dist-vercel-release`: geslaagd; bundle `AppEntry-a309d12e23b3a0b702e78ca3bf1dc4e3.js`, 2.532.601 bytes, SHA-256 `51a9d4cc41c866cec94f3aa69d5cb3f55e511ad7eb28511380446ff4cae1c934`.
+- Vercel preview `dpl_2UbsWGRioqLGM7jPpu7Kxq1RDgvj`: `READY`; previewbundle was byte- en hash-identiek aan de lokale export.
+- Vercel productie `dpl_HcJSahLW4Fg4cxBLfQx14mZ6JAtS`: `READY`; `bugbaas.vercel.app` serveert dezelfde bundle en SHA-256.
+- Een per ongeluk aangemaakt tijdelijk Vercel-project `dist-vercel-release` is volledig verwijderd; productie blijft gekoppeld aan project `bugbaas`.
+- Remote Functions missen nog `FITNESSSYNCER_CLIENT_ID`, `FITNESSSYNCER_CLIENT_SECRET` en `FITNESSSYNCER_TOKEN_KEY`; echte providerlogin kon daarom niet end-to-end worden uitgevoerd.
+- Geen APK-build of APK-publicatie uitgevoerd; bestaande tracked APK-binaries tonen geen worktree-wijzigingen.
+
+## 2026-07-20 Vercel ranks, sounds, ranked permissions and Tower balance
+
+- `npm run typecheck`: geslaagd.
+- Gerichte Node-tests: 10/10 geslaagd voor volledige ranked-mode rulesdekking, actuele eigen ranks, Tower-zijwaartse spreiding/missing-step-gaps en websound-profielen/Pressable-detectie.
+- FitnessSyncer Functions-tests: 6/6 geslaagd voor afstandsfiltering, stappen-samenvattingen, bron-deduplicatie, stabiele import-id's en token-expiry.
+- Firestore rules compileerden en zijn gedeployed naar `thomascimpro-6266f`; `bubble_swarm` staat in zowel `validDuelMode` als `validArcadeMode`.
+- Functions-deploy analyseerde de huidige bron en sloeg alle vijf FitnessSyncer Functions over als identiek aan de al gedeployde versie.
+- Remote Functions bevatten geen `FITNESSSYNCER_CLIENT_ID`, `FITNESSSYNCER_CLIENT_SECRET` of `FITNESSSYNCER_TOKEN_KEY`; echte providerlogin is daarom nog niet uitvoerbaar.
+- Expo web export naar `dist-vercel-release`: geslaagd; bundle `AppEntry-0bea8ee78d9ca4fe36230482d686fcf9.js`, 2.531.787 bytes, SHA-256 `a1a26a548b1f9171bde5cc9ff55de3ec42400bb6099cd732a76405b5e1457c7b`.
+- Vercel preview `dpl_Cu5zXPMWMdVAVMch8VTCfFEcUhGM`: `READY`; previewbundle is byte- en hash-identiek aan de lokale export.
+- Vercel productie `dpl_HeJ27nWsLoiAHKxsNXTyk9omozXM`: `READY`; `bugbaas.vercel.app` serveert dezelfde bundle en SHA-256.
+- Windows Chrome-headless startte wel, maar gaf binnen DevSpace geen capturebare DOM terug; ingelogde visuele ranked/FitnessSyncer-smoke is daarom niet als uitgevoerd gemarkeerd.
+- `android/gradlew.bat :app:processDebugResources --console=plain`: `BUILD SUCCESSFUL`; versie 2.10.12 en de `bugbaas://settings` deep link verwerken correct als Android resources.
+- Geen APK-build of APK-publicatie uitgevoerd; bestaande tracked APK-bestanden tonen geen worktree-wijzigingen.
+
 ## 2026-07-19 web auth, rewards and Tower hold hotfix
 
 - `npm run typecheck`: passed.

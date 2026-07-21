@@ -110,6 +110,7 @@ export async function showPhoneNotification(notification: AppNotification): Prom
 }
 
 export async function scheduleBuddyTaskNotification(input: { actionLabel: string; body: string; endsAt: number; taskId: string; xp: number }): Promise<string> {
+  if (Platform.OS !== "android") return "";
   await initializePhoneNotifications();
   const permissions = await Notifications.getPermissionsAsync();
   if (!permissions.granted) return "";

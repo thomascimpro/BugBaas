@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "r
 import type { RouteName } from "../../App";
 import { useI18n } from "../services/i18n";
 
-type TourRoute = "home" | "bugs" | "duel" | "bugdex" | "leaderboard" | "settings";
+type TourRoute = "home" | "realBugScan" | "duel" | "bugdex" | "leaderboard" | "settings";
 
 type Step = {
   route: TourRoute;
@@ -22,9 +22,7 @@ const steps: Step[] = [
   { route: "home", titleKey: "tour.home", bodyKey: "tour.homeBody", target: "tab" },
   { route: "home", titleKey: "tour.profile", bodyKey: "tour.profileBody", target: "tab" },
   { route: "home", titleKey: "tour.movement", bodyKey: "tour.movementBody", target: "tab" },
-  { route: "bugs", titleKey: "tour.bugs", bodyKey: "tour.bugsBody", target: "tab" },
-  { route: "bugs", titleKey: "tour.bugDetails", bodyKey: "tour.bugDetailsBody", target: "tab" },
-  { route: "bugs", titleKey: "tour.new", bodyKey: "tour.newBody", target: "tab" },
+  { route: "realBugScan", titleKey: "tour.bugs", bodyKey: "tour.bugsBody", target: "tab" },
   { route: "duel", titleKey: "tour.arena", bodyKey: "tour.arenaBody", target: "tab" },
   { route: "bugdex", titleKey: "tour.bugdex", bodyKey: "tour.bugdexBody", target: "tab" },
   { route: "bugdex", titleKey: "tour.bugdexRewards", bodyKey: "tour.bugdexRewardsBody", target: "tab" },
@@ -34,7 +32,7 @@ const steps: Step[] = [
   { route: "settings", titleKey: "tour.settings", bodyKey: "tour.settingsBody", target: "settings" }
 ];
 
-const tabRoutes: Array<Extract<RouteName, "home" | "bugs" | "duel" | "bugdex" | "leaderboard">> = ["home", "bugs", "duel", "bugdex", "leaderboard"];
+const tabRoutes: Array<Extract<RouteName, "home" | "realBugScan" | "duel" | "bugdex" | "leaderboard">> = ["home", "realBugScan", "duel", "bugdex", "leaderboard"];
 
 export function HelpTourOverlay({ visible, onFinish, onNavigate }: Props) {
   const { t } = useI18n();

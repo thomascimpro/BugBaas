@@ -21,10 +21,92 @@ function activityTimestamp(value) {
   return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0;
 }
 
+function activityMovement(value) {
+  const item = activityItem(value);
+  if (!item || item.type !== "Activity" || item.manual === true) return null;
+  const summary = item.summary === true;
+  const activity = String(item.fitnessSyncerActivity || item.activity || "").trim().toLowerCase();
+  if (!summary && !supportedActivities.some((candidate) => activity === candidate || activity.includes(candidate))) return null;
+  const distance = Number(item.distanceKM);
+  const steps = Number(item.steps);
+  const distanceKm = Number.isFinite(distance) && distance > 0 ? Math.round(distance * 1000) / 1000 : 0;
+  const safeSteps = Number.isFinite(steps) && steps > 0 ? Math.round(steps) : 0;
+  if (!distanceKm && !safeSteps) return null;
+  return { distanceKm, steps: safeSteps, summary, timestamp: activityTimestamp(item) };
+}
+
+function aggregateActivityMovement(records, todayStart, weekStart) {
+  const sourceDays = new Map();
+  for (const record of records) {
+    const movement = activityMovement(record?.value);
+    if (!movement || movement.timestamp < weekStart) continue;
+    const day = Math.floor(movement.timestamp / 86_400_000);
+    const key = `${String(record.sourceId || "unknown")}:${day}`;
+    const current = sourceDays.get(key) || {
+      day,
+      detailDistanceKm: 0,
+      detailSteps: 0,
+      summaryDistanceKm: 0,
+      summarySteps: 0
+    };
+    if (movement.summary) {
+      current.summaryDistanceKm = Math.max(current.summaryDistanceKm, movement.distanceKm);
+      current.summarySteps = Math.max(current.summarySteps, movement.steps);
+    } else {
+      current.detailDistanceKm += movement.distanceKm;
+      current.detailSteps += movement.steps;
+    }
+    sourceDays.set(key, current);
+  }
+
+  const days = new Map();
+  for (const sourceDay of sourceDays.values()) {
+    const distanceKm = Math.max(sourceDay.summaryDistanceKm, sourceDay.detailDistanceKm);
+    const steps = Math.max(sourceDay.summarySteps, sourceDay.detailSteps);
+    const current = days.get(sourceDay.day) || { distanceKm: 0, steps: 0 };
+    current.distanceKm = Math.max(current.distanceKm, distanceKm);
+    current.steps = Math.max(current.steps, steps);
+    days.set(sourceDay.day, current);
+  }
+
+  let todayKm = 0;
+  let todaySteps = 0;
+  let weekKm = 0;
+  let weekSteps = 0;
+  const todayDay = Math.floor(todayStart / 86_400_000);
+  for (const [day, movement] of days) {
+    const effectiveKm = Math.max(movement.distanceKm, movement.steps * 0.00075);
+    weekKm += effectiveKm;
+    weekSteps += movement.steps;
+    if (day >= todayDay) {
+      todayKm += effectiveKm;
+      todaySteps += movement.steps;
+    }
+  }
+  return {
+    todayKm: Math.round(todayKm * 100) / 100,
+    todaySteps,
+    weekKm: Math.round(weekKm * 100) / 100,
+    weekSteps
+  };
+}
+
 function activityImportId(sourceId, value) {
   const item = activityItem(value);
   const providerId = String(item?.itemId || `${activityTimestamp(item)}:${item?.distanceKM || 0}:${item?.activity || "activity"}`);
   return createHash("sha256").update(`${sourceId}:${providerId}`).digest("hex");
+}
+
+function fitnessServerConfigurationStatus(environment = {}) {
+  const missingConfiguration = String(environment.FITNESSSYNCER_TOKEN_KEY || "").trim() ? [] : ["token_key"];
+  return { configured: missingConfiguration.length === 0, missingConfiguration };
+}
+
+function fitnessUserConfigurationStatus(credentials = {}) {
+  const missingConfiguration = [];
+  if (!String(credentials.clientId || "").trim()) missingConfiguration.push("client_id");
+  if (!String(credentials.clientSecret || "").trim()) missingConfiguration.push("client_secret");
+  return { configured: missingConfiguration.length === 0, missingConfiguration };
 }
 
 function tokenExpiryMs(expiresIn, now = Date.now()) {
@@ -33,4 +115,4 @@ function tokenExpiryMs(expiresIn, now = Date.now()) {
   return value > Math.floor(now / 2000) ? value * 1000 : now + value * 1000;
 }
 
-module.exports = { activityDistanceKm, activityImportId, activityTimestamp, tokenExpiryMs };
+module.exports = { activityDistanceKm, activityImportId, activityMovement, activityTimestamp, aggregateActivityMovement, fitnessServerConfigurationStatus, fitnessUserConfigurationStatus, tokenExpiryMs };

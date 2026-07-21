@@ -1,5 +1,48 @@
 # Status
 
+## 2026-07-21 release 2.10.17
+
+- Alle 48 ontbrekende BugDex-afbeeldingen zijn toegevoegd, transparant gemaakt, geoptimaliseerd en gekoppeld aan de catalogus.
+- BugScan verbruikt alleen een dagpoging bij een geldige herkenning; een zekere soort buiten de catalogus wordt als developersuggestie vastgelegd en afwijzingen of onzekere scans kosten geen poging.
+- FitnessSyncer ondersteunt persoonlijke OAuth-appgegevens, PKCE, versleutelde opslag, tokenrefresh en detailimport; providerconsent blijft afhankelijk van een door FitnessSyncer geregistreerde productiecallback.
+- Webexport en de getekende Android APK 2.10.17 zijn lokaal succesvol gebouwd. Productiepublicatie volgt vanuit deze releasecommit.
+
+## 2026-07-21 FitnessSyncer OAuth connect hotfix
+
+- `Koppel FitnessSyncer` blijft op web actief en wordt alleen tijdens een lopende request geblokkeerd; ontbrekende backendconfiguratie verschijnt als duidelijke melding in plaats van een niet-werkende grijze knop.
+- Alle vijf FitnessSyncer HTTPS Functions zijn expliciet publiek invokeerbaar gemaakt. Status, start, sync en disconnect blijven daarna beschermd door Firebase ID-tokencontrole; de callback blijft beschermd door OAuth-state en PKCE.
+- De Functions zijn succesvol bijgewerkt op Firebase-project `thomascimpro-6266f`; CORS-preflight op `fitnessSyncerStart` geeft HTTP 204 en start/sync geven zonder login correct HTTP 401.
+- Vercel-productie is `READY` op deployment `dpl_Gz5vb23fJx1rCCv6Uz2dELP8TqKo`; `bugbaas.vercel.app` serveert bundle `AppEntry-149da9e01d13fbc13eb1ecbf9e3fcd45.js`.
+- Echte FitnessSyncer-toestemming en tokenuitwisseling blijven extern geblokkeerd totdat FitnessSyncer een geldige BugBaas Client ID en Client Secret heeft uitgegeven en deze server-side zijn ingesteld.
+
+## 2026-07-20 BugScan reward release 2.10.15
+
+- Elke geldige unieke echte bugscan geeft voortaan altijd `+1` van de herkende BugDex-bug, ook wanneer de bestaande voorraad `count: 0` was.
+- De reward-event-ID gebruikt de unieke scan-ID; dubbele verwerking van exact hetzelfde event blijft idempotent geblokkeerd.
+- Vercel-productie is `READY` op deployment `dpl_69KTPZko2Eyx1fsFLuwCUD9vquPv`; `bugbaas.vercel.app` serveert bundle `AppEntry-167d3edc9a0761bf18ba854c17f600d5.js` en de BugScan API-route antwoordt op CORS preflight.
+- Android APK 2.10.15 is gebouwd als `dist/BugBaas-2.10.15.apk`, package `nl.cimpro.bugbaas`, versionCode `195`.
+- GitHub Release is niet gemaakt; GitHub CLI is lokaal niet ingelogd.
+
+## 2026-07-20 daily rewards, buddy persistence and Tower jump hotfix
+
+- Geclaimde daily mission-bugs openen direct als BugDex-rewardpopup in plaats van als mogelijk gemiste rondlopende vangbug.
+- Buddy-taken worden vóór optionele notificatieplanning in Firebase opgeslagen en gebruiken absolute start/eindtijden; de timer loopt dus door wanneer Vercel gesloten is.
+- Hidden/testaccounts en normale accounts blijven strikt gescheiden in zowel Score- als Duel-ranking; Home en het volledige leaderboard gebruiken een verse complete lijst.
+- Bug Tower-pressure start direct, een volle balk haalt circa 5-6 normale treden en de groene `MEGA` geeft +100 punten plus een sterkere volgende sprong.
+- FitnessSyncer Functions tonen nu exact welke veilige configuratievelden ontbreken. De providerlogin blijft uitgeschakeld zolang Client ID, Client Secret en Token key niet zijn ingesteld.
+- Vercel-productie is `READY` op deployment `dpl_HcJSahLW4Fg4cxBLfQx14mZ6JAtS`; `bugbaas.vercel.app` serveert bundle `AppEntry-a309d12e23b3a0b702e78ca3bf1dc4e3.js`.
+- Geen APK gebouwd of gepubliceerd; bestaande APK-binaries zijn niet gewijzigd.
+
+## 2026-07-20 Vercel ranks, sounds, ranked permissions and Tower balance
+
+- Vercel gebruikt browserbrede WebAudio-feedback voor bestaande game-events en alle actieve React Native Web `Pressable`-acties; Android-geluid blijft ongewijzigd.
+- Home berekent Score- en Duel-rank uit een verse volledige actieve gebruikerslijst en vervangt een verouderde eigen leaderboard-snapshot door de actuele gebruiker.
+- Firestore accepteert nu alle zes Arena-ranked modes, inclusief `bubble_swarm`; de rules zijn gecompileerd en live op `thomascimpro-6266f`.
+- Bug Tower spreidt opeenvolgende treden sterker links/rechts en gebruikt vanaf hogere floors oplopend grotere missing-step-gaps; deze gameplaybron wordt gedeeld door web en een toekomstige APK-build.
+- FitnessSyncer OAuth-return, stappenimport en dag/week-deduplicatie staan in de gedeployde Functions-code. De runtime blijft bewust uitgeschakeld zolang `FITNESSSYNCER_CLIENT_ID`, `FITNESSSYNCER_CLIENT_SECRET` en `FITNESSSYNCER_TOKEN_KEY` ontbreken.
+- Vercel-productie is `READY` op deployment `dpl_HeJ27nWsLoiAHKxsNXTyk9omozXM`; `bugbaas.vercel.app` serveert bundle `AppEntry-0bea8ee78d9ca4fe36230482d686fcf9.js`.
+- Geen APK gebouwd of gepubliceerd; bestaande APK-bestanden zijn niet gewijzigd.
+
 ## 2026-07-19 web auth, rewards and Tower hold hotfix
 
 - Web Google-login uses Firebase's browser popup instead of the unsupported native RN Google Sign-In method; Android keeps the native flow.

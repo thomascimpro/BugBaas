@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, BackHandler, DimensionValue, Image, ImageBackground, Platform as RNPlatform, Pressable, StyleSheet, Text, View } from "react-native";
 import { createArcadeSeed, loadArcadeHighScore, saveArcadeHighScore, seededNumber } from "../../services/arcadeResultService";
 import { arcadeSquadAssistForUser } from "../../services/bugSquadGameBalance";
+import { towerJumpVelocity, towerPlatformGap, towerPlatformX, towerScrollSpeed } from "../../services/bugTowerBalance";
 import { playBugSound } from "../../services/soundService";
 import { ArcadeRunResult, User } from "../../types";
 import { ArcadeSquadAssist } from "./ArcadeSquadAssist";
@@ -202,6 +203,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
           playBugSound("arcade_build");
         } else if (pickup.kind === "spring") {
           springReadyRef.current = true;
+          scoreRef.current += 100;
           playBugSound("arcade_pickup");
         }
       });
@@ -273,8 +275,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
     }
     const speed = clamp(Math.abs(player.vx) / maxHorizontalSpeed, 0, 1);
     const charge = clamp(runDistanceRef.current / 32, 0, 1);
-    const springBoost = springReadyRef.current ? 0.34 : 0;
-    const jumpVelocity = -(1.7 + speed * 0.58 + charge * 0.46 + springBoost);
+    const jumpVelocity = towerJumpVelocity(speed, charge, springReadyRef.current);
     const spinning = springReadyRef.current || (speed >= 0.72 && charge >= 0.58);
     springReadyRef.current = false;
     playerRef.current = { ...player, grounded: false, highJump: jumpVelocity < -2.15, spinAngle: 0, spinning, vy: jumpVelocity };
@@ -410,7 +411,7 @@ export function BugTowerGame({ onBack, onResult, practice = false, ranked = fals
               </View>
               <View pointerEvents="none" style={styles.controls}>
                 <View style={styles.chargeMeter}>
-                  <Text style={styles.chargeLabel}>{renderState.springReady ? "SPRING READY" : renderState.player.spinning ? "SPIN!" : renderState.charge >= 58 ? "SPIN READY" : "JUMP POWER"}</Text>
+                  <Text style={styles.chargeLabel}>{renderState.springReady ? "MEGA JUMP READY" : renderState.player.spinning ? "SPIN!" : renderState.charge >= 58 ? "SPIN READY" : "JUMP POWER"}</Text>
                   <View style={styles.chargeTrack}><View style={[styles.chargeFill, { width: `${renderState.charge}%` as DimensionValue }]} /></View>
                   <Text style={styles.chargeValue}>{renderState.charge}%</Text>
                 </View>
@@ -431,11 +432,11 @@ function Ready({ onStart }: { onStart: () => void }) {
       <View style={styles.panel}>
         <BugTowerSprite frame={3} large />
         <Text style={styles.panelTitle}>Climb the endless tower</Text>
-        <Text style={styles.body}>Hold left or right to run. Release to jump: a longer run gives a higher leap. After a spinning landing, tap immediately for an extra flip before the tower catches you.</Text>
+        <Text style={styles.body}>Hold left or right to run. Release to jump: a full bar can clear 5-6 steps. Green MEGA gives +100 points and supercharges your next jump. After a spinning landing, tap immediately for an extra flip.</Text>
         <View style={styles.difficultyRow}>
-          <Text style={styles.difficultyChip}>Run-up jumps</Text>
+          <Text style={styles.difficultyChip}>5-6 step jumps</Text>
           <Text style={styles.difficultyChip}>100-floor worlds</Text>
-          <Text style={styles.difficultyChip}>Rising pressure</Text>
+          <Text style={styles.difficultyChip}>MEGA jump boost</Text>
           <Text style={styles.difficultyChip}>120-second peak</Text>
         </View>
         <Pressable accessibilityLabel="Start Bug Tower" testID="bug-tower-start" style={styles.primaryButton} onPress={onStart}><Text style={styles.primaryText}>Start climb</Text></Pressable>
@@ -479,7 +480,7 @@ function TowerPickupView({ pickup }: { pickup: TowerPickup }) {
     <View pointerEvents="none" style={[styles.pickup, percentPosition(pickup.x, pickup.y)]}>
       {pickup.kind === "coin" && <View style={styles.coin}><View style={styles.coinInset} /></View>}
       {pickup.kind === "rocket" && <View style={styles.rocketPickup}><Text style={styles.rocketPickupText}>▲</Text></View>}
-      {pickup.kind === "spring" && <View style={styles.springPickup}><Text style={styles.springPickupText}>↟</Text></View>}
+      {pickup.kind === "spring" && <View style={styles.springPickup}><Text style={styles.springPickupText}>MEGA</Text></View>}
     </View>
   );
 }
@@ -547,13 +548,9 @@ export function movingPlatformChance(floor: number) {
 }
 
 function createPlatform(previous: Platform | null, floor: number, seed: string): Platform {
-  const stage = Math.floor(floor / 15);
   const width = platformWidthForFloor(floor, seed);
-  const gap = clamp(9.8 + stage * 0.2 + seededNumber(seed, floor * 5 + 1) * 2.8, 9.8, floor >= 200 ? 16.4 : 17.2);
-  const previousCenter = previous ? previous.x + previous.width / 2 : 50;
-  const reach = clamp(18 + width * 0.2, 21, 30);
-  const offset = (seededNumber(seed, floor * 5 + 2) - 0.5) * reach * 2;
-  const x = clamp(previousCenter + offset - width / 2, 3.5, 96.5 - width);
+  const gap = towerPlatformGap(floor, seededNumber(seed, floor * 5 + 1), seededNumber(seed, floor * 5 + 7));
+  const x = towerPlatformX(previous?.x ?? 12, previous?.width ?? 76, width, floor, seededNumber(seed, floor * 5 + 2));
   const driftRoll = seededNumber(seed, floor * 5 + 3);
   const moving = driftRoll < movingPlatformChance(floor);
   const drift = moving ? (seededNumber(seed, floor * 5 + 4) > 0.5 ? 1 : -1) * clamp(0.032 + floor * 0.0002, 0.032, 0.12) : 0;
@@ -593,14 +590,6 @@ function movePlatform(platform: Platform, scroll: number): Platform {
     x = clamp(x, 3.5, 96.5 - platform.width);
   }
   return { ...platform, drift, x, y: platform.y + scroll };
-}
-
-function towerScrollSpeed(floor: number, elapsed: number) {
-  if (floor < 5 && elapsed < 10000) return 0;
-  const timePressure = Math.max(0, elapsed - 10000) * 0.00000012;
-  const floorPressure = floor * 0.00028;
-  const zonePressure = Math.floor(floor / 50) * 0.003;
-  return clamp(0.012 + timePressure + floorPressure + zonePressure, 0.012, 0.13);
 }
 
 function towerZone(floor: number) {
@@ -693,8 +682,8 @@ const styles = StyleSheet.create({
   rocketPickup: { alignItems: "center", backgroundColor: "#f97316", borderColor: "#ffedd5", borderRadius: 8, borderWidth: 2, height: 24, justifyContent: "center", width: 20 },
   rocketPickupText: { color: "#fff", fontSize: 13, fontWeight: "900" },
   shell: { backgroundColor: "#050d24", flex: 1 },
-  springPickup: { alignItems: "center", backgroundColor: "#22c55e", borderColor: "#dcfce7", borderRadius: 999, borderWidth: 2, height: 24, justifyContent: "center", width: 24 },
-  springPickupText: { color: "#fff", fontSize: 16, fontWeight: "900", lineHeight: 18 },
+  springPickup: { alignItems: "center", backgroundColor: "#22c55e", borderColor: "#dcfce7", borderRadius: 999, borderWidth: 2, height: 30, justifyContent: "center", width: 42 },
+  springPickupText: { color: "#fff", fontSize: 8, fontWeight: "900", letterSpacing: 0.4, lineHeight: 10 },
   spriteFrame: { overflow: "hidden" },
   squadOverlay: { position: "absolute", right: 8, top: 42, zIndex: 9 },
   title: { color: "#f8fbff", fontSize: 24, fontWeight: "900" }

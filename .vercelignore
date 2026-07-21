@@ -1,0 +1,36 @@
+.git
+.github
+.env
+.env.*
+.idea
+.chatgpt
+android
+coverage
+docs
+screenshots
+tmp
+bugbaas-wiki
+bugbaas-all-117-contact.png
+bugbaas-hd-batch-1-contact.png
+firebase
+release
+assets/Kenney assets
+assets/animated/23 Steampunk Mechanical Butterflies
+assets/animated/Animated insect enemy assets
+assets/animated/Animated insect enemy assets.zip
+assets/animated/Dragonfly Sprite Sheet.png
+assets/buddy/kenney/extracted/animal-pack-remastered
+assets/buddy/kenney/extracted/cube-pets
+assets/buddy/kenney/extracted/interface-sounds
+assets/buddy/kenney/extracted/rpg-audio
+assets/buddy/kenney/extracted/ui-audio
+assets/buddy/kenney/extracted/ui-pack-rpg-expansion
+dist
+dist-*
+*.apk
+*.aab
+*.7z
+*.log
+phone_*.png
+tablet_*.png
+new secret key

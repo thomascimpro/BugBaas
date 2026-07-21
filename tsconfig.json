@@ -1,7 +1,14 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "**/node_modules",
+    ".playwright-cli",
+    "dist",
+    "dist-*"
+  ]
 }

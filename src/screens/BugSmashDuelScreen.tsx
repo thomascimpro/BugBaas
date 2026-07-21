@@ -345,6 +345,7 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   const [soloCampaignLives, setSoloCampaignLives] = useState(soloCampaignStartingLives);
   const [squadModalVisible, setSquadModalVisible] = useState(false);
   const [helperInfoVisible, setHelperInfoVisible] = useState(false);
+  const [rankedConfirm, setRankedConfirm] = useState<{ onConfirm: () => void } | null>(null);
   const [squadLoading, setSquadLoading] = useState(false);
   const [squadBusyId, setSquadBusyId] = useState("");
   const [now, setNow] = useState(Date.now());
@@ -1698,10 +1699,20 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
   }
 
   function confirmRankedStart(onConfirm: () => void) {
+    if (Platform.OS === "web") {
+      setRankedConfirm({ onConfirm });
+      return;
+    }
     Alert.alert(t("arcade.rankedConfirmTitle"), t("arcade.rankedConfirmBody"), [
       { text: t("common.cancel"), style: "cancel" },
       { text: t("arcade.rankedConfirmStart"), onPress: onConfirm }
     ]);
+  }
+
+  function startConfirmedRanked() {
+    const onConfirm = rankedConfirm?.onConfirm;
+    setRankedConfirm(null);
+    onConfirm?.();
   }
 
   async function recordArcadeRunResult(result: ArcadeRunResult) {
@@ -2197,6 +2208,22 @@ export function BugSmashDuelScreen({ user, initialDuelId = "", initialOpponent, 
           </View>
         </View>
       </Modal>
+      {Platform.OS === "web" && (
+        <Modal transparent animationType="fade" visible={Boolean(rankedConfirm)} onRequestClose={() => setRankedConfirm(null)}>
+          <View style={styles.startModalBackdrop}>
+            <View style={styles.startModalCard}>
+              <Text style={styles.startTitle}>{t("arcade.rankedConfirmTitle")}</Text>
+              <Text style={styles.startBody}>{t("arcade.rankedConfirmBody")}</Text>
+              <Pressable style={sharedStyles.button} onPress={startConfirmedRanked}>
+                <Text style={sharedStyles.buttonText}>{t("arcade.rankedConfirmStart")}</Text>
+              </Pressable>
+              <Pressable style={sharedStyles.secondaryButton} onPress={() => setRankedConfirm(null)}>
+                <Text style={sharedStyles.secondaryButtonText}>{t("common.cancel")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      )}
       {activeDuel && playerNeedsManualStart && (
         <Modal animationType="fade" transparent visible onRequestClose={startAcceptedDuel}>
           <View style={styles.startModalBackdrop}>

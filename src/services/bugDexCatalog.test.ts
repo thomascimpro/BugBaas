@@ -1,0 +1,120 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { bugDexSetBadgeBugIds, bugDexSetById, bugDexSets } from "./bugDexSetService.ts";
+import { bugDexEntries, bugDexFacts, isBugDexEntryUnlocked } from "./pointsService.ts";
+
+const newBugIds = [
+  "papiervisje",
+  "ovenvisje",
+  "bedwants",
+  "varenrouwmug",
+  "trips",
+  "spintmijt",
+  "wolluis",
+  "schildluis",
+  "grote-huisspin",
+  "trilspin",
+  "klein-koolwitje",
+  "klein-geaderd-witje",
+  "citroenvlinder",
+  "bont-zandoogje",
+  "icarusblauwtje",
+  "kleine-vos",
+  "landkaartje",
+  "boomblauwtje",
+  "springstaart",
+  "miljoenpoot",
+  "kelderpissebed",
+  "oprolpissebed",
+  "buxusmot",
+  "buxusrups",
+  "leliehaantje",
+  "engerling",
+  "emelt",
+  "gamma-uil",
+  "huismoeder",
+  "agaatvlinder",
+  "windevedermot",
+  "jakobsvlinder",
+  "jakobsvlinderrups",
+  "distelvlinder",
+  "groot-koolwitje",
+  "hooibeestje",
+  "koevinkje",
+  "geelpoothoornaar",
+  "daas",
+  "stadsreus",
+  "bijvlieg",
+  "rosse-metselbij",
+  "blauwzwarte-houtbij",
+  "gewone-wolfspin",
+  "venstersectorspin",
+  "grote-wegslak",
+  "segrijnslak",
+  "regenworm"
+] as const;
+
+const newBugIdSet = new Set<string>(newBugIds);
+const newEntries = bugDexEntries.filter((entry) => newBugIdSet.has(entry.id));
+
+function sourceContainsArtMapping(source: string, bugId: string): boolean {
+  return source.includes(`"${bugId}": require(`);
+}
+
+test("adds exactly 48 unique drop-only scan entries", () => {
+  assert.equal(newBugIds.length, 48);
+  assert.equal(new Set(newBugIds).size, 48);
+  assert.equal(newEntries.length, 48);
+  assert.ok(newEntries.every((entry) => entry.unlockMode === "drop"));
+  assert.ok(newEntries.every((entry) => !isBugDexEntryUnlocked(entry, { totalPoints: 999999, bugCount: 999999 })));
+  assert.equal(isBugDexEntryUnlocked(bugDexEntries[0], { totalPoints: 0, bugCount: 0 }), true);
+});
+
+test("keeps the approved rarity distribution and adds no Mythic entry", () => {
+  const counts = Object.fromEntries(["Gewoon", "Zeldzaam", "Episch", "Legendarisch", "Mythisch"].map((rarity) => [
+    rarity,
+    newEntries.filter((entry) => entry.rarity === rarity).length
+  ]));
+
+  assert.deepEqual(counts, {
+    Gewoon: 13,
+    Zeldzaam: 16,
+    Episch: 13,
+    Legendarisch: 6,
+    Mythisch: 0
+  });
+});
+
+test("provides a fact and an art mapping for every new entry", () => {
+  const bugArtSource = readFileSync("src/services/bugArt.ts", "utf8");
+
+  for (const bugId of newBugIds) {
+    assert.ok(bugDexFacts[bugId], `Missing fact for ${bugId}`);
+    assert.ok(sourceContainsArtMapping(bugArtSource, bugId), `Missing art mapping for ${bugId}`);
+  }
+});
+
+test("places every new entry in a Dutch home or garden filter", () => {
+  const homeSet = bugDexSetById("dutch_home");
+  const gardenSet = bugDexSetById("dutch_garden");
+
+  assert.ok(homeSet);
+  assert.ok(gardenSet);
+  const categorizedIds = new Set([...homeSet.bugIds, ...gardenSet.bugIds]);
+
+  for (const bugId of newBugIds) {
+    assert.ok(categorizedIds.has(bugId), `Missing Dutch category for ${bugId}`);
+  }
+});
+
+test("does not add new entries to existing badge requirements", () => {
+  const badgeSets = bugDexSets.filter((set) => set.badgeId);
+  assert.ok(badgeSets.length > 0);
+
+  for (const set of badgeSets) {
+    const badgeIds = bugDexSetBadgeBugIds(set);
+    assert.ok(badgeIds.length > 0, `Empty badge requirements for ${set.id}`);
+    assert.ok(badgeIds.every((bugId) => !newBugIdSet.has(bugId)), `New bug leaked into badge ${set.id}`);
+  }
+});

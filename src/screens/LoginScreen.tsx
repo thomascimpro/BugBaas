@@ -4,13 +4,14 @@ import { ActivityIndicator, Animated, Platform, Pressable, SafeAreaView, StyleSh
 import { AppBackground } from "../components/AppBackground";
 import { BugArtImage } from "../components/BugArtImage";
 import { WalkingBugsLayer } from "../components/WalkingBugsLayer";
+import { shouldUseNativeGoogleSignIn } from "../services/googleSignInPlatformPolicy";
 import { useI18n } from "../services/i18n";
 import { sharedStyles } from "./sharedStyles";
 
 const splashBadge = require("../../assets/generated/bugbaas-splash-badge-hd.png");
 
 function googleSignInModule() {
-  if (Constants.appOwnership === "expo") return null;
+  if (!shouldUseNativeGoogleSignIn(Platform.OS, Constants.appOwnership)) return null;
   try {
     return require("@react-native-google-signin/google-signin");
   } catch {

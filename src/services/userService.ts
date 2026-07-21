@@ -57,7 +57,13 @@ function writeStoredUserList(cacheKey: string, items: User[]): void {
 function clearStoredUserListCache(uid?: string): void {
   cachedUserLists.clear();
   const userKey = uid ?? auth.currentUser?.uid ?? "anonymous";
-  void AsyncStorage.multiRemove([`bugbaas:users:${userKey}`, `bugbaas:usersLight:${userKey}`, `bugbaas:leaderboard:${userKey}`]).catch(() => undefined);
+  void AsyncStorage.multiRemove([
+    `bugbaas:users:${userKey}`,
+    `bugbaas:usersLight:${userKey}`,
+    `bugbaas:leaderboard:top:${userKey}`,
+    `bugbaas:leaderboard:all:${userKey}`,
+    `bugbaas:leaderboard:${userKey}`
+  ]).catch(() => undefined);
 }
 
 function normalizeUser(user: User): User {
@@ -650,7 +656,12 @@ export async function listUsers(): Promise<User[]> {
   return sorted;
 }
 
-export async function listLeaderboardUsers(): Promise<User[]> {
+type LeaderboardListOptions = {
+  complete?: boolean;
+  fresh?: boolean;
+};
+
+export async function listLeaderboardUsers(options: LeaderboardListOptions = {}): Promise<User[]> {
   if (!isFirebaseConfigured) {
     const currentIsTest = Boolean(demoUser?.testAccount);
     return Array.from(demoUsers.values())
@@ -661,18 +672,22 @@ export async function listLeaderboardUsers(): Promise<User[]> {
   }
 
   const currentUid = auth.currentUser?.uid;
-  const cacheKey = `leaderboard:${currentUid ?? "anonymous"}`;
-  const cached = cachedUserLists.get(cacheKey);
-  if (cached && Date.now() - cached.at < leaderboardCacheTtlMs) return cached.items;
-  const stored = await readStoredUserList(cacheKey, leaderboardCacheTtlMs);
-  if (stored) {
-    cachedUserLists.set(cacheKey, { at: Date.now(), items: stored });
-    return stored;
+  const cacheKey = `leaderboard:${options.complete ? "all" : "top"}:${currentUid ?? "anonymous"}`;
+  if (!options.fresh) {
+    const cached = cachedUserLists.get(cacheKey);
+    if (cached && Date.now() - cached.at < leaderboardCacheTtlMs) return cached.items;
+    const stored = await readStoredUserList(cacheKey, leaderboardCacheTtlMs);
+    if (stored) {
+      cachedUserLists.set(cacheKey, { at: Date.now(), items: stored });
+      return stored;
+    }
   }
 
   const currentSnapshot = currentUid ? await getDoc(doc(db, "users", currentUid)) : null;
   const currentIsTest = Boolean(currentSnapshot?.exists() && (currentSnapshot.data() as User).testAccount);
-  const snapshot = await getDocs(query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(leaderboardLimit)));
+  const snapshot = options.complete
+    ? await getDocs(collection(db, "users"))
+    : await getDocs(query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(leaderboardLimit)));
   const users = snapshot.docs
     .map((item) => item.data() as User)
     .filter((user) => user.active !== false)

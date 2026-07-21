@@ -1,0 +1,137 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import catalog from "../../shared/bugdex-catalog.json" with { type: "json" };
+import { buildBugCatalogPrompt, dayKeyInTimeZone, normalizeIdentification } from "./classification.mjs";
+
+test("accepts a high-confidence BugDex match", () => {
+  const result = normalizeIdentification({
+    containsBug: true,
+    imageQuality: "good",
+    catalogStatus: "matched",
+    matchedBugId: "lieveheersbeestje",
+    commonName: "Lieveheersbeestje",
+    scientificName: "Coccinellidae",
+    confidence: 0.94,
+    reason: "Rode kever met zwarte stippen."
+  }, catalog);
+
+  assert.equal(result.status, "matched");
+  assert.equal(result.identification.bugId, "lieveheersbeestje");
+});
+
+test("routes an invented BugDex id to review", () => {
+  const result = normalizeIdentification({
+    containsBug: true,
+    imageQuality: "good",
+    catalogStatus: "uncertain",
+    matchedBugId: "verzonnen-kever",
+    commonName: "Onbekende kever",
+    scientificName: "",
+    confidence: 0.99,
+    reason: "Geen geldige catalogusmatch."
+  }, catalog);
+
+  assert.equal(result.status, "pending_review");
+  assert.equal(result.identification.bugId, null);
+});
+
+test("marks a confident named species outside the catalog as reward owed", () => {
+  const result = normalizeIdentification({
+    containsBug: true,
+    imageQuality: "good",
+    catalogStatus: "not_in_catalog",
+    matchedBugId: null,
+    commonName: "Aziatisch lieveheersbeestje",
+    scientificName: "Harmonia axyridis",
+    confidence: 0.92,
+    reason: "Kenmerkend halsschild en variabele dekschildtekening."
+  }, catalog);
+
+  assert.equal(result.status, "not_in_catalog");
+  assert.equal(result.identification.bugId, null);
+  assert.equal(result.identification.scientificName, "Harmonia axyridis");
+});
+
+test("fills empty model text fields before returning the API contract", () => {
+  const result = normalizeIdentification({
+    containsBug: true,
+    imageQuality: "good",
+    catalogStatus: "uncertain",
+    matchedBugId: null,
+    commonName: "   ",
+    scientificName: "",
+    confidence: 0.72,
+    reason: "   "
+  }, catalog);
+
+  assert.equal(result.status, "pending_review");
+  assert.equal(result.identification.commonName, "Onbekende bug");
+  assert.equal(result.identification.reason, "De foto kon niet betrouwbaar worden beoordeeld.");
+});
+
+test("does not create reward debt for an uncertain unnamed bug", () => {
+  const result = normalizeIdentification({
+    containsBug: true,
+    imageQuality: "good",
+    catalogStatus: "not_in_catalog",
+    matchedBugId: null,
+    commonName: "Onbekende bug",
+    scientificName: "",
+    confidence: 0.91,
+    reason: "Te weinig kenmerken voor een soortnaam."
+  }, catalog);
+
+  assert.equal(result.status, "pending_review");
+});
+
+test("routes low-confidence known matches to review", () => {
+  const result = normalizeIdentification({
+    containsBug: true,
+    imageQuality: "good",
+    catalogStatus: "matched",
+    matchedBugId: "mier",
+    commonName: "Mier",
+    scientificName: "Formicidae",
+    confidence: 0.61,
+    reason: "Foto is onscherp."
+  }, catalog);
+
+  assert.equal(result.status, "pending_review");
+  assert.equal(result.identification.bugId, "mier");
+});
+
+test("rejects images without a visible bug", () => {
+  const result = normalizeIdentification({
+    containsBug: false,
+    imageQuality: "good",
+    catalogStatus: "uncertain",
+    matchedBugId: null,
+    commonName: "Geen insect",
+    scientificName: "",
+    confidence: 0.97,
+    reason: "Alleen een blad zichtbaar."
+  }, catalog);
+
+  assert.equal(result.status, "rejected_no_bug");
+});
+
+test("builds Amsterdam day keys across the UTC day boundary", () => {
+  assert.equal(dayKeyInTimeZone(new Date("2026-07-20T21:59:00.000Z")), "2026-07-20");
+  assert.equal(dayKeyInTimeZone(new Date("2026-07-20T22:01:00.000Z")), "2026-07-21");
+});
+
+test("includes only compact catalog ids and names in the model prompt", () => {
+  const prompt = buildBugCatalogPrompt(catalog.slice(0, 2));
+  assert.match(prompt, /zilvervisje: Zilvervisje/);
+  assert.match(prompt, /fruitvlieg: Fruitvlieg/);
+  assert.doesNotMatch(prompt, /rarity/i);
+});
+
+test("keeps the scan catalog synchronized with BugDex entries", () => {
+  const source = readFileSync(new URL("../../src/services/pointsService.ts", import.meta.url), "utf8");
+  const entriesSection = source.slice(source.indexOf("export const bugDexEntries"));
+  const sourceIds = Array.from(entriesSection.matchAll(/\{ id: \"([^\"]+)\", name: \"([^\"]+)\", title:/g), (match) => match[1]);
+  assert.ok(sourceIds.length > 0);
+  assert.deepEqual(new Set(catalog.map((entry) => entry.id)), new Set(sourceIds));
+});

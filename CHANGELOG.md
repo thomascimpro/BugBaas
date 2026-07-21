@@ -1,5 +1,45 @@
 # Changelog
 
+## 2.10.17
+
+- 48 nieuwe Nederlandse BugDex-soorten gebruiken eigen transparante, visueel gecontroleerde afbeeldingen.
+- BugScan verbruikt alleen een dagelijkse poging bij een geldige BugDex-match of een zekere nieuwe soort; onzekere, slechte of bugloze foto's kosten geen poging.
+- Een zekere soort buiten de catalogus wordt als developer-suggestie vastgelegd; bestaande BugDex-soorten geven de normale reward.
+- Google-login op web gebruikt uitsluitend Firebase popup-authenticatie en initialiseert geen native Android-module meer.
+- FitnessSyncer ondersteunt persoonlijke versleutelde OAuth-credentials, PKCE, detailimport van activiteiten en providerbrede deduplicatie.
+- Expo is bijgewerkt naar de bij SDK 54 passende patchversie en high/critical dependency-audits zijn opgelost.
+
+## 2.10.15
+
+- De FitnessSyncer-koppelknop op web blijft actief en geeft een duidelijke activatiemelding wanneer de providerconfiguratie nog ontbreekt.
+- FitnessSyncer HTTPS-endpoints accepteren browserrequests weer en controleren daarna veilig het ingelogde Firebase-account.
+- Elke geldige BugScan geeft voortaan altijd één extra kopie van de herkende bug in de BugDex.
+- Bugs met `count: 0` worden door een nieuwe echte scan weer owned.
+- Unieke scans gebruiken een eigen reward-event; dubbele verwerking van hetzelfde event blijft geblokkeerd.
+
+## 2.10.14
+
+- Nieuwe `BugScan`-tab fotografeert echte bugs en koppelt een betrouwbare herkenning direct aan de BugDex.
+- Bestaande bug-, tip-, trick- en ideemeldingen blijven bereikbaar via een compacte kaart onderaan Home.
+- Nieuwe daily mission `Spot 1 echte bug` telt alleen een geldige bugherkenning of reviewwaardige vondst.
+- Vercel reserveert maximaal drie scans per gebruiker per Amsterdamse dag vóór OpenAI; dubbele scan-ID's en lokaal herhaalde foto's worden geweigerd.
+- De officiële flow gebruikt alleen de camera, verkleint foto's client-side en beperkt gestructureerde AI-output zonder de hoge beeldanalysekwaliteit te verlagen.
+- BugScan reserveert genoeg modeloutput voor een volledig gestructureerd resultaat; reasoning-only responses eindigen niet meer onterecht als tijdelijke analysefout.
+- Oudere scanresponses en bestaande BugDex-unlocks met nul extra kopieën worden veilig genormaliseerd in plaats van afgekeurd als `Ongeldig scanresultaat ontvangen`.
+
+## 2.10.13
+
+- Web krijgt lichte interfacegeluiden op alle React Native Web-knoppen plus bestaande afzonderlijke game-, reward- en catchsounds.
+- Home toont actuele Score- en Duel-ranks uit de volledige actieve gebruikerslijst in plaats van een beperkte of verouderde topselectie.
+- Ranked matchmaking accepteert alle zes Arena-modes in Firestore, inclusief Bubble Swarm.
+- Bug Tower-treden wisselen zichtbaarder links/rechts en krijgen op hogere floors oplopend vaker een extra grote verticale tussenruimte.
+- FitnessSyncer verwerkt stappen naast afstand, voorkomt dubbeltelling tussen telefoon en horloge en keert na OAuth terug naar web of app-instellingen.
+- Daily mission-bugrewards verschijnen direct als BugDex-popup en hoeven niet meer als rondlopende bug gevangen te worden.
+- Buddy-timers worden direct in Firebase opgeslagen en blijven op absolute eindtijd doorlopen wanneer de webpagina gesloten is.
+- Hidden/testaccounts en normale accounts blijven strikt gescheiden in Home en de volledige Score- en Duel-ranglijsten.
+- Bug Tower start direct met opwaartse druk; een volle jumpbalk haalt circa 5-6 treden en de groene MEGA-power-up geeft +100 punten en een sterkere volgende sprong.
+- Settings benoemt exact welke FitnessSyncer-configuratie nog ontbreekt.
+
 ## 2.10.11
 
 - Google login on web uses Firebase popup authentication and no longer calls the unsupported React Native Google Sign-In implementation.
