@@ -5,6 +5,7 @@ import { BugDexDropResult, BugDexDropSource, clearBugDexInventoryCache, grantBug
 import { localDayId, SoloCampaignBossProgress } from "./missionProgressService";
 import { badgesForUser, titleForPoints } from "./pointsService";
 import { starterBoostedXp } from "./starterBoostService";
+import { completedDailyArcadeModes, dailyArcadeModes } from "./dailyMissionProgress";
 
 export type DailyMission = {
   id: string;
@@ -14,6 +15,7 @@ export type DailyMission = {
   reward: string;
   rewardSource: BugDexDropSource;
   rewardXp: number;
+  completedArcadeModes?: ArcadeMode[];
 };
 
 type DailyMissionTemplate = {
@@ -28,11 +30,12 @@ type DailyMissionTemplate = {
 
 type DailyMissionContext = {
   bossProgress: SoloCampaignBossProgress;
+  completedArcadeModes: ArcadeMode[];
   duels: BugSmashDuel[];
+  realBugScanProgress: number;
 };
 
 const dailyMissionXp = 10;
-const allArcadeModes: ArcadeMode[] = ["tap_duel", "web_runner", "nest_defense", "bug_glide", "bug_tower", "bubble_swarm"];
 const demoDailyClaims = new Set<string>();
 
 const dailyMissionTemplates: DailyMissionTemplate[] = [
@@ -48,15 +51,11 @@ const dailyMissionTemplates: DailyMissionTemplate[] = [
   {
     id: "play-all-game-types",
     title: "mission.dailyPlayAllGameTypes",
-    target: allArcadeModes.length,
+    target: dailyArcadeModes.length,
     reward: "mission.rewardXp20",
     rewardSource: "daily_mission_bonus",
     rewardXp: 20,
-    progressFor: (user, { duels }, day) => new Set(duels
-      .filter((duel) => isUserDuel(duel, user) && isThisDay(duel.scores?.[user.uid]?.submittedAt ?? "", day))
-      .map((duel) => duel.arcadeMode ?? "tap_duel")
-      .filter((mode): mode is ArcadeMode => allArcadeModes.includes(mode as ArcadeMode))
-    ).size
+    progressFor: (_user, { completedArcadeModes }) => completedArcadeModes.length
   },
   {
     // Keep the legacy id so claims already made today remain idempotent when the target changes.
@@ -85,14 +84,27 @@ const dailyMissionTemplates: DailyMissionTemplate[] = [
     rewardSource: "daily_mission_bonus",
     rewardXp: dailyMissionXp,
     progressFor: (_user, { bossProgress }) => bossProgress.dayCount
+  },
+  {
+    id: "real-bug-scan",
+    title: "mission.dailyRealBugScan",
+    target: 1,
+    reward: "mission.rewardXp10",
+    rewardSource: "daily_mission_bonus",
+    rewardXp: dailyMissionXp,
+    progressFor: (_user, { realBugScanProgress }) => realBugScanProgress
   }
 ];
 
-export function dailyMissionSet(user: User, options: { bossProgress: SoloCampaignBossProgress; duels?: BugSmashDuel[]; now?: Date }): DailyMission[] {
-  const day = localDayId(options.now);
+export function dailyMissionSet(user: User, options: { bossProgress: SoloCampaignBossProgress; duels?: BugSmashDuel[]; now?: Date; realBugScanProgress?: number }): DailyMission[] {
+  const now = options.now ?? new Date();
+  const day = localDayId(now);
+  const duels = options.duels ?? [];
   const context: DailyMissionContext = {
     bossProgress: options.bossProgress,
-    duels: options.duels ?? []
+    completedArcadeModes: completedDailyArcadeModes(user.uid, duels, now),
+    duels,
+    realBugScanProgress: Math.max(0, options.realBugScanProgress ?? 0)
   };
   return dailyMissionTemplates.map((template) => {
     const progress = Math.min(template.target, template.progressFor(user, context, day));
@@ -103,7 +115,8 @@ export function dailyMissionSet(user: User, options: { bossProgress: SoloCampaig
       progress,
       reward: template.reward,
       rewardSource: template.rewardSource,
-      rewardXp: template.rewardXp
+      rewardXp: template.rewardXp,
+      ...(template.id === "play-all-game-types" ? { completedArcadeModes: context.completedArcadeModes } : {})
     };
   });
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.16
+
+- De ontbrekende daily `Spot 1 echte bug` is hersteld en telt een geslaagde Real BugScan van vandaag mee.
+- `Speel elk type spel 1x` toont per Arena-game direct welke game vandaag al wel of nog niet gespeeld is.
+- De compacte Home-kaart naar bestaande bugmeldingen, tips, tricks en ideeën is teruggezet.
+
 ## 2.10.11
 
 - Google login on web uses Firebase popup authentication and no longer calls the unsupported React Native Google Sign-In implementation.

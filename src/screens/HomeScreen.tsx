@@ -20,9 +20,11 @@ import { languages, useI18n } from "../services/i18n";
 import { listLeaderboardUsers } from "../services/userService";
 import { loadSoloCampaignProgress } from "../services/soloCampaignProgressService";
 import { claimedDailyMissionIds as fetchClaimedDailyMissionIds, claimDailyMissionBonusWithReward, claimDailyMissionReward, dailyMissionSet, dailyMissionSetComplete, isDailyMissionBonusClaimed } from "../services/dailyMissionService";
+import { dailyArcadeModes } from "../services/dailyMissionProgress";
+import { getDailyRealBugScanProgress } from "../services/realBugScanProgress";
 import { loadSoloCampaignBossProgress, SoloCampaignBossProgress } from "../services/missionProgressService";
 import { claimedWeeklyMissionIds, claimWeeklyMissionBonusWithReward, claimWeeklyMissionReward, isWeeklyMissionBonusClaimed, weeklyMissionLabel, weeklyMissionSet, weeklyMissionSetComplete } from "../services/weeklyMissionService";
-import { BugDexInventoryItem, BugDexUnlock, BugMastery, BugReport, BugSmashDuel, User } from "../types";
+import { ArcadeMode, BugDexInventoryItem, BugDexUnlock, BugMastery, BugReport, BugSmashDuel, User } from "../types";
 import { sharedStyles } from "./sharedStyles";
 
 type Props = {
@@ -80,6 +82,14 @@ const buddyStateSwarmImage = require("../../assets/buddy/kenney/state/buddy_stat
 const settingsGearImage = require("../../assets/generated/settings-gear-hd.png");
 const wikiButtonImage = require("../../assets/generated/bugbaas-wiki-button-hd.png");
 const bugBaasWikiUrl = "https://bugbaas-wiki.netlify.app";
+const dailyArcadeModeTitleKeys: Record<ArcadeMode, string> = {
+  tap_duel: "duel.title",
+  web_runner: "arcade.webRunner.title",
+  nest_defense: "arcade.nestDefense.title",
+  bug_glide: "arcade.bugGlide.title",
+  bug_tower: "arcade.bugTower.title",
+  bubble_swarm: "arcade.bubbleSwarm.title"
+};
 
 export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRadarClaimed, onMovementRegistered, onOpenBugDexWorkshop, onRewardDrop, onUserUpdated, user, onNavigate }: Props) {
   const { language, setLanguage, t, tr } = useI18n();
@@ -99,6 +109,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const [fitnessSyncerMessage, setFitnessSyncerMessage] = useState("");
   const [soloCampaignWave, setSoloCampaignWave] = useState(1);
   const [bossProgress, setBossProgress] = useState<SoloCampaignBossProgress>({ dayCount: 0, dayId: "", updatedAt: "", weekCount: 0, weekId: "" });
+  const [realBugScanProgress, setRealBugScanProgress] = useState(0);
   const [claimedDailyIds, setClaimedDailyIds] = useState<Set<string>>(new Set());
   const [claimingDailyMissionId, setClaimingDailyMissionId] = useState("");
   const [dailyBonusClaimed, setDailyBonusClaimed] = useState(false);
@@ -157,7 +168,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
   const buddyMotionStyle = buddyBeeMotionStyle(buddyActiveTask?.action, buddyAnim);
   const buddyProgress = Math.min(100, Math.round((buddyMasteryProgressXp / buddyMasteryNextXp) * 100));
   const buddyLastAction = buddyCareState.lastAction ? buddyActionLabel(buddyCareState.lastAction, t) : t("buddy.noAction");
-  const dailyMissions = dailyMissionSet(user, { bossProgress, duels });
+  const dailyMissions = dailyMissionSet(user, { bossProgress, duels, realBugScanProgress });
   const dailyMissionIdsKey = dailyMissions.map((mission) => mission.id).join("|");
   const missions = weeklyMissionSet(user, bugs, { bossProgress, duels, inventory, soloCampaignWave });
   const missionIdsKey = missions.map((mission) => mission.id).join("|");
@@ -175,6 +186,7 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
     listBugMastery(user).then((items) => setMasteryByBugId(Object.fromEntries(items.map((item) => [item.bugId, item])))).catch(() => setMasteryByBugId({}));
     loadSoloCampaignProgress(user.uid).then((progress) => setSoloCampaignWave(progress.wave)).catch(() => setSoloCampaignWave(1));
     loadSoloCampaignBossProgress(user.uid).then(setBossProgress).catch(() => undefined);
+    getDailyRealBugScanProgress(user).then(setRealBugScanProgress).catch(() => setRealBugScanProgress(0));
   }, [user.uid]);
 
   useEffect(() => {
@@ -893,6 +905,20 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
                 <View style={styles.missionTrack}>
                   <View style={[styles.missionFill, { width }]} />
                 </View>
+                {mission.completedArcadeModes && (
+                  <View style={styles.missionGameList}>
+                    {dailyArcadeModes.map((mode) => {
+                      const completed = mission.completedArcadeModes?.includes(mode) === true;
+                      return (
+                        <View key={mode} style={[styles.missionGameChip, completed && styles.missionGameChipDone]}>
+                          <Text style={[styles.missionGameText, completed && styles.missionGameTextDone]}>
+                            {completed ? "✓" : "○"} {t(dailyArcadeModeTitleKeys[mode])}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
                 {done && !claimed ? (
                   <Pressable style={styles.missionClaimButton} disabled={claimingDailyMissionId === mission.id} onPress={() => handleDailyMissionClaim(mission)}>
                     <Text style={styles.missionClaimText}>{claimingDailyMissionId === mission.id ? "..." : t("home.claimDailyReward")}</Text>
@@ -1215,6 +1241,16 @@ export function HomeScreen({ movementBoost = 0, onActivateBugLamp, onMovementRad
           )}
         </View>
       )}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("home.reportCta")} style={styles.reportCard} onPress={() => onNavigate("bugs")}>
+        <View style={styles.reportBug}>
+          <BugArtImage bugId="pissebed" size={56} />
+        </View>
+        <View style={styles.reportText}>
+          <Text style={styles.reportTitle}>{t("home.reportTitle")}</Text>
+          <Text style={styles.reportBody}>{t("home.reportBody")}</Text>
+        </View>
+        <Text style={styles.reportCta}>{t("home.reportCta")}</Text>
+      </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={t("home.wikiCta")} style={styles.wikiCard} onPress={openBugBaasWiki}>
         <Image resizeMode="cover" source={wikiButtonImage} style={styles.wikiImage} />
         <View style={styles.wikiText}>
@@ -3100,6 +3136,32 @@ const styles = StyleSheet.create({
     backgroundColor: "#15724f",
     height: "100%"
   },
+  missionGameList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 8
+  },
+  missionGameChip: {
+    backgroundColor: "#eef3ef",
+    borderColor: "#cbd8ce",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 4
+  },
+  missionGameChipDone: {
+    backgroundColor: "#e1f4e7",
+    borderColor: "#69a981"
+  },
+  missionGameText: {
+    color: "#68766f",
+    fontSize: 10,
+    fontWeight: "800"
+  },
+  missionGameTextDone: {
+    color: "#15724f"
+  },
   missionClaimButton: {
     alignSelf: "flex-start",
     backgroundColor: "#15724f",
@@ -3137,6 +3199,51 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
     marginTop: 6
+  },
+  reportCard: {
+    alignItems: "center",
+    backgroundColor: "#eaf7f0",
+    borderColor: "#8cc5aa",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+    minHeight: 82,
+    padding: 12
+  },
+  reportBug: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderColor: "#b9dcca",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 62,
+    justifyContent: "center",
+    width: 70
+  },
+  reportText: {
+    flex: 1,
+    minWidth: 0
+  },
+  reportTitle: {
+    color: "#102018",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  reportBody: {
+    color: "#52665d",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
+    marginTop: 2
+  },
+  reportCta: {
+    color: "#15724f",
+    fontSize: 12,
+    fontWeight: "900",
+    maxWidth: 58,
+    textAlign: "right"
   },
   wikiCard: {
     alignItems: "center",

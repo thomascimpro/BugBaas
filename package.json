@@ -9,6 +9,7 @@
     "apk:release": "cd android && gradlew.bat :app:assembleRelease --console=plain",
     "apk:fast": "cd android && gradlew.bat :app:assembleRelease --console=plain -Pandroid.enableMinifyInReleaseBuilds=false -Pandroid.enableShrinkResourcesInReleaseBuilds=false -Pandroid.enablePngCrunchInReleaseBuilds=false",
     "typecheck": "tsc --noEmit",
+    "test:daily-missions": "node --experimental-strip-types --test src/services/dailyMissionProgress.test.ts",
     "test:real-bug-scan": "node --experimental-strip-types --test src/services/realBugScanPending.test.ts && node --test server/realBugScan/*.test.mjs",
     "seed:cimpro-org": "node scripts/seed_cimpro_organization.mjs",
     "season:close-duel": "node scripts/close_duel_season.mjs",

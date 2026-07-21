@@ -1,5 +1,18 @@
 # Test Results
 
+## 2026-07-21 corrected Android release 2.10.16
+
+- `npm run typecheck`: geslaagd.
+- `npm run test:daily-missions`: 1 gerichte regressietest geslaagd; unieke speltypes van vandaag worden per gebruiker correct bepaald.
+- `npm run test:real-bug-scan`: 5 tests geslaagd.
+- `git diff --check`: geslaagd.
+- Normale `BUGBAAS_REQUIRE_ENV=1 NODE_ENV=production` release-build: geslaagd; Gradle gaf `Success` terug.
+- APK: `android/app/build/outputs/apk/release/app-release.apk`, 85.900.795 bytes, package `nl.cimpro.bugbaas`, versionCode `196`, versionName `2.10.16`, targetSdk `36`, ABI `arm64-v8a`.
+- APK Signature Scheme v2: geldig; certificaat SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`, gelijk aan 2.10.15.
+- APK SHA-256: `58A3559EC632B7B745C83A2C237FBE54AE07648688D70539BA75CE83EBD32CE1`.
+- Gebundelde APK bevat de herstelde Real BugScan-daily, Home-meldingskaart en `play-all-game-types`-missie.
+- `adb devices -l`: geen aangesloten toestel; fysieke install-, layout- en touch-smoke niet uitgevoerd.
+
 ## 2026-07-19 web auth, rewards and Tower hold hotfix
 
 - `npm run typecheck`: passed.

@@ -1,5 +1,12 @@
 # Status
 
+## 2026-07-21 corrected Android release 2.10.16
+
+- De in 2.10.16 ontbrekende daily `Spot 1 echte bug` en de Home-kaart naar bestaande meldingen zijn hersteld.
+- `Speel elk type spel 1x` toont nu per Arena-game een duidelijke voltooid/nog-te-doen status voor vandaag.
+- De normale production/minified Android release-build is geslaagd als versionName `2.10.16`, versionCode `196`.
+- Geen Android-toestel aangesloten; fysieke install-, layout- en touch-smoke blijven open.
+
 ## 2026-07-19 web auth, rewards and Tower hold hotfix
 
 - Web Google-login uses Firebase's browser popup instead of the unsupported native RN Google Sign-In method; Android keeps the native flow.
