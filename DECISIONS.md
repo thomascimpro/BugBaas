@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-07-21 BugScan confidence and image quality
+
+- A 0.70 confidence boundary balances useful acceptance with protection against wrong rewards: it only auto-accepts a model-declared match whose localized name exactly matches the selected BugDex entry.
+- Specific taxa outside BugDex use the same 0.70 boundary and still require a non-generic name, supporting fact and explicit `not_in_catalog` classification.
+- Image preparation prioritizes 2048 px detail, then reduces resolution and compression only when needed to keep the base64 JSON request below Vercel's 4.5 MB function payload limit.
+
 ## 2026-07-21 BugScan structured-output recovery
 
 - Incomplete or syntactically truncated structured AI output is retried exactly once with a larger budget; upstream HTTP failures are not automatically duplicated.

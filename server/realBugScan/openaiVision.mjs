@@ -1,7 +1,7 @@
 import { buildBugCatalogPrompt } from "./classification.mjs";
 
-const INITIAL_MAX_OUTPUT_TOKENS = 3200;
-const RETRY_MAX_OUTPUT_TOKENS = 5000;
+const INITIAL_MAX_OUTPUT_TOKENS = 6000;
+const RETRY_MAX_OUTPUT_TOKENS = 9000;
 
 const responseSchema = {
   type: "object",
@@ -86,6 +86,9 @@ export function createOpenAIImageIdentifier({
       "Set catalogStatus to matched only when the identified taxon is genuinely represented by one exact BugDex entry. Never choose the closest-looking, related, or generic entry merely because it is in the catalog.",
       "Set catalogStatus to not_in_catalog only when a specific named species or clear taxon is confidently identifiable but absent from the catalog.",
       "Set catalogStatus to uncertain when the photo or identification is not specific enough. Use null for matchedBugId unless catalogStatus is matched.",
+      "Use uncertain only when the visible evidence genuinely cannot support one best identification. If one taxon is clearly most likely, return that best identification and express residual doubt through confidence instead.",
+      "A confidence around 0.70 is acceptable for a best identification when multiple visible anatomical features support it; do not require near-certainty.",
+      "Set imageQuality to poor only when blur, darkness, distance, or obstruction prevents useful anatomical assessment. A normal phone photo, crop, plain background, or imperfect composition is not poor by itself.",
       "When the identified taxon is absent from BugDex, return catalogStatus not_in_catalog and its real name so a developer can review and add it later.",
       "Do not invent IDs. Treat confidence as identification confidence, not image quality.",
       "Return commonName in Dutch, commonNameEn in English, and commonNameFr in French. Keep scientificName language-neutral.",
@@ -108,7 +111,7 @@ export function createOpenAIImageIdentifier({
         body: JSON.stringify({
           model,
           max_output_tokens: maxOutputTokens,
-          reasoning: { effort: "low" },
+          reasoning: { effort: "medium" },
           input: [{
             role: "user",
             content: [

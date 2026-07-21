@@ -1,5 +1,15 @@
 # Test Results
 
+## 2026-07-21 BugScan recognition release 2.10.19
+
+- `npm run test:real-bug-scan`: 65/65 passed, including the 0.70 acceptance boundary, exact-name protection, 2048 px primary input and two payload fallbacks.
+- `npm run typecheck`: passed.
+- `npx expo install --check`: dependencies are up to date; production Expo webexport passed with 365 assets.
+- Vercel deployment `dpl_C5RcSw2H1YctAE5xzJC1oFhYQkjw`: `READY`; `https://bugbaas.vercel.app` serves `AppEntry-fcdb748e30f50dc01ebd72c98e268ef3.js`, containing version 2.10.19 and the 2048/1600 image policy. The API route returns the expected HTTP 405 for GET.
+- Android `assembleRelease`: `BUILD SUCCESSFUL`; package `nl.cimpro.bugbaas`, versionCode 199, versionName 2.10.19, minSdk 26, targetSdk 36 and APK Signature Scheme v2 verified.
+- APK `dist/BugBaas-2.10.19.apk`: 109,089,194 bytes; SHA-256 `02616E5892830133809D126E608EEC094164CF206F2F8746183A4C5B156AA82E`.
+- `adb devices -l` returned no connected device, so physical installation and an authenticated camera-to-result smoke remain unverified.
+
 ## 2026-07-21 BugScan analysis hotfix 2.10.18
 
 - `npm run test:real-bug-scan`: 62/62 passed, including incomplete response, truncated JSON, single retry limit and no retry on HTTP 429.

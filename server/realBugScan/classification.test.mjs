@@ -20,6 +20,22 @@ test("accepts a high-confidence BugDex match", () => {
   assert.equal(result.identification.bugId, "lieveheersbeestje");
 });
 
+test("accepts an exact BugDex match at seventy percent confidence", () => {
+  const result = normalizeIdentification({
+    containsBug: true,
+    imageQuality: "good",
+    catalogStatus: "matched",
+    matchedBugId: "mier",
+    commonName: "Mier",
+    scientificName: "Formicidae",
+    confidence: 0.7,
+    reason: "Zes poten, antennes en een duidelijke mierenvorm."
+  }, catalog);
+
+  assert.equal(result.status, "matched");
+  assert.equal(result.identification.bugId, "mier");
+});
+
 test("routes an invented BugDex id to review", () => {
   const result = normalizeIdentification({
     containsBug: true,
@@ -57,6 +73,22 @@ test("marks a confident named species outside the catalog as reward owed", () =>
   assert.equal(result.identification.bugId, null);
   assert.equal(result.identification.scientificName, "Harmonia axyridis");
   assert.match(result.identification.fact, /kleurpatronen/);
+});
+
+test("records a concrete missing species at seventy percent confidence", () => {
+  const result = normalizeIdentification({
+    containsBug: true,
+    imageQuality: "good",
+    catalogStatus: "not_in_catalog",
+    matchedBugId: null,
+    commonName: "Eikendoorncicade",
+    scientificName: "Platycotis vittata",
+    fact: "Deze cicade heeft een opvallend verlengd halsschild.",
+    confidence: 0.7,
+    reason: "De lichaamsvorm en tekening passen bij deze soort."
+  }, catalog);
+
+  assert.equal(result.status, "not_in_catalog");
 });
 
 test("rejects a forced nearest BugDex match and stores it as a missing species", () => {

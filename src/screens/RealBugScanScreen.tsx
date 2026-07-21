@@ -7,6 +7,7 @@ import { BugArtImage } from "../components/BugArtImage";
 import { type Language, useI18n } from "../services/i18n";
 import { type RealBugScanResponse } from "../services/realBugScanContract";
 import {
+  emergencyRealBugPhotoPlan,
   fallbackRealBugPhotoPlan,
   primaryRealBugPhotoPlan,
   reviewRealBugThumbnailPlan,
@@ -127,12 +128,19 @@ export function RealBugScanScreen({ user, onBack }: Props) {
       );
       if (!primary.base64) throw new Error(t("bugScan.error.prepare"));
 
-      const prepared = shouldFallbackRealBugPhoto(primary.base64)
+      let prepared = shouldFallbackRealBugPhoto(primary.base64)
         ? await manipulatePhoto(
             primary.uri,
             fallbackRealBugPhotoPlan(primary.width ?? 0, primary.height ?? 0)
           )
         : primary;
+      if (!prepared.base64) throw new Error(t("bugScan.error.prepare"));
+      if (shouldFallbackRealBugPhoto(prepared.base64)) {
+        prepared = await manipulatePhoto(
+          prepared.uri,
+          emergencyRealBugPhotoPlan(prepared.width ?? 0, prepared.height ?? 0)
+        );
+      }
       if (!prepared.base64) throw new Error(t("bugScan.error.prepare"));
 
       const thumbnail = await manipulatePhoto(

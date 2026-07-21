@@ -49,8 +49,8 @@ test("sends the image and returns structured identification", async () => {
   assert.equal(result.matchedBugId, "mier");
   assert.equal(requestBodies.length, 1);
   assert.equal(requestBody.model, "gpt-test");
-  assert.equal(requestBody.max_output_tokens, 3200);
-  assert.equal(requestBody.reasoning.effort, "low");
+  assert.equal(requestBody.max_output_tokens, 6000);
+  assert.equal(requestBody.reasoning.effort, "medium");
   assert.equal(requestBody.input[0].content[1].image_url, "data:image/jpeg;base64,YWJjZA==");
   assert.match(requestBody.input[0].content[0].text, /screenshots, photos of screens or prints, toys, and clearly AI-generated or manipulated images/i);
   assert.match(requestBody.input[0].content[0].text, /still fill commonName and scientificName/i);
@@ -58,6 +58,8 @@ test("sends the image and returns structured identification", async () => {
   assert.match(requestBody.input[0].content[0].text, /always name what is actually visible/i);
   assert.match(requestBody.input[0].content[0].text, /developer can review and add it later/i);
   assert.match(requestBody.input[0].content[0].text, /at most 140 characters per field/i);
+  assert.match(requestBody.input[0].content[0].text, /confidence around 0\.70 is acceptable/i);
+  assert.match(requestBody.input[0].content[0].text, /normal phone photo, crop, plain background, or imperfect composition is not poor/i);
   assert.ok(requestBody.text.format.schema.required.includes("factFr"));
   assert.ok(requestBody.text.format.schema.required.includes("reasonFr"));
   assert.equal(requestBody.text.format.type, "json_schema");
@@ -85,8 +87,8 @@ test("retries once with a larger budget after an incomplete response", async () 
 
   assert.equal(result.matchedBugId, "mier");
   assert.equal(requestBodies.length, 2);
-  assert.equal(requestBodies[0].max_output_tokens, 3200);
-  assert.equal(requestBodies[1].max_output_tokens, 5000);
+  assert.equal(requestBodies[0].max_output_tokens, 6000);
+  assert.equal(requestBodies[1].max_output_tokens, 9000);
   assert.match(requestBodies[1].input[0].content[0].text, /retry after an incomplete response/i);
 });
 

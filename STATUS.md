@@ -1,5 +1,14 @@
 # Status
 
+## 2026-07-21 BugScan recognition release 2.10.19
+
+- Version metadata is aligned at 2.10.19 / Android versionCode 199.
+- Primary AI input is increased to 2048 px JPEG quality 0.95, with 1600/0.90 and 1280/0.82 fallbacks for oversized payloads.
+- Exact BugDex matches and specific missing species are accepted from 0.70 confidence; generic, invented and forced-nearest matches remain review-only.
+- The vision prompt treats confidence as graded uncertainty instead of defaulting to `uncertain`, and only marks image quality poor when anatomical assessment is genuinely blocked.
+- Vercel deployment `dpl_C5RcSw2H1YctAE5xzJC1oFhYQkjw` is `READY` and aliased to `https://bugbaas.vercel.app`.
+- Signed APK `dist/BugBaas-2.10.19.apk` is built and verified; physical-device testing remains unavailable because ADB reports no connected device.
+
 ## 2026-07-21 BugScan analysis hotfix 2.10.18
 
 - Production failures were caused by the 1200-token response limit truncating the expanded 15-field multilingual JSON result, not by image quality.

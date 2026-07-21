@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.19
+
+- BugScan verstuurt tot 2048 px met hogere JPEG-kwaliteit en gebruikt twee veilige fallbackstappen om onder Vercels requestlimiet te blijven.
+- Een exacte BugDex-match of concrete nieuwe soort wordt vanaf 70% confidence geaccepteerd; vage en geforceerde matches blijven geblokkeerd.
+- De herkennings-AI beoordeelt normale telefoonfoto's minder snel als slechte kwaliteit en gebruikt meer redeneer- en outputruimte.
+
 ## 2.10.18
 
 - BugScan voorkomt afgebroken AI-resultaten met een ruimer outputbudget, compacte meertalige velden en precies één automatische herstelpoging.

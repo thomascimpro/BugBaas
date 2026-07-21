@@ -1,6 +1,6 @@
 const defaultTimeZone = "Europe/Amsterdam";
-const defaultAutoAwardThreshold = 0.86;
-const defaultMissingCatalogThreshold = 0.75;
+const defaultAutoAwardThreshold = 0.7;
+const defaultMissingCatalogThreshold = 0.7;
 
 function cleanString(value, fallback = "") {
   const cleaned = typeof value === "string" ? value.trim() : "";
